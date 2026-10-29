@@ -512,7 +512,9 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
   Future<void> toggleSubtask(String taskId, String subtaskId) async {
     final AppData data = _current;
     final Task? task = data.taskById(taskId);
-    if (task == null || task.isPaused || task.isCompleted) return;
+    // Allow subtasks to be reopened after automatic parent completion.
+    // The parent status is recalculated below from the updated child states.
+    if (task == null || task.isPaused) return;
     final Subtask? selected = task.subtasks.where((Subtask s) => s.id == subtaskId).firstOrNull;
     if (selected == null) return;
     final DateTime now = DateTime.now();
