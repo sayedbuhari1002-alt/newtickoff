@@ -11,6 +11,7 @@ class AppData {
     this.notes = const <Note>[],
     this.tasks = const <Task>[],
     this.taskActivities = const <TaskActivity>[],
+    this.settings = const <String, String>{},
   });
 
   /// All habits including archived ones.
@@ -25,6 +26,9 @@ class AppData {
   final List<Note> notes;
   final List<Task> tasks;
   final List<TaskActivity> taskActivities;
+
+  /// On-device preferences stored in the SQLite app_settings table.
+  final Map<String, String> settings;
 
   Habit? habitById(String id) {
     for (final Habit h in habits) {
@@ -126,6 +130,7 @@ class AppData {
     List<Note>? notes,
     List<Task>? tasks,
     List<TaskActivity>? taskActivities,
+    Map<String, String>? settings,
   }) {
     return AppData(
       habits: habits ?? this.habits,
@@ -135,6 +140,7 @@ class AppData {
       notes: notes ?? this.notes,
       tasks: tasks ?? this.tasks,
       taskActivities: taskActivities ?? this.taskActivities,
+      settings: settings ?? this.settings,
     );
   }
 }

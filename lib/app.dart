@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
+import 'state/app_settings.dart';
+import 'state/app_state.dart';
 
 /// Root widget: dark theme + router.
 class TickOffApp extends ConsumerWidget {
@@ -11,11 +13,12 @@ class TickOffApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final String themeName = ref.watch(appDataProvider).valueOrNull?.settings[AppSettingKeys.theme] ?? 'original';
     return MaterialApp.router(
       title: 'TickOff',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.dark(graphite: themeName == 'graphite'),
+      darkTheme: AppTheme.dark(graphite: themeName == 'graphite'),
       themeMode: ThemeMode.dark,
       routerConfig: ref.watch(appRouterProvider),
     );

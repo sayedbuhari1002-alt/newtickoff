@@ -13,6 +13,9 @@ import '../../features/notes/notes_screen.dart';
 import '../../features/settings/archive_screen.dart';
 import '../../features/settings/categories_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/settings/theme_settings_screen.dart';
+import '../../features/settings/widgets_settings_screen.dart';
+import '../../features/settings/rearrange_screen.dart';
 import '../../features/share/share_progress_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/tasks/subtask_editor_screen.dart';
@@ -78,11 +81,11 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
       GoRoute(path: AppRoutes.shareProgress, builder: (BuildContext c, GoRouterState s) => ShareProgressScreen(habitId: s.uri.queryParameters['habit'])),
       GoRoute(path: AppRoutes.categories, builder: (BuildContext c, GoRouterState s) => const CategoriesScreen()),
       GoRoute(path: AppRoutes.archive, builder: (BuildContext c, GoRouterState s) => const ArchiveScreen()),
-      _stub(AppRoutes.theme, 'Theme', 4, 'Theme preferences are available from Settings.'),
+      GoRoute(path: AppRoutes.theme, builder: (BuildContext c, GoRouterState s) => const ThemeSettingsScreen()),
       _stub(AppRoutes.layout, 'Layout', 4, 'Display and timeline options are available from Settings.'),
-      _stub(AppRoutes.widgets, 'Widgets', 4, 'Native Android launcher widgets are not included.'),
+      GoRoute(path: AppRoutes.widgets, builder: (BuildContext c, GoRouterState s) => const WidgetsSettingsScreen()),
       _stub(AppRoutes.general, 'General', 4, 'General preferences are available from Settings.'),
-      _stub(AppRoutes.rearrange, 'Rearrange', 4, 'Habit ordering follows the stored habit order.'),
+      GoRoute(path: AppRoutes.rearrange, builder: (BuildContext c, GoRouterState s) => const RearrangeScreen()),
     ],
   );
 }

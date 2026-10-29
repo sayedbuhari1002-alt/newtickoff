@@ -6,13 +6,14 @@ import 'package:sqflite/sqflite.dart';
 /// Schema version history:
 /// * 1 - initial schema (categories, habits, completions, notes, achievements).
 /// * 2 - local tasks, subtasks, and immutable task activity history.
+/// * 3 - local key/value preferences for appearance and Dashboard layout.
 ///
 /// To change the schema, bump [version], add a step to [_migrations] that
 /// upgrades from the previous version, and keep [_createV1] untouched.
 class AppDatabase {
   AppDatabase._();
 
-  static const int version = 2;
+  static const int version = 3;
   static const String fileName = 'tickoff.db';
 
   /// Opens (creating if needed) the database. Pass [path] to use another file
@@ -29,6 +30,7 @@ class AppDatabase {
       onCreate: (Database db, int newVersion) async {
         await _createV1(db);
         if (newVersion >= 2) await _migrateV2(db);
+        if (newVersion >= 3) await _migrateV3(db);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         for (int v = oldVersion; v < newVersion; v++) {
@@ -39,9 +41,20 @@ class AppDatabase {
     );
   }
 
-  /// Upgrade steps keyed by the version they upgrade FROM (1 -> 2 is key 1).
+  /// Upgrade steps keyed by the version they upgrade FROM (1 -> 2, 2 -> 3).
   static final Map<int, Future<void> Function(Database db)> _migrations =
-      <int, Future<void> Function(Database db)>{1: _migrateV2};
+      <int, Future<void> Function(Database db)>{
+        1: _migrateV2,
+        2: _migrateV3,
+      };
+
+  static Future<void> _migrateV3(Database db) async {
+    await db.execute('''
+      CREATE TABLE app_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT NOT NULL
+      )''');
+  }
 
   static Future<void> _migrateV2(Database db) async {
     final Batch batch = db.batch();

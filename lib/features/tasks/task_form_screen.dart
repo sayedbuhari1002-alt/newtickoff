@@ -232,7 +232,15 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
       await ref.read(appDataProvider.notifier).saveTask(task);
       _savedSuccessfully = true;
       _sessionAddedPaths.clear();
-      if (mounted) context.go(AppRoutes.taskDetail(task.id));
+      if (mounted) {
+        if (widget.taskId == null) {
+          context.pushReplacement(AppRoutes.taskDetail(task.id));
+        } else if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go(AppRoutes.taskDetail(task.id));
+        }
+      }
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
     } finally {

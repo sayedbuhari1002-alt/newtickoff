@@ -55,6 +55,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         await repo.loadAchievements();
     final List<Task> tasks = await repo.loadTasks();
     final List<TaskActivity> taskActivities = await repo.loadTaskActivities();
+    final Map<String, String> settings = await repo.loadSettings();
 
     final Map<String, Map<String, CompletionRecord>> index =
         <String, Map<String, CompletionRecord>>{};
@@ -70,6 +71,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       notes: notes,
       tasks: tasks,
       taskActivities: taskActivities,
+      settings: settings,
     );
     // Refresh local notifications after every launch. A notification failure
     // never prevents local data from loading.
@@ -115,6 +117,18 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         Map<String, Map<int, String>>.of(data.achievements);
     all[habit.id] = updated;
     return data.copyWith(achievements: all);
+  }
+
+  // --------------------------------------------------------------- preferences
+
+  /// Persists a small UI preference locally and publishes it to the app.
+  Future<void> saveSetting(String key, String value) async {
+    if (state.valueOrNull == null) await future;
+    await _repo.saveSetting(key, value);
+    final AppData data = _current;
+    state = AsyncData<AppData>(data.copyWith(
+      settings: <String, String>{...data.settings, key: value},
+    ));
   }
 
   // ------------------------------------------------------------------ habits
@@ -512,7 +526,9 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
   Future<void> toggleSubtask(String taskId, String subtaskId) async {
     final AppData data = _current;
     final Task? task = data.taskById(taskId);
-    if (task == null || task.isPaused || task.isCompleted) return;
+    // Allow subtasks to be reopened after automatic parent completion.
+    // The parent status is recalculated below from the updated child states.
+    if (task == null || task.isPaused) return;
     final Subtask? selected = task.subtasks.where((Subtask s) => s.id == subtaskId).firstOrNull;
     if (selected == null) return;
     final DateTime now = DateTime.now();

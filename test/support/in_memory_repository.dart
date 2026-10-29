@@ -14,6 +14,13 @@ class InMemoryAppRepository implements AppRepository {
       <String, Map<int, String>>{};
   final Map<String, Task> tasks = <String, Task>{};
   final Map<String, TaskActivity> taskActivities = <String, TaskActivity>{};
+  final Map<String, String> settings = <String, String>{};
+
+  @override
+  Future<Map<String, String>> loadSettings() async => Map<String, String>.of(settings);
+
+  @override
+  Future<void> saveSetting(String key, String value) async => settings[key] = value;
 
   @override
   Future<List<Habit>> loadHabits() async => habits.values.toList();

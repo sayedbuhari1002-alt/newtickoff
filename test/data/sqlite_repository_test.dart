@@ -157,8 +157,21 @@ void main() {
         'tasks',
         'subtasks',
         'task_activities',
+        'app_settings',
       ]),
     );
+  });
+
+  test('local settings round-trip through SQLite', () async {
+    await repo.saveSetting('ui.theme', 'graphite');
+    await repo.saveSetting('dashboard.section_order', '["tasks","progress","habits","insights"]');
+    expect(await repo.loadSettings(), <String, String>{
+      'ui.theme': 'graphite',
+      'dashboard.section_order': '["tasks","progress","habits","insights"]',
+    });
+    await repo.saveSetting('ui.theme', 'original');
+    expect((await repo.loadSettings())['ui.theme'], 'original');
+    expect(await countRows(db, 'app_settings'), 2);
   });
 
   test('opening a version-1 database upgrades without deleting habit data', () async {
