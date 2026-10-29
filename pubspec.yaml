@@ -1,10 +1,11 @@
+
 name: tickoff_replacement
 description: Offline Android habit tracker modelled on the supplied TickOff screenshots.
 publish_to: 'none'
 version: 0.2.0+2
 
 environment:
-  sdk: '>=3.4.0 <4.0.0'
+  sdk: '>=3.5.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -14,12 +15,13 @@ dependencies:
   path: ^1.9.0
   sqflite: ^2.3.3
   uuid: ^4.4.0
+
   # Local-only reminders and on-device task attachments.
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
   flutter_timezone: ^3.0.1
   image_picker: ^1.1.2
-  record: ^5.1.2
+  record: ^6.2.1
   audioplayers: ^6.1.0
   path_provider: ^2.1.4
 
