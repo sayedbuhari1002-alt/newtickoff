@@ -19,7 +19,7 @@ dependencies:
   # Local-only reminders and on-device task attachments.
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
-  flutter_timezone: ^3.0.1
+  flutter_timezone: ^4.1.1
   image_picker: ^1.1.2
   record: ^6.2.1
   audioplayers: ^6.1.0
