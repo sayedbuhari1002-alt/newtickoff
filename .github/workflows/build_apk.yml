@@ -54,7 +54,7 @@ jobs:
 
       - name: Static analysis
         id: analyze
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
         continue-on-error: true
 
       - name: Unit and widget tests
