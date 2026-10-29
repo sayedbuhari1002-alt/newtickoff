@@ -1,0 +1,105 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show toolchain versions
+        run: |
+          flutter --version
+          dart --version
+          java -version
+
+      - name: Install SQLite library for repository tests
+        id: sqlite
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+        continue-on-error: true
+
+      - name: Prepare Android scaffold if absent
+        id: android_scaffold
+        run: bash tool/prepare_android.sh
+        continue-on-error: true
+
+      - name: Resolve dependencies
+        id: pub_get
+        run: flutter pub get
+        continue-on-error: true
+
+      - name: Format Dart source and tests
+        id: format
+        run: dart format lib test
+        continue-on-error: true
+
+      - name: Static analysis
+        id: analyze
+        run: flutter analyze
+        continue-on-error: true
+
+      - name: Unit and widget tests
+        id: app_tests
+        run: flutter test test/unit test/widget
+        continue-on-error: true
+
+      - name: SQLite repository and migration tests
+        id: db_tests
+        run: flutter test test/data
+        continue-on-error: true
+
+      - name: Build release APK
+        id: apk
+        run: flutter build apk --release
+        continue-on-error: true
+
+      - name: Upload release APK artifact
+        if: steps.apk.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tickoff-stage5-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Fail the workflow if any required check failed
+        if: always()
+        env:
+          SQLITE: ${{ steps.sqlite.outcome }}
+          ANDROID_SCAFFOLD: ${{ steps.android_scaffold.outcome }}
+          PUB_GET: ${{ steps.pub_get.outcome }}
+          FORMAT: ${{ steps.format.outcome }}
+          ANALYZE: ${{ steps.analyze.outcome }}
+          APP_TESTS: ${{ steps.app_tests.outcome }}
+          DB_TESTS: ${{ steps.db_tests.outcome }}
+          APK: ${{ steps.apk.outcome }}
+        run: |
+          failed=0
+          for check in SQLITE ANDROID_SCAFFOLD PUB_GET FORMAT ANALYZE APP_TESTS DB_TESTS APK; do
+            value="${!check}"
+            echo "$check: $value"
+            if [ "$value" != "success" ]; then failed=1; fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "One or more required checks failed. Review the earlier step logs; an APK artifact is uploaded only if the APK build succeeded."
+            exit 1
+          fi
