@@ -59,3 +59,7 @@ No database schema migration is required for these changes. Existing tasks, habi
 ## Verification limitation
 
 The Flutter and Dart SDKs were not available in the implementation environment. The project therefore still requires `dart format`, `flutter analyze`, `flutter test`, the SQLite tests, and the Android release build in GitHub Actions before the APK can be treated as verified.
+
+
+## Notification runtime correction
+- Added R8/ProGuard keep rules for Gson TypeToken generic signatures used by flutter_local_notifications, preventing the release-build `Missing type parameter` exception while loading/cancelling scheduled reminders.

@@ -32,6 +32,32 @@ else
 fi
 
 
+
+# Preserve Gson generic signatures used by flutter_local_notifications.
+# Without these R8 rules, release builds can throw
+# "RuntimeException: Missing type parameter" while loading/cancelling
+# scheduled notifications (Gson TypeToken loses its generic signature).
+PROGUARD_RULES="android/app/proguard-rules.pro"
+cat > "$PROGUARD_RULES" <<'EOF'
+# Gson TypeToken requires generic signatures at runtime.
+-keepattributes Signature
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
+EOF
+
+# Ensure the generated Android release build consumes the app ProGuard rules.
+if [ -f android/app/build.gradle.kts ]; then
+  APP_GRADLE="android/app/build.gradle.kts"
+  if ! grep -q 'proguard-rules.pro' "$APP_GRADLE"; then
+    sed -i '/release[[:space:]]*{/a\\            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")' "$APP_GRADLE"
+  fi
+elif [ -f android/app/build.gradle ]; then
+  APP_GRADLE="android/app/build.gradle"
+  if ! grep -q 'proguard-rules.pro' "$APP_GRADLE"; then
+    sed -i "/release[[:space:]]*{/a\\            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'" "$APP_GRADLE"
+  fi
+fi
+
 # Runtime permissions and receivers required by exact local reminders and recording.
 for permission in POST_NOTIFICATIONS RECEIVE_BOOT_COMPLETED RECORD_AUDIO SCHEDULE_EXACT_ALARM; do
   if ! grep -q "android.permission.${permission}" "$MANIFEST"; then
