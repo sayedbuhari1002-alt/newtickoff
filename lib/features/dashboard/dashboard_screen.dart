@@ -146,7 +146,7 @@ class _OverviewBody extends ConsumerWidget {
                     doneHabits: doneHabits,
                     totalHabits: dueHabits.length,
                   ),
-                'tasks' => _tasksSection(context, ref, dayTasks),
+                'tasks' => _tasksSection(context, ref, dayTasks, today),
                 'habits' => _habitsSection(context, ref, data, habits, dueHabits, selected),
                 'insights' => _insightsSection(context),
                 _ => const SizedBox.shrink(),
@@ -205,7 +205,12 @@ class _OverviewBody extends ConsumerWidget {
     );
   }
 
-  Widget _tasksSection(BuildContext context, WidgetRef ref, List<Task> dayTasks) {
+  Widget _tasksSection(
+    BuildContext context,
+    WidgetRef ref,
+    List<Task> dayTasks,
+    DateTime today,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -235,7 +240,7 @@ class _OverviewBody extends ConsumerWidget {
               key: ValueKey<String>(task.id),
               task: task,
               selectedDate: selected,
-              showOverdue: selected.isAtSameMomentAs(today),
+              showOverdue: isSameDay(selected, today),
               titleFontSize: 16,
               onOpen: () => context.push(AppRoutes.taskDetail(task.id)),
               onToggle: (bool done) async {

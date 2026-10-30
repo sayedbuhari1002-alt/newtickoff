@@ -338,7 +338,7 @@ class HabitDetailScreen extends ConsumerWidget {
     bool complete,
     bool slipped,
     CompletionRecord? record,
-    bool isToday = true,
+    bool isToday,
   ) {
     if (habit.type == HabitType.quit) {
       if (isToday) return slipped ? 'Slipped today' : 'Slip-free today';
