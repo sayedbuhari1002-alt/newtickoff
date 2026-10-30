@@ -98,6 +98,50 @@ Future<void> showHabitInfoSheet(BuildContext context, Habit habit) {
   );
 }
 
+class _DailyCountHistory extends StatelessWidget {
+  const _DailyCountHistory({required this.habit, required this.records});
+
+  final Habit habit;
+  final Map<String, CompletionRecord> records;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<MapEntry<String, CompletionRecord>> entries = records.entries
+        .where((MapEntry<String, CompletionRecord> e) => e.value.count > 0)
+        .toList()
+      ..sort((MapEntry<String, CompletionRecord> a, MapEntry<String, CompletionRecord> b) => b.key.compareTo(a.key));
+    if (entries.isEmpty) {
+      return const Text(
+        'No count entries recorded yet.',
+        style: TextStyle(color: AppColors.textSecondary),
+      );
+    }
+    return Column(
+      children: <Widget>[
+        for (int i = 0; i < entries.length && i < 30; i++) ...<Widget>[
+          if (i > 0) const Divider(height: 14),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  parseDateKey(entries[i].key) is DateTime
+                      ? dayMonthLabel(parseDateKey(entries[i].key)!)
+                      : entries[i].key,
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+              Text(
+                countLabel(habit, entries[i].value.count),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _InfoRow extends StatelessWidget {
   const _InfoRow(this.label, this.value);
 
@@ -308,6 +352,13 @@ Future<void> showHistorySheet(BuildContext context, String habitId) {
                   color: AppColors.textSecondary,
                 ),
               ),
+              if (habit.tracking == TrackingMethod.count) ...<Widget>[
+                const SizedBox(height: AppDimens.gap),
+                SectionCard(
+                  title: 'Recorded daily counts',
+                  child: _DailyCountHistory(habit: habit, records: records),
+                ),
+              ],
             ],
           ),
         );

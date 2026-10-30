@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tickoff_replacement/core/router/routes.dart';
+import 'package:tickoff_replacement/domain/models/models.dart';
 import 'package:tickoff_replacement/shared/widgets/widgets.dart';
 
 import '../support/in_memory_repository.dart';
@@ -54,6 +55,28 @@ void main() {
     // 10 completed of 14 due.
     expect(tileValue(tester, 'Completion Rate'), '71%');
     expect(tileValue(tester, 'Days Tracked'), '8');
+  });
+
+  testWidgets('count analytics retain actual values above the daily goal',
+      (WidgetTester tester) async {
+    final InMemoryAppRepository repo = InMemoryAppRepository()
+      ..habits['water'] = sampleHabit(
+        id: 'water',
+        title: 'Drink Water',
+        tracking: TrackingMethod.count,
+        goal: 100,
+      );
+    final CompletionRecord record = CompletionRecord(
+      habitId: 'water',
+      dateKey: '2026-10-26',
+      updatedAt: DateTime(2026, 10, 26),
+      count: 120,
+    );
+    repo.records[record.key] = record;
+
+    await pumpApp(tester, repo: repo, location: AppRoutes.analytics);
+    expect(find.text('Actual Count History'), findsOneWidget);
+    expect(find.textContaining('120/100'), findsOneWidget);
   });
 
   testWidgets('date-range filter changes the figures',

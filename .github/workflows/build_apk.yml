@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   workflow_dispatch:
 
 jobs:
@@ -76,7 +76,7 @@ jobs:
         if: steps.apk.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: tickoff-stage5-release-apk
+          name: tickoff-next-version-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14

@@ -6,6 +6,7 @@ import '../../core/icons/habit_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../domain/models/models.dart';
+import '../../data/services/task_reminder_service.dart';
 import '../../shared/utils/format.dart';
 import '../../shared/utils/guarded.dart';
 import '../../shared/widgets/widgets.dart';
@@ -174,7 +175,15 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    if (ok) context.pop();
+    if (ok) {
+      final String? reminderIssue = TaskReminderService.instance.lastSchedulingIssue;
+      if (reminderIssue != null && _reminder.enabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(reminderIssue)),
+        );
+      }
+      context.pop();
+    }
   }
 
   @override

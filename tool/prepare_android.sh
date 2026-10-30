@@ -32,14 +32,14 @@ else
 fi
 
 
-# Runtime permissions and receivers required by local reminders and recording.
-for permission in POST_NOTIFICATIONS RECEIVE_BOOT_COMPLETED RECORD_AUDIO; do
+# Runtime permissions and receivers required by exact local reminders and recording.
+for permission in POST_NOTIFICATIONS RECEIVE_BOOT_COMPLETED RECORD_AUDIO SCHEDULE_EXACT_ALARM; do
   if ! grep -q "android.permission.${permission}" "$MANIFEST"; then
     sed -i "/<application/i\    <uses-permission android:name=\"android.permission.${permission}\" />" "$MANIFEST"
   fi
 done
 if ! grep -q 'ScheduledNotificationReceiver' "$MANIFEST"; then
-  sed -i '/<\/application>/i\        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />\n        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">\n            <intent-filter>\n                <action android:name="android.intent.action.BOOT_COMPLETED" />\n                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />\n                <action android:name="android.intent.action.QUICKBOOT_POWERON" />\n            </intent-filter>\n        </receiver>' "$MANIFEST"
+  sed -i '/<\/application>/i\        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />\n        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">\n            <intent-filter>\n                <action android:name="android.intent.action.BOOT_COMPLETED" />\n                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />\n                <action android:name="android.intent.action.QUICKBOOT_POWERON" />\n                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />\n            </intent-filter>\n        </receiver>' "$MANIFEST"
 fi
 
 # flutter_local_notifications 17 uses core-library desugaring for scheduled

@@ -22,6 +22,30 @@ void main() {
     expect(find.text('Due (0)'), findsOneWidget);
   });
 
+  testWidgets('quit habits with no slip count as successful in Daily Progress',
+      (WidgetTester tester) async {
+    final InMemoryAppRepository repo = InMemoryAppRepository()
+      ..habits['b1'] = sampleHabit(id: 'b1', title: 'Build One')
+      ..habits['b2'] = sampleHabit(id: 'b2', title: 'Build Two')
+      ..habits['q1'] = sampleHabit(id: 'q1', title: 'Quit One', type: HabitType.quit)
+      ..habits['q2'] = sampleHabit(id: 'q2', title: 'Quit Two', type: HabitType.quit);
+    for (final String habitId in <String>['b1', 'b2']) {
+      final CompletionRecord completedBuild = doneOn(habitId, kToday);
+      repo.records[completedBuild.key] = completedBuild;
+    }
+    final CompletionRecord slippedQuit = CompletionRecord(
+      habitId: 'q2',
+      dateKey: dateKey(kToday),
+      updatedAt: kToday,
+      slipped: true,
+    );
+    repo.records[slippedQuit.key] = slippedQuit;
+
+    await pumpApp(tester, repo: repo);
+    expect(find.text('75%'), findsOneWidget);
+    expect(find.text('3 of 4'), findsOneWidget);
+  });
+
   testWidgets('stored habits appear with real counts and streaks',
       (WidgetTester tester) async {
     final InMemoryAppRepository repo = InMemoryAppRepository()
@@ -104,6 +128,19 @@ void main() {
     expect(repo.records, isEmpty);
   });
 
+  testWidgets('Dashboard allows a Build habit to be completed directly',
+      (WidgetTester tester) async {
+    final InMemoryAppRepository repo = InMemoryAppRepository()
+      ..habits['b1'] = sampleHabit(id: 'b1', title: 'Stretching');
+    await pumpApp(tester, repo: repo);
+
+    expect(find.text('0 of 1'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.circle_outlined));
+    await tester.pumpAndSettle();
+    expect(repo.records['b1|${dateKey(kToday)}']!.done, isTrue);
+    expect(find.text('1 of 1'), findsOneWidget);
+  });
+
   testWidgets('count habits add one step per tap and show progress',
       (WidgetTester tester) async {
     final InMemoryAppRepository repo = InMemoryAppRepository()
@@ -124,6 +161,17 @@ void main() {
     expect(find.textContaining('2/2'), findsOneWidget);
     expect(find.text('Streak: 1 day  ·  2/2'), findsOneWidget);
     expect(repo.records.values.single.count, 2);
+
+    await tester.tap(find.byIcon(Icons.remove_rounded));
+    await tester.pumpAndSettle();
+    expect(repo.records.values.single.count, 1);
+
+    await tester.tap(find.byIcon(Icons.restart_alt_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Reset'), findsOneWidget);
+    await tester.tap(find.text('Reset'));
+    await tester.pumpAndSettle();
+    expect(repo.records, isEmpty);
   });
 
   testWidgets('quit habits record a slip instead of a completion',

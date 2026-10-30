@@ -218,8 +218,27 @@ class HabitEngine {
     return isSameDay(day, today) ? DayOutcome.pending : DayOutcome.failure;
   }
 
+  /// Whether a Build habit is scheduled for a calendar date. Unlike
+  /// [isDueOn], this also evaluates future dates so the Tasks page can preview
+  /// upcoming scheduled habits.
+  bool isScheduledOn(
+    Habit habit,
+    DateTime date,
+    Map<String, CompletionRecord> records,
+  ) {
+    final DateTime day = dateOnly(date);
+    if (habit.isArchived || habit.type != HabitType.build) return false;
+    if (day.isBefore(startDate(habit, records))) return false;
+    if (_isFlexible(habit)) {
+      if (isCompleted(habit, records[dateKey(day)])) return true;
+      return _completedInPeriodBefore(habit, day, records) <
+          habit.schedule.timesPerPeriod;
+    }
+    return habit.schedule.isScheduledOn(day);
+  }
+
   /// Whether the habit should appear under the dashboard "Due" filter on
-  /// [date].
+  /// [date]. Future dates are deliberately excluded from the dashboard.
   bool isDueOn(
     Habit habit,
     DateTime date,
@@ -229,12 +248,7 @@ class HabitEngine {
     final DateTime start = startDate(habit, records);
     if (day.isAfter(today) || day.isBefore(start)) return false;
     if (habit.type == HabitType.quit) return true;
-    if (_isFlexible(habit)) {
-      if (isCompleted(habit, records[dateKey(day)])) return true;
-      return _completedInPeriodBefore(habit, day, records) <
-          habit.schedule.timesPerPeriod;
-    }
-    return habit.schedule.isScheduledOn(day);
+    return isScheduledOn(habit, day, records);
   }
 
   int _completedInPeriodBefore(

@@ -29,6 +29,84 @@ class AnalyticsScreen extends ConsumerStatefulWidget {
   ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
+class _ActualCountHistory extends StatelessWidget {
+  const _ActualCountHistory({
+    required this.habits,
+    required this.data,
+    required this.from,
+    required this.to,
+  });
+
+  final List<Habit> habits;
+  final AppData data;
+  final DateTime from;
+  final DateTime to;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<_CountHistoryValue> values = <_CountHistoryValue>[];
+    for (final Habit habit in habits.where((Habit h) => h.tracking == TrackingMethod.count)) {
+      for (final MapEntry<String, CompletionRecord> entry in data.recordsFor(habit.id).entries) {
+        final DateTime? day = parseDateKey(entry.key);
+        if (day == null || day.isBefore(from) || day.isAfter(to) || entry.value.count <= 0) continue;
+        values.add(_CountHistoryValue(habit: habit, day: day, count: entry.value.count));
+      }
+    }
+    values.sort((_CountHistoryValue a, _CountHistoryValue b) => b.day.compareTo(a.day));
+
+    return SectionCard(
+      title: 'Actual Count History',
+      child: values.isEmpty
+          ? const Text(
+              'No count entries in this date range yet.',
+              style: TextStyle(color: AppColors.textSecondary),
+            )
+          : Column(
+              children: <Widget>[
+                for (int i = 0; i < values.length; i++) ...<Widget>[
+                  if (i > 0) const Divider(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              values[i].habit.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              dayMonthLabel(values[i].day),
+                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        countLabel(values[i].habit, values[i].count),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+class _CountHistoryValue {
+  const _CountHistoryValue({required this.habit, required this.day, required this.count});
+  final Habit habit;
+  final DateTime day;
+  final double count;
+}
+
 class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   String? _habitId;
   AnalyticsRange _range = AnalyticsRange.month;
@@ -153,6 +231,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
           ),
+          if (selected.any((Habit h) => h.tracking == TrackingMethod.count)) ...<Widget>[
+            const SizedBox(height: AppDimens.gap),
+            _ActualCountHistory(habits: selected, data: data, from: from, to: today),
+          ],
           const SizedBox(height: AppDimens.gap),
           SectionCard(
             title: 'Summary',

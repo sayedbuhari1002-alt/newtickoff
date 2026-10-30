@@ -49,6 +49,11 @@ class SettingsScreen extends StatelessWidget {
           _Group(
             children: <Widget>[
               _Tile(
+                icon: Icons.notifications_active_outlined,
+                label: 'Notifications & reminders',
+                route: AppRoutes.notifications,
+              ),
+              _Tile(
                 icon: Icons.settings_outlined,
                 label: 'General',
                 route: AppRoutes.general,

@@ -19,9 +19,10 @@ import 'habit_sheets.dart';
 
 /// Habit detail: status, streaks, score, quick actions, history and timeline.
 class HabitDetailScreen extends ConsumerWidget {
-  const HabitDetailScreen({super.key, required this.habitId});
+  const HabitDetailScreen({super.key, required this.habitId, this.selectedDate});
 
   final String habitId;
+  final DateTime? selectedDate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -45,10 +46,13 @@ class HabitDetailScreen extends ConsumerWidget {
     }
 
     final DateTime today = ref.watch(todayProvider);
+    final DateTime trackingDate = selectedDate == null
+        ? today
+        : dateOnly(selectedDate!);
     final HabitEngine engine = ref.watch(habitEngineProvider);
     final HabitStats stats =
         ref.watch(habitStatsProvider)[habit.id] ?? HabitStats.empty;
-    final CompletionRecord? record = data.recordsFor(habit.id)[dateKey(today)];
+    final CompletionRecord? record = data.recordsFor(habit.id)[dateKey(trackingDate)];
     final Color color = habit.color;
     final bool quit = habit.type == HabitType.quit;
     final bool slipped = quit && engine.isSlipped(habit, record);
@@ -118,9 +122,27 @@ class HabitDetailScreen extends ConsumerWidget {
                     Center(
                       child: _StatusChip(
                         color: slipped ? AppColors.danger : color,
-                        label: _statusLabel(habit, complete, slipped, record),
+                        label: _statusLabel(
+                          habit,
+                          complete,
+                          slipped,
+                          record,
+                          trackingDate.isAtSameMomentAs(dateOnly(today)),
+                        ),
                       ),
                     ),
+                    if (habit.tracking == TrackingMethod.count) ...<Widget>[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Current count: ${countLabel(habit, record?.count ?? 0)}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: AppDimens.gapLg),
                     Row(
                       children: <Widget>[
@@ -215,45 +237,90 @@ class HabitDetailScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: () => tapDay(context, ref, habit, today),
-                      onLongPress: () =>
-                          longPressDay(context, ref, habit, today),
-                      child: Container(
-                        height: 54,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: slipped
-                              ? AppColors.danger.withAlpha(120)
-                              : color.withAlpha(complete ? 200 : 90),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            Icon(
-                              slipped
-                                  ? Icons.close_rounded
-                                  : Icons.check_circle_rounded,
-                              color: complete && !slipped
-                                  ? Colors.black
-                                  : Colors.white,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _doneLabel(habit, complete, slipped),
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
-                                color: complete && !slipped
-                                    ? Colors.black
-                                    : Colors.white,
+                    if (habit.tracking == TrackingMethod.count) ...<Widget>[
+                      Row(
+                        children: <Widget>[
+                          _CountActionButton(
+                            icon: Icons.remove_rounded,
+                            tooltip: 'Decrease by ${formatNumber(habit.step)}',
+                            onTap: () => decreaseCountDay(context, ref, habit, trackingDate),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => tapDay(context, ref, habit, trackingDate),
+                              onLongPress: () => longPressDay(context, ref, habit, trackingDate),
+                              child: Container(
+                                height: 54,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: slipped
+                                      ? AppColors.danger.withAlpha(120)
+                                      : color.withAlpha(complete ? 200 : 90),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    Icon(
+                                      slipped ? Icons.close_rounded : Icons.add_rounded,
+                                      color: complete && !slipped ? Colors.black : Colors.white,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _doneLabel(habit, complete, slipped),
+                                      style: TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w600,
+                                        color: complete && !slipped ? Colors.black : Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ],
+                          ),
+                          const SizedBox(width: 8),
+                          _CountActionButton(
+                            icon: Icons.restart_alt_rounded,
+                            tooltip: "Reset this day's count",
+                            onTap: () => resetCountDay(context, ref, habit, trackingDate),
+                          ),
+                        ],
+                      ),
+                    ] else
+                      GestureDetector(
+                        onTap: () => tapDay(context, ref, habit, trackingDate),
+                        onLongPress: () => longPressDay(context, ref, habit, trackingDate),
+                        child: Container(
+                          height: 54,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: slipped
+                                ? AppColors.danger.withAlpha(120)
+                                : color.withAlpha(complete ? 200 : 90),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                slipped ? Icons.close_rounded : Icons.check_circle_rounded,
+                                color: complete && !slipped ? Colors.black : Colors.white,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _doneLabel(habit, complete, slipped),
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: complete && !slipped ? Colors.black : Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                     const SizedBox(height: AppDimens.gapLg),
                     _Timeline(habit: habit, data: data),
                   ],
@@ -271,9 +338,11 @@ class HabitDetailScreen extends ConsumerWidget {
     bool complete,
     bool slipped,
     CompletionRecord? record,
+    bool isToday = true,
   ) {
     if (habit.type == HabitType.quit) {
-      return slipped ? 'Slipped today' : 'Slip-free today';
+      if (isToday) return slipped ? 'Slipped today' : 'Slip-free today';
+      return slipped ? 'Slip recorded' : 'No slip recorded';
     }
     if (complete) return 'Completed';
     if (habit.tracking == TrackingMethod.count) {
@@ -404,6 +473,36 @@ class _StatusChip extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CountActionButton extends StatelessWidget {
+  const _CountActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: Material(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: SizedBox(
+              width: 48,
+              height: 54,
+              child: Icon(icon, color: AppColors.textPrimary),
+            ),
+          ),
+        ),
+      );
 }
 
 class _InfoChip extends StatelessWidget {

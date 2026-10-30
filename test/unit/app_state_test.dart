@@ -155,6 +155,27 @@ void main() {
     expect(repo.records, isEmpty);
   });
 
+  test('count decrement clamps at zero and reset preserves other days', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    final AppDataNotifier n = await load(c);
+    final Habit h = habit(tracking: TrackingMethod.count, goal: 100).copyWith(step: 10);
+
+    await n.saveHabit(h);
+    await n.addCount(h, today, 120);
+    await n.addCount(h, addDays(today, -1), 30);
+    expect(repo.records['h|${dateKey(today)}']!.count, 120);
+
+    await n.decreaseCount(h, today);
+    expect(repo.records['h|${dateKey(today)}']!.count, 110);
+    await n.resetCount(h, today);
+    expect(repo.records.containsKey('h|${dateKey(today)}'), isFalse);
+    expect(repo.records['h|${dateKey(addDays(today, -1))}']!.count, 30);
+
+    await n.decreaseCount(h, today);
+    expect(repo.records.containsKey('h|${dateKey(today)}'), isFalse);
+  });
+
   test('checklist items toggle independently', () async {
     final InMemoryAppRepository repo = InMemoryAppRepository();
     final ProviderContainer c = containerFor(repo);

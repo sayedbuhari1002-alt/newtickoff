@@ -52,6 +52,39 @@ List<CompletionRecord> doneDays(Iterable<int> days) =>
     days.map((int d) => done(oct(d))).toList();
 
 void main() {
+
+  group('Build habit scheduling for dated task views', () {
+    test('weekday schedule can be evaluated for a future date', () {
+      const Schedule fridayOnly = Schedule(
+        type: FrequencyType.daysOfWeek,
+        weekdays: <int>{5},
+      );
+      final Habit h = habit(schedule: fridayOnly, created: oct(20));
+      expect(engine.isScheduledOn(h, DateTime(2026, 10, 30), const {}), isTrue);
+      expect(engine.isScheduledOn(h, DateTime(2026, 10, 31), const {}), isFalse);
+    });
+
+    test('quit habits and dates before creation are excluded from Build schedule', () {
+      expect(engine.isScheduledOn(habit(type: HabitType.quit), oct(27), const {}), isFalse);
+      expect(engine.isScheduledOn(habit(created: oct(26)), oct(25), const {}), isFalse);
+    });
+  });
+
+  group('Quit habit success semantics', () {
+    test('a missing record is a successful slip-free day', () {
+      final Habit quit = habit(type: HabitType.quit);
+      expect(engine.isSuccess(quit, null), isTrue);
+      expect(engine.dayProgress(quit, null), 1);
+    });
+
+    test('recording a slip makes the day unsuccessful', () {
+      final Habit quit = habit(type: HabitType.quit);
+      final CompletionRecord slipped = slip(today);
+      expect(engine.isSuccess(quit, slipped), isFalse);
+      expect(engine.dayProgress(quit, slipped), 0);
+    });
+  });
+
   group('Build streaks (everyday)', () {
     test('7 completed days with today still pending = streak of 7', () {
       final HabitStats s = engine.stats(habit(), recs(doneDays(<int>[20, 21, 22, 23, 24, 25, 26])));

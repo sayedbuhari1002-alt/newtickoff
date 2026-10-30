@@ -60,7 +60,7 @@ class HabitCard extends ConsumerWidget {
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: () => context.push(AppRoutes.habitDetail(habit.id)),
+        onTap: () => context.push(AppRoutes.habitDetail(habit.id, date: date)),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -115,6 +115,28 @@ class HabitCard extends ConsumerWidget {
                       color: AppColors.textPrimary,
                     ),
                   ),
+                  if (habit.tracking == TrackingMethod.count) ...<Widget>[
+                    const SizedBox(width: 6),
+                    _SquareButton(
+                      tooltip: "Reset this day's count",
+                      onTap: () => resetCountDay(context, ref, habit, date),
+                      child: const Icon(
+                        Icons.restart_alt_rounded,
+                        size: 21,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    _SquareButton(
+                      tooltip: 'Decrease by ${formatNumber(habit.step)}',
+                      onTap: () => decreaseCountDay(context, ref, habit, date),
+                      child: const Icon(
+                        Icons.remove_rounded,
+                        size: 22,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   _CheckButton(
                     habit: habit,

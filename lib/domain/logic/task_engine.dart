@@ -2,27 +2,33 @@ import '../models/models.dart';
 
 DateTime dayOnly(DateTime value) => DateTime(value.year, value.month, value.day);
 
-/// True when an incomplete task belongs in the selected date's scheduled list.
-/// An explicit reminder starts visibility; otherwise the deadline is used.
-bool isTaskVisibleOnDate(Task task, DateTime selectedDate) {
-  if (task.isCompleted || task.isPaused) return false;
-  final DateTime? start = task.reminderAt ?? task.dueAt;
-  if (start == null) return false;
-  return !dayOnly(selectedDate).isBefore(dayOnly(start));
+/// Whether [task] is scheduled for [selectedDate]. A reminder starts the
+/// visible window and the deadline ends it, both inclusively. If only one of
+/// those dates exists, the task is shown on that date only.
+bool isTaskScheduledOnDate(Task task, DateTime selectedDate) {
+  if (task.isPaused) return false;
+  final DateTime? startValue = task.reminderAt ?? task.dueAt;
+  if (startValue == null) return false;
+  final DateTime start = dayOnly(startValue);
+  final DateTime selected = dayOnly(selectedDate);
+  // A reminder-only task remains active from its reminder date until it is
+  // completed or given a deadline. With a deadline, visibility ends that day.
+  if (task.dueAt == null) return !selected.isBefore(start);
+  final DateTime end = dayOnly(task.dueAt!);
+  if (start.isAfter(end)) return false;
+  return !selected.isBefore(start) && !selected.isAfter(end);
 }
 
+/// Kept as a compatibility helper for callers/tests: visibility now means
+/// scheduled on the selected date, not an indefinitely carried overdue task.
+bool isTaskVisibleOnDate(Task task, DateTime selectedDate) =>
+    isTaskScheduledOnDate(task, selectedDate);
+
+/// Whether an incomplete task was already past its deadline by [selectedDate].
+/// The list filter decides whether overdue tasks are eligible to be displayed.
 bool isTaskOverdueOnDate(Task task, DateTime selectedDate) {
   if (task.isCompleted || task.isPaused || task.dueAt == null) return false;
-  final DateTime dueDay = dayOnly(task.dueAt!);
-  final DateTime selectedDay = dayOnly(selectedDate);
-  if (dueDay.isBefore(selectedDay)) return true;
-  if (dueDay.isAfter(selectedDay)) return false;
-  final bool hasDueTime = task.dueAt!.hour != 0 || task.dueAt!.minute != 0;
-  if (!hasDueTime) return false;
-  final DateTime now = DateTime.now();
-  if (dayOnly(now).isAtSameMomentAs(selectedDay)) return now.isAfter(task.dueAt!);
-  // A historical selected date is evaluated through its end-of-day boundary.
-  return selectedDay.isBefore(dayOnly(now));
+  return dayOnly(task.dueAt!).isBefore(dayOnly(selectedDate));
 }
 
 enum TaskSort { defaultOrder, priority, deadline, categoryAscending, categoryDescending }
@@ -33,32 +39,40 @@ List<Task> filterAndSortTasks(
   Iterable<Task> tasks, {
   required TaskListFilter filter,
   required DateTime selectedDate,
-  TaskPriority? priority,
   String? category,
   TaskSort sort = TaskSort.defaultOrder,
   bool includeCompleted = true,
+  DateTime? todayOverride,
 }) {
+  final DateTime selected = dayOnly(selectedDate);
+  final DateTime today = dayOnly(todayOverride ?? DateTime.now());
+  final bool isToday = selected.isAtSameMomentAs(today);
+  final bool includeOverdue = filter == TaskListFilter.today && isToday;
+
   final List<Task> result = tasks.where((Task task) {
     if (!includeCompleted && task.isCompleted) return false;
-    if (priority != null && task.priority != priority) return false;
     if (category != null && category.isNotEmpty && task.category != category) return false;
+    final bool completedOnSelectedDate = task.isCompleted &&
+        task.completedAt != null &&
+        dayOnly(task.completedAt!).isAtSameMomentAs(selected);
     switch (filter) {
       case TaskListFilter.all:
         return true;
       case TaskListFilter.today:
-      case TaskListFilter.selectedDate:
-        return isTaskVisibleOnDate(task, selectedDate) ||
-            (task.isCompleted && task.completedAt != null && dayOnly(task.completedAt!).isAtSameMomentAs(dayOnly(selectedDate)));
+        return isTaskScheduledOnDate(task, selected) ||
+            completedOnSelectedDate ||
+            (includeOverdue && isTaskOverdueOnDate(task, selected));
       case TaskListFilter.due:
-        return isTaskVisibleOnDate(task, selectedDate);
+      case TaskListFilter.selectedDate:
+        return isTaskScheduledOnDate(task, selected) || completedOnSelectedDate;
     }
   }).toList();
 
   int defaultCompare(Task a, Task b) {
     if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
     if (a.isPaused != b.isPaused) return a.isPaused ? 1 : -1;
-    final bool aOverdue = isTaskOverdueOnDate(a, selectedDate);
-    final bool bOverdue = isTaskOverdueOnDate(b, selectedDate);
+    final bool aOverdue = includeOverdue && isTaskOverdueOnDate(a, selected);
+    final bool bOverdue = includeOverdue && isTaskOverdueOnDate(b, selected);
     if (aOverdue != bOverdue) return aOverdue ? -1 : 1;
     final DateTime aDue = a.dueAt ?? DateTime(9999);
     final DateTime bDue = b.dueAt ?? DateTime(9999);
@@ -189,7 +203,7 @@ class TaskAnalyticsEngine {
       if (due == null) return false;
       final DateTime dueDay = dayOnly(due);
       if (dueDay.isBefore(selectedDay)) return true;
-      return dueDay.isAtSameMomentAs(selectedDay) && (due.hour != 0 || due.minute != 0);
+      return false;
     }
 
     for (final String id in ids) {
