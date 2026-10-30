@@ -12,6 +12,7 @@ import 'package:record/record.dart';
 import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/ids.dart';
+import '../../data/services/task_reminder_service.dart';
 import '../../domain/models/models.dart';
 import '../../state/app_data.dart';
 import '../../state/app_state.dart';
@@ -232,7 +233,21 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
       await ref.read(appDataProvider.notifier).saveTask(task);
       _savedSuccessfully = true;
       _sessionAddedPaths.clear();
-      if (mounted) context.go(AppRoutes.taskDetail(task.id));
+      final String? reminderIssue = TaskReminderService.instance.lastSchedulingIssue;
+      if (mounted && reminderIssue != null && _reminderAt != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(reminderIssue)),
+        );
+      }
+      if (mounted) {
+        if (widget.taskId == null) {
+          context.pushReplacement(AppRoutes.taskDetail(task.id));
+        } else if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go(AppRoutes.taskDetail(task.id));
+        }
+      }
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
     } finally {

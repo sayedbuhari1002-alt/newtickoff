@@ -1,3 +1,5 @@
+import '../utils/date_utils.dart';
+
 /// Every route path in one place.
 class AppRoutes {
   AppRoutes._();
@@ -10,7 +12,14 @@ class AppRoutes {
 
   // Habits (full-screen, no bottom bar)
   static const String habitNew = '/habit/new';
-  static String habitDetail(String id) => '/habit/$id';
+  static String habitDetail(String id, {DateTime? date}) {
+    final String path = '/habit/$id';
+    if (date == null) return path;
+    return Uri(
+      path: path,
+      queryParameters: <String, String>{'date': dateKey(date)},
+    ).toString();
+  }
   static String habitEdit(String id) => '/habit/$id/edit';
   static String habitAnalytics(String id) => '/habit/$id/analytics';
 
@@ -40,6 +49,7 @@ class AppRoutes {
   static const String layout = '/settings/layout';
   static const String widgets = '/settings/widgets';
   static const String general = '/settings/general';
+  static const String notifications = '/settings/notifications';
   static const String rearrange = '/settings/rearrange';
   static const String categories = '/settings/categories';
   static const String archive = '/settings/archive';

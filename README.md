@@ -14,8 +14,10 @@ TickOff is an offline-first Flutter application that combines the supplied Stage
 - Local reminders for tasks and supported habit reminders, with permission requests and failure handling so notification errors do not block saving.
 - Persisted task activity snapshots for task/subtask creation, updates, completion/reopening, deadline changes, pause/resume, postponement, duplication, deletion, and subtask edits.
 - Task analytics with day/week/month/30-day/90-day/year/custom ranges; task summary metrics, completion bars/trends, comparison charts, weighted score trend, and selected-day historical breakdown.
-- SQLite schema migration from version 1 to version 2 that adds task tables while leaving Stage 3 habit tables and records intact.
+- SQLite schema migrations through version 3: task tables are added in version 2 and local app preferences in version 3, without resetting existing habit or task data.
 - GitHub Actions workflow that runs formatting, analysis, unit/widget tests, database/migration tests, and builds/uploads a release APK; the workflow fails if a required check fails.
+
+See [PATCH_NOTES_SETTINGS_NAVIGATION.md](PATCH_NOTES_SETTINGS_NAVIGATION.md) for the latest navigation and Settings changes and their verification status.
 
 ## Stage 3 habit functionality retained
 
@@ -69,7 +71,8 @@ The checked-in workflow does not merge branches or push source changes automatic
 
 - Database file: `tickoff.db` in the app's application-support database location.
 - Schema version 1 contains the original categories, habits, completion records, notes, and achievements tables.
-- Schema version 2 adds `tasks`, `subtasks`, and `task_activities` plus indexes. The migration is additive; it does not reset or rebuild the Stage 3 tables.
+- Schema version 2 adds `tasks`, `subtasks`, and `task_activities` plus indexes.
+- Schema version 3 adds the `app_settings` key/value table used for theme selection, Dashboard widget visibility, and section ordering. All migrations are additive; they do not reset or rebuild existing habit/task data.
 - Task parent rows and subtasks use a SQLite transaction during upsert. Task activity rows intentionally do **not** use a foreign key to `tasks`, allowing historical events to remain after a task is deleted.
 - Photos and recordings are copied to an app-private `tickoff_attachments` directory. A task deletion removes an attachment file only when no remaining task or note references it.
 - The activity journal only starts recording after this version is installed. Historical task states that were never captured cannot be reconstructed retroactively.
@@ -86,7 +89,7 @@ Run all tests with `flutter test` after installing Flutter and resolving depende
 
 - No Dart formatter, analyzer, Flutter test runner, Android Gradle build, or device runtime was available when this archive was prepared. The included CI workflow is the intended next verification gate.
 - Android scaffold files are generated during the build rather than included in the source archive because the supplied ZIP lacked them.
-- Settings destinations for theme/layout/widgets/general/rearrange remain inherited placeholder pages; a native Android launcher widget is not included. The working Settings features from the source (including categories and archive) remain available.
+- Theme settings now persist the original TickOff Dark or Graphite appearance locally. Widgets settings control visibility of the in-app Dashboard sections, and Rearrange persists Dashboard section order. These are in-app Dashboard sections, not Android launcher widgets; native launcher widgets remain outside this implementation. Layout and General remain placeholder destinations.
 - Audio capture/playback and local notification behavior depend on Android permission and operating-system behavior and need device testing. If a notification cannot be scheduled, saved task/habit data remains local.
 - Habit-linked notes retain the Stage 3 behavior. Photo/audio attachment support in this change is implemented for tasks; existing note attachment controls should be verified separately.
 - Weighted task score is intentionally defined as 1 point for Low, 2 for Medium, and 3 for High priority per actual task or subtask completion. A parent auto-completion event is excluded from completion units when child completion events already represent that work.

@@ -3,20 +3,24 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_dimens.dart';
 
-/// Single dark theme matching the reference screenshots.
+/// Dark appearance presets for the reference UI.
 ///
-/// Only long-stable ThemeData members are used so the theme compiles on any
-/// recent Flutter release. Component styling lives in the shared widgets.
+/// The default preset preserves the original black/gold/cyan palette. The
+/// optional Graphite preset changes Material surfaces without recolouring
+/// user-selected habit or task accents.
 class AppTheme {
   AppTheme._();
 
-  static ThemeData dark() {
-    const ColorScheme scheme = ColorScheme.dark(
+  static ThemeData dark({bool graphite = false}) {
+    final Color background = graphite ? const Color(0xFF101114) : AppColors.background;
+    final Color surface = graphite ? const Color(0xFF202126) : AppColors.surface;
+    final Color sheet = graphite ? const Color(0xFF17181B) : AppColors.sheet;
+    final ColorScheme scheme = ColorScheme.dark(
       primary: AppColors.gold,
       onPrimary: Colors.black,
       secondary: AppColors.cyan,
       onSecondary: Colors.black,
-      surface: AppColors.surface,
+      surface: surface,
       onSurface: AppColors.textPrimary,
       error: AppColors.danger,
       onError: Colors.white,
@@ -26,11 +30,11 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: scheme,
-      scaffoldBackgroundColor: AppColors.background,
-      canvasColor: AppColors.background,
+      scaffoldBackgroundColor: background,
+      canvasColor: background,
       dividerColor: AppColors.divider,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.background,
+      appBarTheme: AppBarTheme(
+        backgroundColor: background,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -42,9 +46,9 @@ class AppTheme {
           color: AppColors.textPrimary,
         ),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: AppColors.sheet,
-        modalBackgroundColor: AppColors.sheet,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: sheet,
+        modalBackgroundColor: sheet,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(

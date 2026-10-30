@@ -55,6 +55,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         await repo.loadAchievements();
     final List<Task> tasks = await repo.loadTasks();
     final List<TaskActivity> taskActivities = await repo.loadTaskActivities();
+    final Map<String, String> settings = await repo.loadSettings();
 
     final Map<String, Map<String, CompletionRecord>> index =
         <String, Map<String, CompletionRecord>>{};
@@ -70,14 +71,23 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       notes: notes,
       tasks: tasks,
       taskActivities: taskActivities,
+      settings: settings,
     );
     // Refresh local notifications after every launch. A notification failure
     // never prevents local data from loading.
     for (final Task task in tasks) {
       unawaited(TaskReminderService.instance.scheduleTask(task));
     }
+    final DateTime today = ref.read(todayProvider);
+    final HabitEngine reminderEngine = HabitEngine(today: today);
     for (final Habit habit in habits.where((Habit h) => !h.isArchived)) {
-      unawaited(TaskReminderService.instance.scheduleHabit(habit));
+      final CompletionRecord? todayRecord = index[habit.id]?[dateKey(today)];
+      final bool skipToday = habit.type == HabitType.build &&
+          reminderEngine.isCompleted(habit, todayRecord);
+      unawaited(TaskReminderService.instance.scheduleHabit(
+        habit,
+        skipToday: skipToday,
+      ));
     }
     // Back-fill achievements reached before this version stored them.
     for (final Habit h in habits.where((Habit h) => !h.isArchived)) {
@@ -117,15 +127,37 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     return data.copyWith(achievements: all);
   }
 
+  // --------------------------------------------------------------- preferences
+
+  /// Persists a small UI preference locally and publishes it to the app.
+  Future<void> saveSetting(String key, String value) async {
+    if (state.valueOrNull == null) await future;
+    await _repo.saveSetting(key, value);
+    final AppData data = _current;
+    state = AsyncData<AppData>(data.copyWith(
+      settings: <String, String>{...data.settings, key: value},
+    ));
+  }
+
   // ------------------------------------------------------------------ habits
 
   /// Creates or updates a habit after validating it.
   Future<void> saveHabit(Habit habit) async {
     final String? problem = habit.validate();
     if (problem != null) throw ArgumentError(problem);
-    await _repo.upsertHabit(habit);
-    await TaskReminderService.instance.scheduleHabit(habit);
     AppData data = _current;
+    final DateTime today = ref.read(todayProvider);
+    final bool skipToday = habit.type == HabitType.build &&
+        HabitEngine(today: today).isCompleted(
+          habit,
+          data.recordsFor(habit.id)[dateKey(today)],
+        );
+    await _repo.upsertHabit(habit);
+    await TaskReminderService.instance.scheduleHabit(
+      habit,
+      requestPermissions: habit.reminder.enabled,
+      skipToday: skipToday,
+    );
     final List<Habit> habits = List<Habit>.of(data.habits);
     final int i = habits.indexWhere((Habit h) => h.id == habit.id);
     if (i >= 0) {
@@ -198,6 +230,19 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     AppData next = data.copyWith(completions: all);
     next = await _syncAchievements(next, habit);
     state = AsyncData<AppData>(next);
+
+    // When a Build habit is completed today, suppress only today's upcoming
+    // reminder. Its selected weekday reminder resumes next week. Reopening or
+    // reducing a count below goal restores today's reminder if its time has
+    // not passed yet.
+    final bool completedToday =
+        habit.type == HabitType.build &&
+        dateOnly(date).isAtSameMomentAs(dateOnly(DateTime.now())) &&
+        HabitEngine(today: DateTime.now()).isCompleted(habit, updated);
+    unawaited(TaskReminderService.instance.scheduleHabit(
+      habit,
+      skipToday: completedToday,
+    ));
   }
 
   /// Tick habits: toggles done (Build) or slipped (Quit).
@@ -211,14 +256,26 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
 
   /// Count habits: adds [delta] (may be negative); never below zero.
   Future<void> addCount(Habit habit, DateTime date, double delta) {
+    if (!delta.isFinite) {
+      throw ArgumentError('The count change must be a finite number.');
+    }
     return _edit(habit, date, (CompletionRecord r) {
       return r.copyWith(count: _clean(r.count + delta));
     });
   }
 
+  Future<void> decreaseCount(Habit habit, DateTime date) {
+    return addCount(habit, date, -habit.step);
+  }
+
+  /// Resets the selected day's count only. Other days' records are untouched.
+  Future<void> resetCount(Habit habit, DateTime date) {
+    return setCount(habit, date, 0);
+  }
+
   Future<void> setCount(Habit habit, DateTime date, double value) {
-    if (value.isNaN || value < 0) {
-      throw ArgumentError('The count must be zero or more.');
+    if (!value.isFinite || value < 0) {
+      throw ArgumentError('The count must be a finite number that is zero or more.');
     }
     return _edit(habit, date, (CompletionRecord r) {
       return r.copyWith(count: _clean(value));
@@ -329,7 +386,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       updatedAt: now,
     );
     await _repo.upsertTask(saved);
-    await TaskReminderService.instance.scheduleTask(saved);
+    await TaskReminderService.instance.scheduleTask(saved, requestPermissions: saved.reminderAt != null && !saved.isCompleted && !saved.isPaused);
     final List<Task> tasks = List<Task>.of(data.tasks);
     final int at = tasks.indexWhere((Task t) => t.id == saved.id);
     if (at >= 0) {
@@ -615,6 +672,10 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
 
 final AsyncNotifierProvider<AppDataNotifier, AppData> appDataProvider =
     AsyncNotifierProvider<AppDataNotifier, AppData>(AppDataNotifier.new);
+final reminderPermissionProvider =
+    FutureProvider.autoDispose<ReminderPermissionStatus>(
+  (ref) => TaskReminderService.instance.checkPermissions(),
+);
 
 /// Stats for every habit, recomputed only when data or the date changes.
 final Provider<Map<String, HabitStats>> habitStatsProvider =

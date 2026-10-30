@@ -115,19 +115,26 @@ class Task {
   int get completedSubtasks => subtasks.where((Subtask s) => s.isCompleted).length;
   double get subtaskProgress => subtasks.isEmpty ? (isCompleted ? 1 : 0) : completedSubtasks / subtasks.length;
   bool get hasSubtasks => subtasks.isNotEmpty;
+  /// A task is overdue only after its deadline calendar day has ended.
+  /// A time-of-day deadline never makes a task overdue on the same date.
   bool get isOverdue {
     if (isCompleted || isPaused || dueAt == null) return false;
-    final DateTime due = DateTime(dueAt!.year, dueAt!.month, dueAt!.day);
-    final DateTime today = DateTime.now();
-    final DateTime day = DateTime(today.year, today.month, today.day);
-    if (due.isBefore(day)) return true;
-    final bool hasDueTime = dueAt!.hour != 0 || dueAt!.minute != 0;
-    return hasDueTime && due.isAtSameMomentAs(day) && today.isAfter(dueAt!);
+    final DateTime dueDay = DateTime(dueAt!.year, dueAt!.month, dueAt!.day);
+    final DateTime now = DateTime.now();
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    return dueDay.isBefore(today);
   }
 
   String? validate() {
     if (title.trim().isEmpty) return 'Please enter a task title.';
     if (subtasks.any((Subtask s) => s.title.trim().isEmpty)) return 'Subtask names cannot be empty.';
+    if (dueAt != null && reminderAt != null) {
+      final DateTime deadlineDay = DateTime(dueAt!.year, dueAt!.month, dueAt!.day);
+      final DateTime reminderDay = DateTime(reminderAt!.year, reminderAt!.month, reminderAt!.day);
+      if (reminderDay.isAfter(deadlineDay)) {
+        return 'The reminder date cannot be after the deadline date.';
+      }
+    }
     return null;
   }
 

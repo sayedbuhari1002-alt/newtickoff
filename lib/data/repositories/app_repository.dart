@@ -4,6 +4,10 @@ import '../../domain/models/models.dart';
 /// `SqliteAppRepository`; tests also use an in-memory version of this
 /// interface for fast widget tests.
 abstract class AppRepository {
+  // Local application preferences (never synced to a cloud service).
+  Future<Map<String, String>> loadSettings();
+  Future<void> saveSetting(String key, String value);
+
   // Habits
   Future<List<Habit>> loadHabits();
 

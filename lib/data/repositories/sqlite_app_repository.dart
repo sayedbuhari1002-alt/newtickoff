@@ -28,6 +28,33 @@ class SqliteAppRepository implements AppRepository {
     if (updated == 0) await executor.insert(table, row);
   }
 
+  // ------------------------------------------------------------- app settings
+
+  @override
+  Future<Map<String, String>> loadSettings() async {
+    final List<Map<String, Object?>> rows = await _db.query('app_settings');
+    return <String, String>{
+      for (final Map<String, Object?> row in rows)
+        row['setting_key'] as String: row['setting_value'] as String,
+    };
+  }
+
+  @override
+  Future<void> saveSetting(String key, String value) async {
+    final int changed = await _db.update(
+      'app_settings',
+      <String, Object?>{'setting_key': key, 'setting_value': value},
+      where: 'setting_key = ?',
+      whereArgs: <Object?>[key],
+    );
+    if (changed == 0) {
+      await _db.insert('app_settings', <String, Object?>{
+        'setting_key': key,
+        'setting_value': value,
+      });
+    }
+  }
+
   // ------------------------------------------------------------------ habits
 
   @override

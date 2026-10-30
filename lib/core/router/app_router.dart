@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/utils/date_utils.dart';
 import '../../domain/models/models.dart';
 import '../../features/analytics/analytics_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
@@ -13,6 +14,10 @@ import '../../features/notes/notes_screen.dart';
 import '../../features/settings/archive_screen.dart';
 import '../../features/settings/categories_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/settings/theme_settings_screen.dart';
+import '../../features/settings/widgets_settings_screen.dart';
+import '../../features/settings/rearrange_screen.dart';
+import '../../features/settings/notification_settings_screen.dart';
 import '../../features/share/share_progress_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/tasks/subtask_editor_screen.dart';
@@ -65,7 +70,10 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
       GoRoute(path: AppRoutes.habitNew, builder: (BuildContext c, GoRouterState s) => const HabitFormScreen()),
       GoRoute(
         path: '/habit/:id',
-        builder: (BuildContext c, GoRouterState s) => HabitDetailScreen(habitId: s.pathParameters['id'] ?? ''),
+        builder: (BuildContext c, GoRouterState s) => HabitDetailScreen(
+          habitId: s.pathParameters['id'] ?? '',
+          selectedDate: parseDateKey(s.uri.queryParameters['date'] ?? ''),
+        ),
         routes: <RouteBase>[
           GoRoute(path: 'edit', builder: (BuildContext c, GoRouterState s) => HabitFormScreen(habitId: s.pathParameters['id'])),
           GoRoute(path: 'analytics', builder: (BuildContext c, GoRouterState s) => AnalyticsScreen(habitId: s.pathParameters['id'])),
@@ -78,11 +86,12 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
       GoRoute(path: AppRoutes.shareProgress, builder: (BuildContext c, GoRouterState s) => ShareProgressScreen(habitId: s.uri.queryParameters['habit'])),
       GoRoute(path: AppRoutes.categories, builder: (BuildContext c, GoRouterState s) => const CategoriesScreen()),
       GoRoute(path: AppRoutes.archive, builder: (BuildContext c, GoRouterState s) => const ArchiveScreen()),
-      _stub(AppRoutes.theme, 'Theme', 4, 'Theme preferences are available from Settings.'),
+      GoRoute(path: AppRoutes.notifications, builder: (BuildContext c, GoRouterState s) => const NotificationSettingsScreen()),
+      GoRoute(path: AppRoutes.theme, builder: (BuildContext c, GoRouterState s) => const ThemeSettingsScreen()),
       _stub(AppRoutes.layout, 'Layout', 4, 'Display and timeline options are available from Settings.'),
-      _stub(AppRoutes.widgets, 'Widgets', 4, 'Native Android launcher widgets are not included.'),
+      GoRoute(path: AppRoutes.widgets, builder: (BuildContext c, GoRouterState s) => const WidgetsSettingsScreen()),
       _stub(AppRoutes.general, 'General', 4, 'General preferences are available from Settings.'),
-      _stub(AppRoutes.rearrange, 'Rearrange', 4, 'Habit ordering follows the stored habit order.'),
+      GoRoute(path: AppRoutes.rearrange, builder: (BuildContext c, GoRouterState s) => const RearrangeScreen()),
     ],
   );
 }
