@@ -62,4 +62,4 @@ The Flutter and Dart SDKs were not available in the implementation environment. 
 
 
 ## Notification runtime correction
-- Added R8/ProGuard keep rules for Gson TypeToken generic signatures used by flutter_local_notifications, preventing the release-build `Missing type parameter` exception while loading/cancelling scheduled reminders.
+- Added Gson TypeToken keep rules to the release ProGuard configuration and an R8 compatibility-mode workaround (`android.enableR8.fullMode=false`) for the notification plugin reflection path. The Android generation script verifies both settings are applied. The CI workflow now withholds the APK artifact if that patch step fails.
