@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/icons/habit_icons.dart';
-import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../domain/models/models.dart';
@@ -183,13 +182,10 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
           SnackBar(content: Text(reminderIssue)),
         );
       }
-      // A newly created habit should be visible immediately in the dedicated
-      // Habits list. When editing, return to the previous detail screen.
-      if (widget.habitId == null) {
-        context.go(AppRoutes.habits);
-      } else {
-        context.pop();
-      }
+      // The form was pushed from the existing shell. Return to that screen
+      // for both creation and editing; the user can then open the Habits tab.
+      // This preserves the caller's navigation context and bottom bar.
+      context.pop();
     }
   }
 

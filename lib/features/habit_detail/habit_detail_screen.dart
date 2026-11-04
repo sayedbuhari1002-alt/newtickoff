@@ -378,6 +378,10 @@ class HabitDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     Habit habit,
   ) {
+    // Keep a stable router reference across the bottom-sheet and repository
+    // awaits. The detail route is outside the shell; using the original
+    // BuildContext after those transitions can leave the detail page visible.
+    final GoRouter router = GoRouter.of(context);
     return showTickSheet<void>(
       context: context,
       title: 'Options',
@@ -419,14 +423,10 @@ class HabitDetailScreen extends ConsumerWidget {
                   context,
                   habit.isArchived ? 'Habit restored.' : 'Habit archived.',
                 );
-                // This detail page was opened on top of a list/dashboard.
-                // Pop it so the user returns to the exact screen they came from
-                // (and the archived habit disappears from that list).
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go(AppRoutes.habits);
-                }
+                // Always leave the detail route after archive/restore. Use the
+                // router captured before dismissing the sheet so this action
+                // does not depend on the modal's Navigator stack.
+                router.go(AppRoutes.habits);
               },
             ),
             SheetOptionTile(
@@ -449,14 +449,9 @@ class HabitDetailScreen extends ConsumerWidget {
                   () => ref.read(appDataProvider.notifier).deleteHabit(habit.id),
                   message: 'Could not delete',
                 );
-                if (ok && context.mounted) {
-                  // Return to the originating list instead of leaving the
-                  // deleted habit's detail route visible.
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go(AppRoutes.habits);
-                  }
+                if (ok) {
+                  // The deleted item no longer has a valid detail destination.
+                  router.go(AppRoutes.habits);
                 }
               },
             ),
