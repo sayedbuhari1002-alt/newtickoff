@@ -378,11 +378,9 @@ class HabitDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     Habit habit,
   ) {
-    // Habit detail is a root-level route pushed above the existing shell.
-    // Keep the root Navigator so archive/delete can close this exact page and
-    // reveal whichever shell destination opened it (Dashboard or Habits).
-    final NavigatorState rootNavigator =
-        Navigator.of(context, rootNavigator: true);
+    // Capture the router before dismissing the sheet or awaiting repository
+    // work. Habit detail is explicitly owned by the root GoRouter Navigator.
+    final GoRouter router = GoRouter.of(context);
     return showTickSheet<void>(
       context: context,
       title: 'Options',
@@ -424,14 +422,13 @@ class HabitDetailScreen extends ConsumerWidget {
                   context,
                   habit.isArchived ? 'Habit restored.' : 'Habit archived.',
                 );
-                // The detail page was pushed above the shell. Pop the root
-                // route to restore its real caller instead of navigating to a
-                // hard-coded tab (which can leave the imperative route alive
-                // in a StatefulShellRoute stack).
-                if (rootNavigator.mounted && rootNavigator.canPop()) {
-                  rootNavigator.pop();
-                } else if (context.mounted) {
-                  GoRouter.of(context).go(AppRoutes.habits);
+                // Use GoRouter's page-stack API rather than popping the
+                // Navigator directly; this keeps the router's match list in
+                // sync and restores the exact shell branch that opened detail.
+                if (router.canPop()) {
+                  router.pop();
+                } else {
+                  router.go(AppRoutes.habits);
                 }
               },
             ),
@@ -455,14 +452,14 @@ class HabitDetailScreen extends ConsumerWidget {
                   () => ref.read(appDataProvider.notifier).deleteHabit(habit.id),
                   message: 'Could not delete',
                 );
-                if (ok) {
+                if (ok && context.mounted) {
                   // The deleted item no longer has a valid detail destination.
-                  // Pop the root detail route to restore the caller. This also
-                  // avoids leaving a stale detail page above the shell.
-                  if (rootNavigator.mounted && rootNavigator.canPop()) {
-                    rootNavigator.pop();
-                  } else if (context.mounted) {
-                    GoRouter.of(context).go(AppRoutes.habits);
+                  // Pop through GoRouter so its route configuration is updated
+                  // together with the root Navigator page stack.
+                  if (router.canPop()) {
+                    router.pop();
+                  } else {
+                    router.go(AppRoutes.habits);
                   }
                 }
               },

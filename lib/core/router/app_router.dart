@@ -35,7 +35,13 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) => bui
 /// and analytics remain full-screen so task and habit workflows are not nested
 /// inside a small modal.
 GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
+  // Keep full-screen habit pages on the root Navigator even when they are
+  // pushed from a StatefulShellRoute branch. This makes their back-stack
+  // ownership explicit and prevents branch navigation from retaining them.
+  final GlobalKey<NavigatorState> rootNavigatorKey =
+      GlobalKey<NavigatorState>(debugLabel: 'rootNavigator');
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: initialLocation,
     routes: <RouteBase>[
       StatefulShellRoute.indexedStack(
@@ -68,9 +74,14 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
           GoRoute(path: 'analytics', builder: (BuildContext c, GoRouterState s) => TaskAnalyticsScreen(taskId: s.pathParameters['id'])),
         ],
       ),
-      GoRoute(path: AppRoutes.habitNew, builder: (BuildContext c, GoRouterState s) => const HabitFormScreen()),
+      GoRoute(
+        path: AppRoutes.habitNew,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (BuildContext c, GoRouterState s) => const HabitFormScreen(),
+      ),
       GoRoute(
         path: '/habit/:id',
+        parentNavigatorKey: rootNavigatorKey,
         builder: (BuildContext c, GoRouterState s) => HabitDetailScreen(
           habitId: s.pathParameters['id'] ?? '',
           selectedDate: parseDateKey(s.uri.queryParameters['date'] ?? ''),

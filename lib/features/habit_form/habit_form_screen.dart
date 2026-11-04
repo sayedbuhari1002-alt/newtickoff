@@ -169,6 +169,9 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
       return;
     }
 
+    // Capture the GoRouter before awaiting persistence. Habit form routes are
+    // explicitly attached to the root Navigator by the route configuration.
+    final GoRouter router = GoRouter.of(context);
     setState(() => _saving = true);
     final bool ok = await guarded(
       context,
@@ -183,18 +186,14 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
           SnackBar(content: Text(reminderIssue)),
         );
       }
-      // Habit forms are pushed as full-screen routes above the shell (or
-      // above the habit detail page while editing). Pop the root Navigator
-      // explicitly so the original shell/detail route and bottom bar are
-      // restored. GoRouter's context.pop can target the active shell branch
-      // instead of the root page when the form was launched from the add sheet.
-      final NavigatorState rootNavigator =
-          Navigator.of(context, rootNavigator: true);
-      if (rootNavigator.canPop()) {
-        rootNavigator.pop();
+      // Pop through GoRouter so its declarative match list and the root
+      // Navigator remain synchronized. This restores the caller (the shell
+      // for a new habit, or the detail page when editing).
+      if (router.canPop()) {
+        router.pop();
       } else {
-        // Support a direct launch of /habit/new without a previous route.
-        context.go(widget.habitId == null
+        // Support a direct launch without a previous route.
+        router.go(widget.habitId == null
             ? AppRoutes.habits
             : AppRoutes.habitDetail(widget.habitId!));
       }

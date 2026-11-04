@@ -72,3 +72,19 @@ The database suite passed 19/19, and the Android release APK compiled successful
 - The three affected widget tests now explicitly assert that the shell's Habits destination is visible after the route is closed.
 
 The preparation environment still has no Flutter/Dart SDK. This source correction has not been compiled or run through Flutter tests here; GitHub Actions must verify it.
+
+
+## Navigation follow-up — 0.4.6+12
+
+The 0.4.5+11 GitHub Actions run still showed three widget failures: the habit detail route remained visible after archive and delete, and the new-habit form did not restore the shell after saving. The release APK compiled, but the workflow did not approve an artifact because the widget test step failed.
+
+The 0.4.6+12 source changes make the route ownership explicit by assigning the habit creation and detail routes to a dedicated root Navigator key. The nested edit route inherits the detail route's root Navigator. Navigation actions now call `GoRouter.pop()` instead of directly mutating a Navigator or using a root-level imperative pop, so the router's route-match state is updated together with the visible stack.
+
+Verification performed in the preparation environment:
+- `git diff --check`
+- `bash -n tool/prepare_android.sh`
+- YAML parsing for `pubspec.yaml` and `.github/workflows/build_apk.yml`
+- Source assertions for the root Navigator key, explicit route ownership, and GoRouter-based pops
+- ZIP integrity check after packaging
+
+The Flutter/Dart SDK is not installed in this preparation environment. `dart format`, `flutter analyze`, `flutter test`, and an Android release build have **not** been run on 0.4.6+12. GitHub Actions must verify this archive before installation.
