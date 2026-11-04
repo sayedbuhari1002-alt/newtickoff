@@ -419,7 +419,14 @@ class HabitDetailScreen extends ConsumerWidget {
                   context,
                   habit.isArchived ? 'Habit restored.' : 'Habit archived.',
                 );
-                if (!habit.isArchived) context.go(AppRoutes.habits);
+                // This detail page was opened on top of a list/dashboard.
+                // Pop it so the user returns to the exact screen they came from
+                // (and the archived habit disappears from that list).
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(AppRoutes.habits);
+                }
               },
             ),
             SheetOptionTile(
@@ -442,7 +449,15 @@ class HabitDetailScreen extends ConsumerWidget {
                   () => ref.read(appDataProvider.notifier).deleteHabit(habit.id),
                   message: 'Could not delete',
                 );
-                if (ok && context.mounted) context.go(AppRoutes.habits);
+                if (ok && context.mounted) {
+                  // Return to the originating list instead of leaving the
+                  // deleted habit's detail route visible.
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(AppRoutes.habits);
+                  }
+                }
               },
             ),
             const SizedBox(height: AppDimens.gapSm),

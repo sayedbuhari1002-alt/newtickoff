@@ -124,3 +124,9 @@ The Flutter and Dart SDKs were not available in the implementation environment. 
 - Updated the add-habit widget test to navigate through the dedicated Habits tab after saving.
 - Added frame pumps between weekday-chip selections so each toggle is rebuilt before the next interaction.
 - Habit-linked note creation now uses the shared local-day provider for its calendar date, keeping date filtering consistent with the app's selected day source.
+
+
+## Navigation corrections (0.4.3+9)
+- Archive and delete actions now pop the habit detail route to its originating list/dashboard after the data change, with a safe Habits-route fallback for direct-entry cases.
+- Creating a new habit navigates to the dedicated Habits destination so the newly saved habit is immediately visible; editing an existing habit still returns to its previous detail screen.
+- These changes address the three remaining widget-test failures from the 0.4.2+8 CI run without changing habit persistence, history, or reminder scheduling.
