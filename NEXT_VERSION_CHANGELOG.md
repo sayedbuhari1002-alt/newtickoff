@@ -135,3 +135,9 @@ The Flutter and Dart SDKs were not available in the implementation environment. 
 - Route to the Habits destination using a stable GoRouter reference after archive, restore, or delete operations.
 - Return from the new-habit form to the screen that opened it, preserving the shell and bottom navigation.
 - No database schema change.
+
+
+## Version 0.4.5+11 — root navigation recovery
+- Habit archive/restore and delete now close the full-screen detail route through the root Navigator, returning to the actual caller in the StatefulShellRoute. A hard-coded Habits route is used only as a fallback when the detail page was opened without a previous route.
+- Saving a new or edited habit now closes the root-level form route explicitly, restoring the originating shell tab or habit detail screen. A direct-launch fallback remains available when no previous route exists.
+- No database schema or habit/task data changes.

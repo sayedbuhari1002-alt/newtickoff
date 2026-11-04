@@ -44,6 +44,8 @@ void main() {
     expect(saved.tracking, TrackingMethod.tick);
     expect(saved.schedule.type, FrequencyType.everyday);
 
+    // Saving closes the root form route and restores the shell/bottom bar.
+    expect(find.text('Habits'), findsWidgets);
     // Verify it in the dedicated Habits destination.
     await goToHabits(tester);
     expect(find.text('Meditate'), findsOneWidget);

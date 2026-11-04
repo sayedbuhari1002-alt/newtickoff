@@ -378,10 +378,11 @@ class HabitDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     Habit habit,
   ) {
-    // Keep a stable router reference across the bottom-sheet and repository
-    // awaits. The detail route is outside the shell; using the original
-    // BuildContext after those transitions can leave the detail page visible.
-    final GoRouter router = GoRouter.of(context);
+    // Habit detail is a root-level route pushed above the existing shell.
+    // Keep the root Navigator so archive/delete can close this exact page and
+    // reveal whichever shell destination opened it (Dashboard or Habits).
+    final NavigatorState rootNavigator =
+        Navigator.of(context, rootNavigator: true);
     return showTickSheet<void>(
       context: context,
       title: 'Options',
@@ -423,10 +424,15 @@ class HabitDetailScreen extends ConsumerWidget {
                   context,
                   habit.isArchived ? 'Habit restored.' : 'Habit archived.',
                 );
-                // Always leave the detail route after archive/restore. Use the
-                // router captured before dismissing the sheet so this action
-                // does not depend on the modal's Navigator stack.
-                router.go(AppRoutes.habits);
+                // The detail page was pushed above the shell. Pop the root
+                // route to restore its real caller instead of navigating to a
+                // hard-coded tab (which can leave the imperative route alive
+                // in a StatefulShellRoute stack).
+                if (rootNavigator.mounted && rootNavigator.canPop()) {
+                  rootNavigator.pop();
+                } else if (context.mounted) {
+                  GoRouter.of(context).go(AppRoutes.habits);
+                }
               },
             ),
             SheetOptionTile(
@@ -451,7 +457,13 @@ class HabitDetailScreen extends ConsumerWidget {
                 );
                 if (ok) {
                   // The deleted item no longer has a valid detail destination.
-                  router.go(AppRoutes.habits);
+                  // Pop the root detail route to restore the caller. This also
+                  // avoids leaving a stale detail page above the shell.
+                  if (rootNavigator.mounted && rootNavigator.canPop()) {
+                    rootNavigator.pop();
+                  } else if (context.mounted) {
+                    GoRouter.of(context).go(AppRoutes.habits);
+                  }
                 }
               },
             ),

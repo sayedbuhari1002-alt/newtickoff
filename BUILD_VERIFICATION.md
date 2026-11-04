@@ -54,3 +54,21 @@ flutter build apk --release
 Do not treat the APK as approved until the workflow passes and the resulting
 APK has been installed and tested on the phone. Keep the existing working APK
 and user data backed up until the replacement is accepted.
+
+## Verification after the 0.4.4+10 navigation run
+
+The next uploaded GitHub Actions log reported 162 app tests passed and 3 failed:
+
+- Archiving a habit updated the data but left the full-screen habit detail visible.
+- Deleting a habit updated the data but left the full-screen habit detail visible.
+- Saving a new habit did not restore the shell/bottom-navigation route expected by the test.
+
+The database suite passed 19/19, and the Android release APK compiled successfully. The workflow remained failed because the app/widget test step failed, so no artifact was approved for installation.
+
+## Source correction in 0.4.5+11
+
+- Archive/restore and delete now pop the root Navigator route for the habit detail page, returning to the actual shell destination that opened it. A GoRouter fallback is used only if there is no prior route.
+- Saving a new or edited habit explicitly pops the root-level form route, restoring the originating shell or detail page. A direct-launch fallback remains available.
+- The three affected widget tests now explicitly assert that the shell's Habits destination is visible after the route is closed.
+
+The preparation environment still has no Flutter/Dart SDK. This source correction has not been compiled or run through Flutter tests here; GitHub Actions must verify it.

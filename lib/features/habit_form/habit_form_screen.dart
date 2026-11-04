@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/icons/habit_icons.dart';
+import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../domain/models/models.dart';
@@ -182,10 +183,21 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
           SnackBar(content: Text(reminderIssue)),
         );
       }
-      // The form was pushed from the existing shell. Return to that screen
-      // for both creation and editing; the user can then open the Habits tab.
-      // This preserves the caller's navigation context and bottom bar.
-      context.pop();
+      // Habit forms are pushed as full-screen routes above the shell (or
+      // above the habit detail page while editing). Pop the root Navigator
+      // explicitly so the original shell/detail route and bottom bar are
+      // restored. GoRouter's context.pop can target the active shell branch
+      // instead of the root page when the form was launched from the add sheet.
+      final NavigatorState rootNavigator =
+          Navigator.of(context, rootNavigator: true);
+      if (rootNavigator.canPop()) {
+        rootNavigator.pop();
+      } else {
+        // Support a direct launch of /habit/new without a previous route.
+        context.go(widget.habitId == null
+            ? AppRoutes.habits
+            : AppRoutes.habitDetail(widget.habitId!));
+      }
     }
   }
 

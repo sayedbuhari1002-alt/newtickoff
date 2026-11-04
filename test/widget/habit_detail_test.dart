@@ -102,6 +102,9 @@ void main() {
     expect(repo.habits['h1']!.isArchived, isTrue);
     expect(repo.records.length, 1);
     expect(find.text('Reading Books'), findsNothing);
+    // The detail route is gone and the original Habits shell destination is
+    // visible again, including its bottom navigation.
+    expect(find.text('Habits'), findsWidgets);
   });
 
   testWidgets('delete asks for confirmation and removes everything',
@@ -130,6 +133,7 @@ void main() {
     expect(repo.habits, isEmpty);
     expect(repo.records, isEmpty);
     expect(find.text('Reading Books'), findsNothing);
+    expect(find.text('Habits'), findsWidgets);
   });
 
   testWidgets('share progress builds a summary screen',
