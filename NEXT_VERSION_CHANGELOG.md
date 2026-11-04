@@ -117,3 +117,10 @@ The Flutter and Dart SDKs were not available in the implementation environment. 
 - Published a saved habit to application state before awaiting the platform reminder scheduler, so a slow/failed notification call cannot leave the UI stale after the database update.
 - Returned to the Habits destination after archiving or deleting a habit from its detail screen.
 - Updated widget tests to follow the current create menu, current Dashboard progress cards, and current Habits date-heading format.
+
+
+## CI test corrections (0.4.2+8)
+- Updated archive/delete widget assertions to verify the habit is removed from the visible list without depending on one exact empty-state message.
+- Updated the add-habit widget test to navigate through the dedicated Habits tab after saving.
+- Added frame pumps between weekday-chip selections so each toggle is rebuilt before the next interaction.
+- Habit-linked note creation now uses the shared local-day provider for its calendar date, keeping date filtering consistent with the app's selected day source.

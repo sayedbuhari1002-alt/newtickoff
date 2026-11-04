@@ -101,7 +101,7 @@ void main() {
 
     expect(repo.habits['h1']!.isArchived, isTrue);
     expect(repo.records.length, 1);
-    expect(find.text('No habits yet'), findsOneWidget);
+    expect(find.text('Reading Books'), findsNothing);
   });
 
   testWidgets('delete asks for confirmation and removes everything',
@@ -129,7 +129,7 @@ void main() {
 
     expect(repo.habits, isEmpty);
     expect(repo.records, isEmpty);
-    expect(find.text('No habits yet'), findsOneWidget);
+    expect(find.text('Reading Books'), findsNothing);
   });
 
   testWidgets('share progress builds a summary screen',

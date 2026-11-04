@@ -44,9 +44,8 @@ void main() {
     expect(saved.tracking, TrackingMethod.tick);
     expect(saved.schedule.type, FrequencyType.everyday);
 
-    // Return to the dedicated Habits destination and verify it is listed.
-    await tester.tap(find.text('Manage habits'));
-    await tester.pumpAndSettle();
+    // Verify it in the dedicated Habits destination.
+    await goToHabits(tester);
     expect(find.text('Meditate'), findsOneWidget);
   });
 
@@ -143,7 +142,9 @@ void main() {
     expect(find.text('Select at least one weekday.'), findsOneWidget);
 
     await tester.tap(find.text('Mo'));
+    await tester.pump(); // Rebuild with Monday selected before the next tap.
     await tester.tap(find.text('Th'));
+    await tester.pump();
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     final Habit saved = repo.habits.values.single;

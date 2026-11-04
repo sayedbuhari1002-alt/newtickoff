@@ -35,8 +35,16 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   bool _initialized = false;
   Note? _existing;
   late final String _id = widget.noteId ?? newId();
-  late final DateTime _createdAt = DateTime.now();
+  late final DateTime _createdAt;
   bool _deleted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Keep the note's calendar date aligned with the same local-day source
+    // used by date navigation and date-keyed records.
+    _createdAt = dateOnly(ref.read(todayProvider));
+  }
 
   @override
   void dispose() {
