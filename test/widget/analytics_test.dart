@@ -117,10 +117,10 @@ void main() {
     expect(tileValue(tester, 'Completion Rate'), '100%');
   });
 
-  testWidgets('the score pill on the dashboard opens analytics',
+  testWidgets('the Dashboard Insights shortcut opens analytics',
       (WidgetTester tester) async {
     await pumpApp(tester, repo: seededTwo());
-    await tester.tap(find.byIcon(Icons.speed_rounded));
+    await tester.tap(find.byIcon(Icons.arrow_forward_rounded));
     await tester.pumpAndSettle();
     expect(find.text('Analytics'), findsOneWidget);
   });

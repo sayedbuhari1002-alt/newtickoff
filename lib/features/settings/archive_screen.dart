@@ -50,12 +50,14 @@ class ArchiveScreen extends ConsumerWidget {
                                 IconButton(
                                   tooltip: 'Restore',
                                   icon: const Icon(Icons.unarchive_outlined),
-                                  onPressed: () => guarded(
-                                    context,
-                                    () => ref
-                                        .read(appDataProvider.notifier)
-                                        .setArchived(h.id, false),
-                                  ),
+                                  onPressed: () async {
+                                    await guarded(
+                                      context,
+                                      () => ref
+                                          .read(appDataProvider.notifier)
+                                          .setArchived(h.id, false),
+                                    );
+                                  },
                                 ),
                                 IconButton(
                                   tooltip: 'Delete',

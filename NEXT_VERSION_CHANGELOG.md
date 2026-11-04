@@ -109,3 +109,11 @@ The Flutter and Dart SDKs were not available in the implementation environment. 
 - Added SQLite migration/repository tests for legacy journal-date backfill, seeded expense categories, expense insert/update/delete, and custom-category deletion behavior.
 - Added model/state tests for paise amounts, expense validation, and expense state changes, plus tests for the 30-minute deadline calculation.
 - The Flutter/Dart SDK is not installed in this preparation environment. `dart format`, `flutter analyze`, `flutter test`, and the release APK build remain unrun here. GitHub Actions must pass before installing this APK as an update, and the notification actions must be tested on the phone.
+
+
+## CI test corrections (0.4.1+7)
+- Replaced the decorated SectionCard container with a Material surface so nested ListTiles render their ink and background correctly.
+- Initialised Notes and Tasks selected dates from the shared todayProvider, keeping screens and date-keyed records aligned.
+- Published a saved habit to application state before awaiting the platform reminder scheduler, so a slow/failed notification call cannot leave the UI stale after the database update.
+- Returned to the Habits destination after archiving or deleting a habit from its detail screen.
+- Updated widget tests to follow the current create menu, current Dashboard progress cards, and current Habits date-heading format.

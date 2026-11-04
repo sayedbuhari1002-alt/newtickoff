@@ -25,8 +25,14 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   TaskListFilter _filter = TaskListFilter.all;
   TaskSort _sort = TaskSort.defaultOrder;
   String? _category;
-  DateTime _selectedDate = DateTime.now();
+  late DateTime _selectedDate;
   bool _includeCompleted = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = dateOnly(ref.read(todayProvider));
+  }
 
   Future<void> _chooseDate() async {
     final DateTime now = DateTime.now();

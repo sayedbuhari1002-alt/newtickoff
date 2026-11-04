@@ -157,11 +157,6 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
           data.recordsFor(habit.id)[dateKey(today)],
         );
     await _repo.upsertHabit(habit);
-    await TaskReminderService.instance.scheduleHabit(
-      habit,
-      requestPermissions: habit.reminder.enabled,
-      skipToday: skipToday,
-    );
     final List<Habit> habits = List<Habit>.of(data.habits);
     final int i = habits.indexWhere((Habit h) => h.id == habit.id);
     if (i >= 0) {
@@ -172,6 +167,13 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     data = data.copyWith(habits: habits);
     data = await _syncAchievements(data, habit);
     state = AsyncData<AppData>(data);
+    // Publish the saved habit immediately. Reminder scheduling is a separate
+    // platform operation and must never delay the visible local-data update.
+    await TaskReminderService.instance.scheduleHabit(
+      habit,
+      requestPermissions: habit.reminder.enabled,
+      skipToday: skipToday,
+    );
   }
 
   Future<void> setArchived(String habitId, bool archived) async {

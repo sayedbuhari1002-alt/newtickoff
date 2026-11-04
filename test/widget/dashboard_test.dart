@@ -87,7 +87,7 @@ void main() {
     // Select Monday the 26th: now it is due.
     await tester.tap(find.text('26'));
     await tester.pumpAndSettle();
-    expect(find.text('Mon, 26th Oct'), findsOneWidget);
+    expect(find.text('Mon · 26th Oct'), findsOneWidget);
     expect(find.text('Due (1)'), findsOneWidget);
   });
 
@@ -99,7 +99,7 @@ void main() {
     await goToHabits(tester);
     await tester.tap(find.text('25'));
     await tester.pumpAndSettle();
-    expect(find.text('Sun, 25th Oct'), findsOneWidget);
+    expect(find.text('Sun · 25th Oct'), findsOneWidget);
     expect(find.text('Due (0)'), findsOneWidget);
   });
 
@@ -210,16 +210,18 @@ void main() {
     expect(find.text('Guitar'), findsNothing);
   });
 
-  testWidgets('the habit score pill reflects stored records',
+  testWidgets('dashboard habit progress reflects today\'s stored records',
       (WidgetTester tester) async {
     final InMemoryAppRepository repo = InMemoryAppRepository()
-      ..habits['h1'] = sampleHabit(created: DateTime(2026, 10, 25));
-    final CompletionRecord r = doneOn('h1', DateTime(2026, 10, 25));
-    repo.records[r.key] = r;
+      ..habits['h1'] = sampleHabit(id: 'h1', title: 'Reading')
+      ..habits['h2'] = sampleHabit(id: 'h2', title: 'Walking', sortOrder: 1);
+    final CompletionRecord completed = doneOn('h1', kToday);
+    repo.records[completed.key] = completed;
+
     await pumpApp(tester, repo: repo);
-    await goToHabits(tester);
-    // Oct 25 done, Oct 26 missed, today pending -> 50%.
-    expect(find.text('50.0%'), findsOneWidget);
+    expect(find.text('Habits'), findsWidgets);
+    expect(find.text('50%'), findsOneWidget);
+    expect(find.text('1 of 2'), findsOneWidget);
   });
 
   testWidgets('settings has no premium or cloud entries',

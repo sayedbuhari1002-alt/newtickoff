@@ -100,6 +100,6 @@ jobs:
             if [ "$value" != "success" ]; then failed=1; fi
           done
           if [ "$failed" -ne 0 ]; then
-            echo "One or more required checks failed. Review the earlier step logs; an APK artifact is uploaded only if the APK build succeeded."
+            echo "One or more required checks failed. Review the earlier step logs; an APK artifact is uploaded only if every required check succeeds."
             exit 1
           fi

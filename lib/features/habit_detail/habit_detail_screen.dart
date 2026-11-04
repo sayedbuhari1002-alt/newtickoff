@@ -419,7 +419,7 @@ class HabitDetailScreen extends ConsumerWidget {
                   context,
                   habit.isArchived ? 'Habit restored.' : 'Habit archived.',
                 );
-                if (!habit.isArchived) context.pop();
+                if (!habit.isArchived) context.go(AppRoutes.habits);
               },
             ),
             SheetOptionTile(
@@ -442,7 +442,7 @@ class HabitDetailScreen extends ConsumerWidget {
                   () => ref.read(appDataProvider.notifier).deleteHabit(habit.id),
                   message: 'Could not delete',
                 );
-                if (ok && context.mounted) context.pop();
+                if (ok && context.mounted) context.go(AppRoutes.habits);
               },
             ),
             const SizedBox(height: AppDimens.gapSm),

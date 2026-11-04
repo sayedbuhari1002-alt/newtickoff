@@ -11,15 +11,15 @@ Future<InMemoryAppRepository> openNewForm(WidgetTester tester) async {
   final InMemoryAppRepository repo = await pumpApp(tester);
   await tester.tap(find.byIcon(Icons.add));
   await tester.pumpAndSettle();
+  await tester.tap(find.text('Add Habit'));
+  await tester.pumpAndSettle();
   return repo;
 }
 
 void main() {
   testWidgets('saving without a title shows a validation message',
       (WidgetTester tester) async {
-    final InMemoryAppRepository repo = await pumpApp(tester);
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pumpAndSettle();
+    final InMemoryAppRepository repo = await openNewForm(tester);
     expect(find.text('Add Habit'), findsOneWidget);
 
     await tester.tap(find.text('Save'));
@@ -31,9 +31,7 @@ void main() {
 
   testWidgets('a new habit is saved to the database and listed',
       (WidgetTester tester) async {
-    final InMemoryAppRepository repo = await pumpApp(tester);
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pumpAndSettle();
+    final InMemoryAppRepository repo = await openNewForm(tester);
 
     await tester.enterText(find.byType(TextField).first, 'Meditate');
     await tester.tap(find.text('Save'));
@@ -46,8 +44,8 @@ void main() {
     expect(saved.tracking, TrackingMethod.tick);
     expect(saved.schedule.type, FrequencyType.everyday);
 
-    // Back on the dashboard.
-    await tester.tap(find.textContaining('All ('));
+    // Return to the dedicated Habits destination and verify it is listed.
+    await tester.tap(find.text('Manage habits'));
     await tester.pumpAndSettle();
     expect(find.text('Meditate'), findsOneWidget);
   });

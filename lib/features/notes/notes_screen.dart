@@ -30,8 +30,16 @@ class NotesScreen extends ConsumerStatefulWidget {
 
 class _NotesScreenState extends ConsumerState<NotesScreen> {
   _NotesMode _mode = _NotesMode.daily;
-  DateTime _selectedDate = dateOnly(DateTime.now());
-  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  late DateTime _selectedDate;
+  late DateTime _selectedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    final DateTime today = dateOnly(ref.read(todayProvider));
+    _selectedDate = today;
+    _selectedMonth = DateTime(today.year, today.month);
+  }
 
   @override
   Widget build(BuildContext context) {
