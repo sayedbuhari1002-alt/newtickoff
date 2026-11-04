@@ -5,7 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../state/app_settings.dart';
 import '../../state/app_state.dart';
 
-/// Theme presets keep the supplied TickOff palette as the default.
+/// Theme presets keep the existing Tazkiyane palette as the default.
 class ThemeSettingsScreen extends ConsumerWidget {
   const ThemeSettingsScreen({super.key});
 
@@ -32,7 +32,7 @@ class ThemeSettingsScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           _ThemeChoice(
             selected: selected == 'original',
-            title: 'TickOff Dark',
+            title: 'Tazkiyane Dark',
             subtitle: 'Original black background with the existing gold and cyan accents.',
             previewBackground: const Color(0xFF000000),
             previewSurface: const Color(0xFF111111),

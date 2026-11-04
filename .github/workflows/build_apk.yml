@@ -73,10 +73,10 @@ jobs:
         continue-on-error: true
 
       - name: Upload release APK artifact
-        if: steps.apk.outcome == 'success' && steps.android_scaffold.outcome == 'success'
+        if: steps.apk.outcome == 'success' && steps.android_scaffold.outcome == 'success' && steps.sqlite.outcome == 'success' && steps.pub_get.outcome == 'success' && steps.format.outcome == 'success' && steps.analyze.outcome == 'success' && steps.app_tests.outcome == 'success' && steps.db_tests.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: tickoff-next-version-release-apk
+          name: tazkiyane-next-version-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14

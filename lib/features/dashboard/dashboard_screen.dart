@@ -355,7 +355,7 @@ class _ReminderWarningBanner extends StatelessWidget {
             ? 'Allow notifications so task and habit reminders can appear.'
             : !status.exactAlarmsGranted
                 ? 'Allow exact alarms so reminders can arrive close to their selected time.'
-                : 'TickOff could not confirm your device time zone. Check your date and time settings.');
+                : 'Tazkiyane could not confirm your device time zone. Check your date and time settings.');
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(

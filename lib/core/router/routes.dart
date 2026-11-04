@@ -36,9 +36,25 @@ class AppRoutes {
 
   // Notes
   static const String noteNewPath = '/note/new';
-  static String noteNew({String? habitId}) =>
-      habitId == null ? noteNewPath : '$noteNewPath?habit=$habitId';
+  static String noteNew({String? habitId, DateTime? date}) {
+    final Map<String, String> query = <String, String>{};
+    if (habitId != null) query['habit'] = habitId;
+    if (date != null) query['date'] = dateKey(date);
+    return query.isEmpty
+        ? noteNewPath
+        : Uri(path: noteNewPath, queryParameters: query).toString();
+  }
   static String noteEdit(String id) => '/note/$id';
+
+  // Expense routes stay separate from journal-note routes.
+  static const String expenseNewPath = '/expense/new';
+  static String expenseNew({DateTime? date}) => date == null
+      ? expenseNewPath
+      : Uri(
+          path: expenseNewPath,
+          queryParameters: <String, String>{'date': dateKey(date)},
+        ).toString();
+  static String expenseEdit(String id) => '/expense/$id/edit';
 
   // Settings
   static const String settings = '/settings';

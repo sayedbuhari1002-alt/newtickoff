@@ -1,6 +1,6 @@
-# TickOff next-version changes
+# Tazkiyane 0.4.0 — next-version changes
 
-This source update implements the six changes agreed for the next TickOff version.
+This release carries forward the previously agreed habit/task improvements and adds deadline actions, completion-aware habit reminders, a date-based journal, expense tracking, and Tazkiyane branding.
 
 ## 1. Task filtering and overdue rules
 
@@ -52,9 +52,9 @@ This source update implements the six changes agreed for the next TickOff versio
 - Tick Build habits can be completed from Tasks; count/checklist habits open their original habit detail page.
 - Habit tracking changes remain attached to the original habit record and its analytics.
 
-## Database compatibility
+## Compatibility with the previous release
 
-No database schema migration is required for these changes. Existing tasks, habits, reminders, and completion records continue to use the current local SQLite schema.
+The existing tasks, habits, reminders, completions, settings, and attachment paths are retained. New journal and expense storage is added through the version-4 SQLite migration described below.
 
 ## Verification limitation
 
@@ -63,3 +63,49 @@ The Flutter and Dart SDKs were not available in the implementation environment. 
 
 ## Notification runtime correction
 - Added Gson TypeToken keep rules to the release ProGuard configuration and an R8 compatibility-mode workaround (`android.enableR8.fullMode=false`) for the notification plugin reflection path. The Android generation script verifies both settings are applied. The CI workflow now withholds the APK artifact if that patch step fails.
+
+
+## 7. Automatic task deadline alerts
+
+- Every active task with a deadline receives one local notification 30 minutes before its deadline, provided the task is still incomplete.
+- The notification includes `Mark as Completed` and `Postpone` actions. Selecting either action opens Tazkiyane; Mark as Completed is applied through the normal app state/repository path. Outstanding subtasks are completed through their existing workflow, preserving task activity history and repeating-task creation.
+- Postpone opens the task editor. Saving a changed deadline cancels and replaces the previous automatic deadline alert. If the editor is closed without saving, the delivered notification is not dismissed by the action itself.
+- Completing or pausing a task, removing its deadline, or changing its deadline reconciles the scheduled alert. Existing manually configured task reminders remain separate and continue to work. A manual reminder at the exact same minute as the automatic alert is coalesced into the action-enabled deadline alert to avoid a duplicate.
+- No repeated daily overdue alerts are scheduled. A date-only deadline is treated as 23:59 local time, so its advance alert is scheduled at 23:29. A deadline with a time uses that exact local time minus 30 minutes.
+
+## 8. Build-habit reminder suppression
+
+- Build habit reminders are suppressed for the current day when the habit is already complete at its configured reminder time.
+- Count-based Build habits are complete for this rule when their saved count reaches or exceeds the daily goal.
+- Reopening a Build habit or reducing a count below its goal before the reminder time reschedules today's reminder when the selected weekday applies.
+- Quit habits are not affected by this rule. Habits without reminders remain unchanged.
+
+## 9. Daily journal and notes
+
+- The Notes destination now uses the same horizontally scrolling date strip as the Dashboard rather than a calendar grid.
+- General notes are stored as date-based journal entries. Multiple entries can be created, edited, and deleted for one date.
+- Existing habit-linked notes remain accessible in a separate Habit Notes section.
+- During the version-4 migration, existing standalone notes are assigned their original creation date; habit-linked notes remain linked to their habit.
+
+## 10. Expense tracking and analytics
+
+- Added local expense records with add, edit, and delete operations, date, amount, category, optional description, and payment method.
+- Amounts are stored as integer paise to avoid floating-point rounding in expense totals.
+- The database seeds Food, Transportation, Shopping, Education, Entertainment, Healthcare, Bills, Personal, and Others categories. Users can add custom categories; deleting a custom category leaves its expenses uncategorised rather than deleting those expenses.
+- Daily expense totals show ₹0 when no entries exist. Monthly analytics include total expenses, average per elapsed day in the current month (or all calendar days in a completed month, including zero-spending days), highest-spending day, transaction count, zero-expense days, category breakdown, and daily spending bars.
+
+## 11. Tazkiyane branding
+
+- Updated the Android launcher label and in-app title/settings copy to Tazkiyane.
+- Kept the existing Android application ID, SQLite database filename, and attachment directory unchanged so the new APK can update the installed app without intentionally resetting local data.
+
+## Database compatibility
+
+- SQLite schema version 4 adds `notes.log_date`, `expense_categories`, and `expenses` plus indexes. The migration is additive and does not recreate the existing habits, completions, tasks, task activities, notes, or settings tables.
+- Existing standalone notes are backfilled from their stored creation timestamps. Existing habit-linked notes preserve their habit relationship.
+
+## Verification status
+
+- Added SQLite migration/repository tests for legacy journal-date backfill, seeded expense categories, expense insert/update/delete, and custom-category deletion behavior.
+- Added model/state tests for paise amounts, expense validation, and expense state changes, plus tests for the 30-minute deadline calculation.
+- The Flutter/Dart SDK is not installed in this preparation environment. `dart format`, `flutter analyze`, `flutter test`, and the release APK build remain unrun here. GitHub Actions must pass before installing this APK as an update, and the notification actions must be tested on the phone.

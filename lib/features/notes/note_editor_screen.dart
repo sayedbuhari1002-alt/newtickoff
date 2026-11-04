@@ -18,10 +18,11 @@ import '../../state/app_state.dart';
 /// and when leaving with the back arrow. Pass [noteId] to edit, [habitId] to
 /// attach a new note to a habit.
 class NoteEditorScreen extends ConsumerStatefulWidget {
-  const NoteEditorScreen({super.key, this.noteId, this.habitId});
+  const NoteEditorScreen({super.key, this.noteId, this.habitId, this.logDate});
 
   final String? noteId;
   final String? habitId;
+  final DateTime? logDate;
 
   @override
   ConsumerState<NoteEditorScreen> createState() => _NoteEditorScreenState();
@@ -72,6 +73,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             Note(
               id: _id,
               habitId: widget.habitId,
+              logDate: widget.habitId == null ? widget.logDate : null,
               createdAt: _createdAt,
               updatedAt: now,
             ))
@@ -125,7 +127,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     if (!_initialized) _initialize(data);
     final String? habitId = _existing?.habitId ?? widget.habitId;
     final Habit? habit = habitId == null ? null : data.habitById(habitId);
-    final DateTime shown = _existing?.createdAt ?? _createdAt;
+    final DateTime shown = _existing?.logDate ?? widget.logDate ?? _existing?.createdAt ?? _createdAt;
 
     return Scaffold(
       appBar: AppBar(

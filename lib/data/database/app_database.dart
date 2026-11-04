@@ -7,13 +7,14 @@ import 'package:sqflite/sqflite.dart';
 /// * 1 - initial schema (categories, habits, completions, notes, achievements).
 /// * 2 - local tasks, subtasks, and immutable task activity history.
 /// * 3 - local key/value preferences for appearance and Dashboard layout.
+/// * 4 - date-based journal notes and local expense tracking.
 ///
 /// To change the schema, bump [version], add a step to [_migrations] that
 /// upgrades from the previous version, and keep [_createV1] untouched.
 class AppDatabase {
   AppDatabase._();
 
-  static const int version = 3;
+  static const int version = 4;
   static const String fileName = 'tickoff.db';
 
   /// Opens (creating if needed) the database. Pass [path] to use another file
@@ -31,6 +32,7 @@ class AppDatabase {
         await _createV1(db);
         if (newVersion >= 2) await _migrateV2(db);
         if (newVersion >= 3) await _migrateV3(db);
+        if (newVersion >= 4) await _migrateV4(db);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         for (int v = oldVersion; v < newVersion; v++) {
@@ -41,12 +43,87 @@ class AppDatabase {
     );
   }
 
-  /// Upgrade steps keyed by the version they upgrade FROM (1 -> 2, 2 -> 3).
+  /// Upgrade steps keyed by the version they upgrade FROM (1 -> 2, etc.).
   static final Map<int, Future<void> Function(Database db)> _migrations =
       <int, Future<void> Function(Database db)>{
         1: _migrateV2,
         2: _migrateV3,
+        3: _migrateV4,
       };
+
+
+
+  static Future<void> _migrateV4(Database db) async {
+    // Existing standalone notes become journal entries on their creation day.
+    // Habit-linked notes remain attached to their habit and keep log_date NULL.
+    // A defensive table check also supports minimal legacy databases used by
+    // migration tests or partially provisioned older installations.
+    final List<Map<String, Object?>> noteTables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'notes'",
+    );
+    if (noteTables.isNotEmpty) {
+      final List<Map<String, Object?>> columns = await db.rawQuery('PRAGMA table_info(notes)');
+      if (!columns.any((Map<String, Object?> column) => column['name'] == 'log_date')) {
+        await db.execute('ALTER TABLE notes ADD COLUMN log_date TEXT');
+      }
+      await db.execute('''
+        UPDATE notes
+        SET log_date = substr(created_at, 1, 10)
+        WHERE habit_id IS NULL AND log_date IS NULL
+      ''');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_notes_log_date ON notes(log_date)');
+    }
+
+    await db.execute('''
+      CREATE TABLE expense_categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        icon_key TEXT NOT NULL DEFAULT 'category',
+        color_value INTEGER NOT NULL DEFAULT 4294959147,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_builtin INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+
+    const List<Map<String, Object>> defaults = <Map<String, Object>>[
+      <String, Object>{'id': 'exp_food', 'name': 'Food', 'icon': 'restaurant', 'color': 0xFFFFA726, 'order': 0},
+      <String, Object>{'id': 'exp_transport', 'name': 'Transportation', 'icon': 'directions_car', 'color': 0xFF42A5F5, 'order': 1},
+      <String, Object>{'id': 'exp_shopping', 'name': 'Shopping', 'icon': 'shopping_bag', 'color': 0xFFAB47BC, 'order': 2},
+      <String, Object>{'id': 'exp_education', 'name': 'Education', 'icon': 'school', 'color': 0xFF66BB6A, 'order': 3},
+      <String, Object>{'id': 'exp_entertainment', 'name': 'Entertainment', 'icon': 'movie', 'color': 0xFFEC407A, 'order': 4},
+      <String, Object>{'id': 'exp_healthcare', 'name': 'Healthcare', 'icon': 'medical_services', 'color': 0xFF26A69A, 'order': 5},
+      <String, Object>{'id': 'exp_bills', 'name': 'Bills', 'icon': 'receipt_long', 'color': 0xFF78909C, 'order': 6},
+      <String, Object>{'id': 'exp_personal', 'name': 'Personal', 'icon': 'person', 'color': 0xFFFFCA28, 'order': 7},
+      <String, Object>{'id': 'exp_others', 'name': 'Others', 'icon': 'more_horiz', 'color': 0xFF90A4AE, 'order': 8},
+    ];
+    final Batch batch = db.batch();
+    for (final Map<String, Object> category in defaults) {
+      batch.insert('expense_categories', <String, Object?>{
+        'id': category['id'],
+        'name': category['name'],
+        'icon_key': category['icon'],
+        'color_value': category['color'],
+        'sort_order': category['order'],
+        'is_builtin': 1,
+      });
+    }
+    await batch.commit(noResult: true);
+
+    await db.execute('''
+      CREATE TABLE expenses (
+        id TEXT PRIMARY KEY,
+        amount_paise INTEGER NOT NULL CHECK(amount_paise > 0),
+        expense_date TEXT NOT NULL,
+        category_id TEXT REFERENCES expense_categories(id) ON DELETE SET NULL,
+        description TEXT NOT NULL DEFAULT '',
+        payment_method TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('CREATE INDEX idx_expenses_date ON expenses(expense_date)');
+    await db.execute('CREATE INDEX idx_expenses_category ON expenses(category_id)');
+  }
 
   static Future<void> _migrateV3(Database db) async {
     await db.execute('''

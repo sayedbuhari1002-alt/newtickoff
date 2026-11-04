@@ -139,8 +139,8 @@ void main() {
           id: 'n1',
           habitId: 'h1',
           title: 'Keep me?',
-          createdAt: DateTime(2026, 10, 26),
-          updatedAt: DateTime(2026, 10, 26),
+          createdAt: kToday,
+          updatedAt: kToday,
         );
       await pumpApp(tester, repo: repo);
       await tester.tap(find.byIcon(Icons.sticky_note_2_rounded));

@@ -234,7 +234,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
       _savedSuccessfully = true;
       _sessionAddedPaths.clear();
       final String? reminderIssue = TaskReminderService.instance.lastSchedulingIssue;
-      if (mounted && reminderIssue != null && _reminderAt != null) {
+      if (mounted && reminderIssue != null && (_reminderAt != null || _dueAt != null)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(reminderIssue)),
         );

@@ -7,7 +7,7 @@ set -euo pipefail
 
 PROJECT_NAME="tickoff_replacement"
 ORG="dev.tickoffreplacement"
-APP_LABEL="TickOff"
+APP_LABEL="Tazkiyane"
 
 if [ ! -d "android/app" ]; then
   echo "Generating Android scaffold with the installed Flutter SDK..."
@@ -40,8 +40,8 @@ PROGUARD_RULES="android/app/proguard-rules.pro"
 cat > "$PROGUARD_RULES" <<'EOF'
 # Gson TypeToken requires generic signatures at runtime.
 -keepattributes Signature
--keep,allowobfuscation class com.google.gson.reflect.TypeToken
--keep,allowobfuscation class * extends com.google.gson.reflect.TypeToken
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
 EOF
 
 # The Android scaffold is generated during CI. Keep R8 in compatibility mode

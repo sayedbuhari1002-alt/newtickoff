@@ -12,7 +12,7 @@ String overallProgressText({
   required DateTime today,
 }) {
   final StringBuffer b = StringBuffer()
-    ..writeln('TickOff progress - ${dayMonthLabel(today)} ${today.year}')
+    ..writeln('Tazkiyane progress - ${dayMonthLabel(today)} ${today.year}')
     ..writeln('Habit score: ${overallScorePercent.toStringAsFixed(1)}%');
   final List<Habit> habits = data.activeHabits;
   if (habits.isEmpty) {

@@ -361,4 +361,46 @@ void main() {
     // 25 done, 26 missed, today pending -> 1 of 2 = 50%
     expect(c.read(overallScoreProvider), closeTo(50, 1e-9));
   });
+
+  test('expenses save, update, delete and retain paise amounts', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    final AppDataNotifier n = await load(c);
+    final DateTime date = DateTime(2026, 10, 27);
+    final Expense expense = Expense(
+      id: 'expense-1',
+      amountPaise: 12550,
+      expenseDate: date,
+      description: 'Groceries',
+      paymentMethod: 'UPI',
+      createdAt: date,
+      updatedAt: date,
+    );
+
+    await n.saveExpense(expense);
+    expect(dataOf(c).expenses.single.amountPaise, 12550);
+    await n.saveExpense(expense.copyWith(amountPaise: 15000));
+    expect(dataOf(c).expenses, hasLength(1));
+    expect(dataOf(c).expenses.single.amountPaise, 15000);
+    await n.deleteExpense(expense.id);
+    expect(dataOf(c).expenses, isEmpty);
+    expect(() => n.saveExpense(expense.copyWith(amountPaise: 0)), throwsArgumentError);
+  });
+
+  test('custom expense categories reject duplicate names and can be deleted', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    final AppDataNotifier n = await load(c);
+    const ExpenseCategory category = ExpenseCategory(id: 'custom', name: 'Coffee');
+
+    await n.saveExpenseCategory(category);
+    expect(dataOf(c).expenseCategories.single, category);
+    await expectLater(
+      n.saveExpenseCategory(const ExpenseCategory(id: 'custom-2', name: 'coffee')),
+      throwsArgumentError,
+    );
+    await n.deleteExpenseCategory(category.id);
+    expect(dataOf(c).expenseCategories, isEmpty);
+  });
+
 }

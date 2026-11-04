@@ -9,6 +9,8 @@ class AppData {
     this.completions = const <String, Map<String, CompletionRecord>>{},
     this.achievements = const <String, Map<int, String>>{},
     this.notes = const <Note>[],
+    this.expenses = const <Expense>[],
+    this.expenseCategories = const <ExpenseCategory>[],
     this.tasks = const <Task>[],
     this.taskActivities = const <TaskActivity>[],
     this.settings = const <String, String>{},
@@ -24,6 +26,8 @@ class AppData {
   /// habitId -> milestone -> unlocked-on date key.
   final Map<String, Map<int, String>> achievements;
   final List<Note> notes;
+  final List<Expense> expenses;
+  final List<ExpenseCategory> expenseCategories;
   final List<Task> tasks;
   final List<TaskActivity> taskActivities;
 
@@ -80,6 +84,59 @@ class AppData {
     return list;
   }
 
+  List<Note> notesForDate(DateTime date) => sortedNotes
+      .where((Note note) => note.habitId == null &&
+          note.logDate != null &&
+          note.logDate!.year == date.year &&
+          note.logDate!.month == date.month &&
+          note.logDate!.day == date.day)
+      .toList();
+
+  List<Note> get habitNotes => sortedNotes
+      .where((Note note) => note.habitId != null)
+      .toList();
+
+  List<Note> habitNotesForDate(DateTime date) => habitNotes
+      .where((Note note) =>
+          note.createdAt.year == date.year &&
+          note.createdAt.month == date.month &&
+          note.createdAt.day == date.day)
+      .toList();
+
+  List<Expense> expensesForDate(DateTime date) {
+    final List<Expense> result = expenses.where((Expense expense) =>
+      expense.expenseDate.year == date.year &&
+      expense.expenseDate.month == date.month &&
+      expense.expenseDate.day == date.day).toList();
+    result.sort((Expense a, Expense b) => b.createdAt.compareTo(a.createdAt));
+    return result;
+  }
+
+  List<Expense> expensesForMonth(DateTime month) {
+    final List<Expense> result = expenses.where((Expense expense) =>
+      expense.expenseDate.year == month.year &&
+      expense.expenseDate.month == month.month).toList();
+    result.sort((Expense a, Expense b) => a.expenseDate.compareTo(b.expenseDate));
+    return result;
+  }
+
+  List<ExpenseCategory> get sortedExpenseCategories {
+    final List<ExpenseCategory> result = List<ExpenseCategory>.of(expenseCategories);
+    result.sort((ExpenseCategory a, ExpenseCategory b) {
+      final int order = a.sortOrder.compareTo(b.sortOrder);
+      return order != 0 ? order : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return result;
+  }
+
+  ExpenseCategory? expenseCategoryById(String? id) {
+    if (id == null) return null;
+    for (final ExpenseCategory category in expenseCategories) {
+      if (category.id == id) return category;
+    }
+    return null;
+  }
+
   Task? taskById(String id) {
     for (final Task task in tasks) {
       if (task.id == id) return task;
@@ -128,6 +185,8 @@ class AppData {
     Map<String, Map<String, CompletionRecord>>? completions,
     Map<String, Map<int, String>>? achievements,
     List<Note>? notes,
+    List<Expense>? expenses,
+    List<ExpenseCategory>? expenseCategories,
     List<Task>? tasks,
     List<TaskActivity>? taskActivities,
     Map<String, String>? settings,
@@ -138,6 +197,8 @@ class AppData {
       completions: completions ?? this.completions,
       achievements: achievements ?? this.achievements,
       notes: notes ?? this.notes,
+      expenses: expenses ?? this.expenses,
+      expenseCategories: expenseCategories ?? this.expenseCategories,
       tasks: tasks ?? this.tasks,
       taskActivities: taskActivities ?? this.taskActivities,
       settings: settings ?? this.settings,

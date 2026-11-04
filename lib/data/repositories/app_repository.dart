@@ -34,6 +34,14 @@ abstract class AppRepository {
   Future<void> upsertNote(Note note);
   Future<void> deleteNote(String noteId);
 
+  // Daily expenses and user-defined expense categories.
+  Future<List<Expense>> loadExpenses();
+  Future<void> upsertExpense(Expense expense);
+  Future<void> deleteExpense(String expenseId);
+  Future<List<ExpenseCategory>> loadExpenseCategories();
+  Future<void> upsertExpenseCategory(ExpenseCategory category);
+  Future<void> deleteExpenseCategory(String categoryId);
+
   // Achievements: habitId -> milestone -> `yyyy-MM-dd` unlocked on
   Future<Map<String, Map<int, String>>> loadAchievements();
   Future<void> saveAchievement(String habitId, int milestone, String unlockedOn);

@@ -133,9 +133,9 @@ class _NotificationSettingsScreenState
                 ),
                 SizedBox(height: 10),
                 Text(
-                  '1. Open Android Settings → Apps → TickOff → Notifications and allow notifications.\n\n'
-                  '2. Open Settings → Apps → Special app access → Alarms & reminders → TickOff and allow alarms and reminders.\n\n'
-                  '3. Return to TickOff and tap “Enable reminder permissions” again.',
+                  '1. Open Android Settings → Apps → Tazkiyane → Notifications and allow notifications.\n\n'
+                  '2. Open Settings → Apps → Special app access → Alarms & reminders → Tazkiyane and allow alarms and reminders.\n\n'
+                  '3. Return to Tazkiyane and tap “Enable reminder permissions” again.',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     height: 1.5,
@@ -144,7 +144,7 @@ class _NotificationSettingsScreenState
                 ),
                 SizedBox(height: 12),
                 Text(
-                  'TickOff uses exact local reminders. Android battery management and some device manufacturers may still affect delivery, even when permissions are enabled.',
+                  'Tazkiyane uses exact local reminders. Android battery management and some device manufacturers may still affect delivery, even when permissions are enabled.',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     height: 1.4,

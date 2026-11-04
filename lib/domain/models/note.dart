@@ -9,6 +9,7 @@ class Note {
     required this.createdAt,
     required this.updatedAt,
     this.habitId,
+    this.logDate,
     this.title = '',
     this.body = '',
     this.photoPaths = const <String>[],
@@ -17,6 +18,9 @@ class Note {
 
   final String id;
   final String? habitId;
+
+  /// Calendar date for a daily journal entry. Habit notes may leave this null.
+  final DateTime? logDate;
   final String title;
   final String body;
   final DateTime createdAt;
@@ -34,6 +38,8 @@ class Note {
   Note copyWith({
     String? habitId,
     bool clearHabit = false,
+    DateTime? logDate,
+    bool clearLogDate = false,
     String? title,
     String? body,
     DateTime? updatedAt,
@@ -43,6 +49,11 @@ class Note {
     return Note(
       id: id,
       habitId: clearHabit ? null : (habitId ?? this.habitId),
+      logDate: clearLogDate
+          ? null
+          : (logDate == null
+              ? this.logDate
+              : DateTime(logDate.year, logDate.month, logDate.day)),
       title: title ?? this.title,
       body: body ?? this.body,
       createdAt: createdAt,
@@ -55,6 +66,7 @@ class Note {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'id': id,
         'habitId': habitId,
+        'logDate': logDate?.toIso8601String(),
         'title': title,
         'body': body,
         'createdAt': createdAt.toIso8601String(),
@@ -72,6 +84,7 @@ class Note {
     return Note(
       id: json['id'] as String,
       habitId: json['habitId'] as String?,
+      logDate: DateTime.tryParse((json['logDate'] as String?) ?? ''),
       title: (json['title'] as String?) ?? '',
       body: (json['body'] as String?) ?? '',
       createdAt: created,
@@ -87,6 +100,7 @@ class Note {
       other is Note &&
       other.id == id &&
       other.habitId == habitId &&
+      other.logDate == logDate &&
       other.title == title &&
       other.body == body &&
       other.createdAt == createdAt &&
@@ -98,6 +112,7 @@ class Note {
   int get hashCode => Object.hash(
         id,
         habitId,
+        logDate,
         title,
         body,
         createdAt,

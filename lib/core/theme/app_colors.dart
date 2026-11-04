@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Colour tokens estimated from the supplied TickOff screenshots.
+/// Colour tokens estimated from the supplied Tazkiyane screenshots.
 ///
 /// Two accent families are used on purpose, exactly as in the reference:
 /// * [gold] on the dashboard and habit-detail screens;

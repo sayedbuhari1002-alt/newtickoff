@@ -195,6 +195,37 @@ void main() {
     });
   });
 
+  group('Expense records', () {
+    test('amounts use integer paise and survive JSON round trip', () {
+      final DateTime date = DateTime(2026, 11, 4);
+      final Expense expense = Expense(
+        id: 'expense-1',
+        amountPaise: 12345,
+        expenseDate: date,
+        categoryId: 'food',
+        description: 'Lunch',
+        paymentMethod: 'UPI',
+        createdAt: date,
+        updatedAt: date,
+      );
+      expect(expense.amountRupees, 123.45);
+      expect(expense.validate(), isNull);
+      expect(Expense.fromJson(expense.toJson()), expense);
+      expect(expense.copyWith(clearCategory: true).categoryId, isNull);
+    });
+
+    test('expense amount and description are validated', () {
+      final DateTime date = DateTime(2026, 11, 4);
+      Expense makeExpense({required int amount, String description = ''}) => Expense(
+        id: 'e', amountPaise: amount, expenseDate: date,
+        createdAt: date, updatedAt: date, description: description,
+      );
+      expect(makeExpense(amount: 0).validate(), isNotNull);
+      expect(makeExpense(amount: 100, description: List<String>.filled(301, 'x').join()).validate(), isNotNull);
+      expect(makeExpense(amount: 100).validate(), isNull);
+    });
+  });
+
   group('Note and HabitCategory', () {
     test('note emptiness and round trip', () {
       final DateTime t = DateTime(2026, 10, 27);

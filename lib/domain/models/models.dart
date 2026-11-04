@@ -1,6 +1,8 @@
 export 'checklist_item.dart';
 export 'completion_record.dart';
 export 'enums.dart';
+export 'expense.dart';
+export 'expense_category.dart';
 export 'habit.dart';
 export 'habit_category.dart';
 export 'note.dart';

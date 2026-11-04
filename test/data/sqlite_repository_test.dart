@@ -158,6 +158,8 @@ void main() {
         'subtasks',
         'task_activities',
         'app_settings',
+        'expense_categories',
+        'expenses',
       ]),
     );
   });
@@ -196,6 +198,60 @@ void main() {
       expect(retained.single['title'], 'Keep me');
       expect(await countRows(upgraded, 'tasks'), 0);
       expect(await countRows(upgraded, 'task_activities'), 0);
+    } finally {
+      await upgraded.close();
+      await databaseFactory.deleteDatabase(oldPath);
+    }
+  });
+
+  test('version-3 standalone notes become dated journal entries', () async {
+    final String oldPath = p.join(await getDatabasesPath(), 'v3-journal-migration-test.db');
+    await databaseFactory.deleteDatabase(oldPath);
+    final Database oldDb = await databaseFactory.openDatabase(
+      oldPath,
+      options: OpenDatabaseOptions(
+        version: 3,
+        onCreate: (Database database, int version) async {
+          await database.execute('''
+            CREATE TABLE notes (
+              id TEXT PRIMARY KEY,
+              habit_id TEXT,
+              title TEXT NOT NULL DEFAULT '',
+              body TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              photos_json TEXT NOT NULL DEFAULT '[]',
+              audio_json TEXT NOT NULL DEFAULT '[]'
+            )
+          ''');
+          await database.insert('notes', <String, Object?>{
+            'id': 'journal-old',
+            'title': 'Legacy thought',
+            'body': 'Keep this entry',
+            'created_at': '2026-10-31T08:15:00.000',
+            'updated_at': '2026-10-31T08:15:00.000',
+          });
+          await database.insert('notes', <String, Object?>{
+            'id': 'habit-old',
+            'habit_id': 'legacy-habit',
+            'title': 'Habit reflection',
+            'created_at': '2026-10-31T09:15:00.000',
+            'updated_at': '2026-10-31T09:15:00.000',
+          });
+        },
+      ),
+    );
+    await oldDb.close();
+
+    final Database upgraded = await AppDatabase.open(path: oldPath);
+    try {
+      final SqliteAppRepository upgradedRepo = SqliteAppRepository(upgraded);
+      final List<Note> notes = await upgradedRepo.loadNotes();
+      final Note standalone = notes.singleWhere((Note note) => note.id == 'journal-old');
+      final Note habitNote = notes.singleWhere((Note note) => note.id == 'habit-old');
+      expect(standalone.logDate, DateTime(2026, 10, 31));
+      expect(habitNote.logDate, isNull);
+      expect(await upgraded.getVersion(), AppDatabase.version);
     } finally {
       await upgraded.close();
       await databaseFactory.deleteDatabase(oldPath);
@@ -342,11 +398,61 @@ void main() {
     final Note n = Note(
       id: 'free',
       title: 'Loose thought',
+      logDate: DateTime(2026, 10, 27),
       createdAt: DateTime(2026, 10, 27),
       updatedAt: DateTime(2026, 10, 27),
     );
     await repo.upsertNote(n);
-    expect((await repo.loadNotes()).single.habitId, isNull);
+    final Note loaded = (await repo.loadNotes()).single;
+    expect(loaded.habitId, isNull);
+    expect(loaded.logDate, DateTime(2026, 10, 27));
+  });
+
+  test('expense categories are seeded and expenses round-trip in paise', () async {
+    final List<ExpenseCategory> categories = await repo.loadExpenseCategories();
+    expect(categories, hasLength(9));
+    expect(categories.every((ExpenseCategory c) => c.isBuiltIn), isTrue);
+
+    final Expense expense = Expense(
+      id: 'expense-1',
+      amountPaise: 12345,
+      expenseDate: DateTime(2026, 11, 4),
+      categoryId: categories.first.id,
+      description: 'Lunch',
+      paymentMethod: 'UPI',
+      createdAt: DateTime(2026, 11, 4, 13),
+      updatedAt: DateTime(2026, 11, 4, 13),
+    );
+    await repo.upsertExpense(expense);
+    expect((await repo.loadExpenses()).single, expense);
+
+    await repo.upsertExpense(expense.copyWith(amountPaise: 15000));
+    expect(await countRows(db, 'expenses'), 1);
+    expect((await repo.loadExpenses()).single.amountPaise, 15000);
+
+    await repo.deleteExpense(expense.id);
+    expect(await repo.loadExpenses(), isEmpty);
+  });
+
+  test('deleting a custom expense category leaves its expenses uncategorised', () async {
+    final ExpenseCategory category = ExpenseCategory(
+      id: 'custom-category',
+      name: 'Coffee',
+      sortOrder: 20,
+    );
+    await repo.upsertExpenseCategory(category);
+    await repo.upsertExpense(Expense(
+      id: 'expense-2',
+      amountPaise: 2500,
+      expenseDate: DateTime(2026, 11, 4),
+      categoryId: category.id,
+      createdAt: DateTime(2026, 11, 4),
+      updatedAt: DateTime(2026, 11, 4),
+    ));
+
+    await repo.deleteExpenseCategory(category.id);
+    expect((await repo.loadExpenses()).single.categoryId, isNull);
+    expect(await countRows(db, 'expense_categories'), 9);
   });
 
   test('data survives closing and reopening the database file', () async {
