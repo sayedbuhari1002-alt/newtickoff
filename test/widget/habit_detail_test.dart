@@ -34,6 +34,26 @@ void main() {
     expect(find.text('Everyday'), findsOneWidget);
   });
 
+  testWidgets('back from habit details after editing returns to Dashboard',
+      (WidgetTester tester) async {
+    final InMemoryAppRepository repo = seeded();
+    await openDetail(tester, repo);
+
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit Habit'), findsOneWidget);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reading Books'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text("Today's Tasks"), findsOneWidget);
+  });
+
   testWidgets('Done completes today and can be undone',
       (WidgetTester tester) async {
     final InMemoryAppRepository repo = seeded();

@@ -191,7 +191,10 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
       // A direct route replacement returns to the intended destination.
       router.go(widget.habitId == null
           ? AppRoutes.habits
-          : AppRoutes.habitDetail(widget.habitId!));
+          : AppRoutes.habitDetail(
+              widget.habitId!,
+              returnToDashboard: true,
+            ));
     }
   }
 

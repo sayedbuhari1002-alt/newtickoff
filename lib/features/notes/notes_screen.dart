@@ -367,6 +367,29 @@ class _NoteTile extends StatelessWidget {
               const SizedBox(height: 4),
               Text(note.body.trim(), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
             ],
+            if (note.photoPaths.isNotEmpty || note.audioPaths.isNotEmpty || note.videoPaths.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 5),
+              Row(children: <Widget>[
+                if (note.photoPaths.isNotEmpty) ...<Widget>[
+                  const Icon(Icons.image_outlined, size: 14, color: AppColors.textHint),
+                  const SizedBox(width: 3),
+                  Text('${note.photoPaths.length}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                  const SizedBox(width: 9),
+                ],
+                if (note.audioPaths.isNotEmpty) ...<Widget>[
+                  const Icon(Icons.mic_none_rounded, size: 14, color: AppColors.textHint),
+                  const SizedBox(width: 3),
+                  Text('${note.audioPaths.length}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                  const SizedBox(width: 9),
+                ],
+                if (note.videoPaths.isNotEmpty) ...<Widget>[
+                  const Icon(Icons.videocam_outlined, size: 14, color: AppColors.textHint),
+                  const SizedBox(width: 3),
+                  Text('${note.videoPaths.length}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                ],
+                const Text('attachments', style: TextStyle(fontSize: 11, color: AppColors.textHint)),
+              ]),
+            ],
             if (habit != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text('Habit · ${habit!.title}', style: const TextStyle(fontSize: 11, color: AppColors.textHint))),
           ])),
           const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),

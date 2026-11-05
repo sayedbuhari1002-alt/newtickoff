@@ -242,6 +242,7 @@ class SqliteAppRepository implements AppRepository {
             'updatedAt': r['updated_at'],
             'photoPaths': jsonDecode(r['photos_json'] as String),
             'audioPaths': jsonDecode(r['audio_json'] as String),
+            'videoPaths': jsonDecode(r['video_json'] as String? ?? '[]'),
           }),
         );
       } catch (e) {
@@ -264,6 +265,7 @@ class SqliteAppRepository implements AppRepository {
         'updated_at': n.updatedAt.toIso8601String(),
         'photos_json': jsonEncode(n.photoPaths),
         'audio_json': jsonEncode(n.audioPaths),
+        'video_json': jsonEncode(n.videoPaths),
       });
     });
   }

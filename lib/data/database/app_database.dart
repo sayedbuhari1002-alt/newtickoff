@@ -8,13 +8,14 @@ import 'package:sqflite/sqflite.dart';
 /// * 2 - local tasks, subtasks, and immutable task activity history.
 /// * 3 - local key/value preferences for appearance and Dashboard layout.
 /// * 4 - date-based journal notes and local expense tracking.
+/// * 5 - local video attachments for journal notes.
 ///
 /// To change the schema, bump [version], add a step to [_migrations] that
 /// upgrades from the previous version, and keep [_createV1] untouched.
 class AppDatabase {
   AppDatabase._();
 
-  static const int version = 4;
+  static const int version = 5;
   static const String fileName = 'tickoff.db';
 
   /// Opens (creating if needed) the database. Pass [path] to use another file
@@ -33,6 +34,7 @@ class AppDatabase {
         if (newVersion >= 2) await _migrateV2(db);
         if (newVersion >= 3) await _migrateV3(db);
         if (newVersion >= 4) await _migrateV4(db);
+        if (newVersion >= 5) await _migrateV5(db);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         for (int v = oldVersion; v < newVersion; v++) {
@@ -49,9 +51,27 @@ class AppDatabase {
         1: _migrateV2,
         2: _migrateV3,
         3: _migrateV4,
+        4: _migrateV5,
       };
 
 
+
+  static Future<void> _migrateV5(Database db) async {
+    // Preserve all existing journal and habit notes while adding the optional
+    // JSON list used to store local video attachment paths.
+    final List<Map<String, Object?>> noteTables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'notes'",
+    );
+    if (noteTables.isEmpty) return;
+    final List<Map<String, Object?>> columns =
+        await db.rawQuery('PRAGMA table_info(notes)');
+    if (!columns.any((Map<String, Object?> column) =>
+        column['name'] == 'video_json')) {
+      await db.execute(
+        "ALTER TABLE notes ADD COLUMN video_json TEXT NOT NULL DEFAULT '[]'",
+      );
+    }
+  }
 
   static Future<void> _migrateV4(Database db) async {
     // Existing standalone notes become journal entries on their creation day.

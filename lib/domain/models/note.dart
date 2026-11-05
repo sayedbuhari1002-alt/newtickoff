@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-/// A note, optionally linked to a habit, with optional local photo and audio
-/// attachments (file paths inside the app's private storage).
+/// A note, optionally linked to a habit, with local photo, audio and video
+/// attachment paths stored in the app's private documents directory.
 @immutable
 class Note {
   const Note({
@@ -14,6 +14,7 @@ class Note {
     this.body = '',
     this.photoPaths = const <String>[],
     this.audioPaths = const <String>[],
+    this.videoPaths = const <String>[],
   });
 
   final String id;
@@ -27,13 +28,15 @@ class Note {
   final DateTime updatedAt;
   final List<String> photoPaths;
   final List<String> audioPaths;
+  final List<String> videoPaths;
 
   /// A note with no text and no attachments is not worth saving.
   bool get isEmpty =>
       title.trim().isEmpty &&
       body.trim().isEmpty &&
       photoPaths.isEmpty &&
-      audioPaths.isEmpty;
+      audioPaths.isEmpty &&
+      videoPaths.isEmpty;
 
   Note copyWith({
     String? habitId,
@@ -45,6 +48,7 @@ class Note {
     DateTime? updatedAt,
     List<String>? photoPaths,
     List<String>? audioPaths,
+    List<String>? videoPaths,
   }) {
     return Note(
       id: id,
@@ -60,6 +64,7 @@ class Note {
       updatedAt: updatedAt ?? this.updatedAt,
       photoPaths: photoPaths ?? this.photoPaths,
       audioPaths: audioPaths ?? this.audioPaths,
+      videoPaths: videoPaths ?? this.videoPaths,
     );
   }
 
@@ -73,6 +78,7 @@ class Note {
         'updatedAt': updatedAt.toIso8601String(),
         'photoPaths': photoPaths,
         'audioPaths': audioPaths,
+        'videoPaths': videoPaths,
       };
 
   factory Note.fromJson(Map<String, dynamic> json) {
@@ -92,6 +98,7 @@ class Note {
           DateTime.tryParse((json['updatedAt'] as String?) ?? '') ?? created,
       photoPaths: strings(json['photoPaths']),
       audioPaths: strings(json['audioPaths']),
+      videoPaths: strings(json['videoPaths']),
     );
   }
 
@@ -106,7 +113,8 @@ class Note {
       other.createdAt == createdAt &&
       other.updatedAt == updatedAt &&
       listEquals(other.photoPaths, photoPaths) &&
-      listEquals(other.audioPaths, audioPaths);
+      listEquals(other.audioPaths, audioPaths) &&
+      listEquals(other.videoPaths, videoPaths);
 
   @override
   int get hashCode => Object.hash(
@@ -119,5 +127,6 @@ class Note {
         updatedAt,
         Object.hashAll(photoPaths),
         Object.hashAll(audioPaths),
+        Object.hashAll(videoPaths),
       );
 }

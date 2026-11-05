@@ -9,7 +9,7 @@ Tazkiyane combines habit tracking, task management, a date-based daily journal, 
 - **Dashboard:** Daily habit/task overview, progress, and scrolling date navigation.
 - **Habits:** Build, Quit, tick, checklist, and count-based habits; scheduling, completion history, streaks, heatmaps, analytics, categories, notes, and reminders.
 - **Tasks:** Task details, priorities, categories, deadlines, optional manual reminders, repeat rules, subtasks, local attachments, pause/resume, postpone, and task analytics.
-- **Journal & Notes:** A horizontally scrolling date selector matching the Dashboard; multiple general journal entries per date; existing habit-linked notes remain separately accessible.
+- **Journal & Notes:** A horizontally scrolling date selector matching the Dashboard; multiple general journal entries per date; photo, recorded audio and video attachments are stored locally; existing habit-linked notes remain separately accessible.
 - **Expenses:** Daily expense entry, edit/delete, built-in and custom categories, daily totals, and monthly spending analytics.
 - **Notifications:** Exact local task reminders, 30-minute pre-deadline alerts with action buttons, and recurring Build-habit reminders that are suppressed when the habit is already complete for the day.
 
@@ -30,6 +30,7 @@ An active task with a deadline is scheduled to show one local alert 30 minutes b
 - Schema version 2 adds tasks, subtasks, and task activity history.
 - Schema version 3 adds local app settings.
 - Schema version 4 adds `notes.log_date`, `expense_categories`, and `expenses` with indexes. Existing standalone notes are assigned the date of their original creation; habit-linked notes remain linked to their habits.
+- Schema version 5 adds `notes.video_json` for local video attachment paths without deleting existing note data.
 - Existing Android application ID and attachment directory remain unchanged for update compatibility.
 
 ## Build on GitHub Actions
