@@ -191,9 +191,6 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
 
   /// Permanently deletes a habit, its history, achievements and notes.
   Future<void> deleteHabit(String habitId) async {
-    final List<Note> removedNotes = _current.notes
-        .where((Note note) => note.habitId == habitId)
-        .toList();
     await _repo.deleteHabit(habitId);
     final AppData data = _current;
     final Map<String, Map<String, CompletionRecord>> completions =
@@ -209,13 +206,6 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         notes: data.notes.where((Note n) => n.habitId != habitId).toList(),
       ),
     );
-    unawaited(_cleanupOrphanedAttachments(
-      removedNotes.expand((Note note) => <String>[
-        ...note.photoPaths,
-        ...note.audioPaths,
-        ...note.videoPaths,
-      ]),
-    ));
     // The habit is already deleted locally. Cancelling Android notifications
     // is cleanup and must not hold the delete action or its navigation open.
     unawaited(_cancelHabitInBackground(habitId));
@@ -357,10 +347,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     final AppData data = _current;
     for (final String path in paths.toSet()) {
       final bool taskStillUses = data.tasks.any((Task t) => t.photoPaths.contains(path) || t.audioPaths.contains(path));
-      final bool noteStillUses = data.notes.any((Note n) =>
-          n.photoPaths.contains(path) ||
-          n.audioPaths.contains(path) ||
-          n.videoPaths.contains(path));
+      final bool noteStillUses = data.notes.any((Note n) => n.photoPaths.contains(path) || n.audioPaths.contains(path));
       if (taskStillUses || noteStillUses || path.trim().isEmpty) continue;
       try {
         final File file = File(path);
@@ -707,10 +694,6 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
   // ------------------------------------------------------------------- notes
 
   Future<void> saveNote(Note note) async {
-    final AppData before = _current;
-    final Note? old = before.notes
-        .where((Note item) => item.id == note.id)
-        .firstOrNull;
     await _repo.upsertNote(note);
     final AppData data = _current;
     final List<Note> list = List<Note>.of(data.notes);
@@ -721,36 +704,14 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       list.add(note);
     }
     state = AsyncData<AppData>(data.copyWith(notes: list));
-    if (old != null) {
-      final Set<String> retained = <String>{
-        ...note.photoPaths,
-        ...note.audioPaths,
-        ...note.videoPaths,
-      };
-      await _cleanupOrphanedAttachments(<String>{
-        ...old.photoPaths,
-        ...old.audioPaths,
-        ...old.videoPaths,
-      }.where((String path) => !retained.contains(path)));
-    }
   }
 
   Future<void> deleteNote(String noteId) async {
-    final Note? old = _current.notes
-        .where((Note item) => item.id == noteId)
-        .firstOrNull;
     await _repo.deleteNote(noteId);
     final AppData data = _current;
     state = AsyncData<AppData>(
       data.copyWith(notes: data.notes.where((Note n) => n.id != noteId).toList()),
     );
-    if (old != null) {
-      await _cleanupOrphanedAttachments(<String>{
-        ...old.photoPaths,
-        ...old.audioPaths,
-        ...old.videoPaths,
-      });
-    }
   }
 
   // --------------------------------------------------------------- expenses

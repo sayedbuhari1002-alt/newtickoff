@@ -120,6 +120,29 @@ void main() {
     expect((await repo.loadTasks()).single.title, 'Final report');
   });
 
+  test('daily notes preserve photo, audio and video attachment paths', () async {
+    final DateTime created = DateTime(2026, 11, 5, 10, 30);
+    final Note note = Note(
+      id: 'journal-media',
+      logDate: DateTime(2026, 11, 5),
+      title: 'Field notes',
+      body: 'A photo, voice memo and short clip.',
+      photoPaths: const <String>['/app/attachments/photo.jpg'],
+      audioPaths: const <String>['/app/attachments/audio.m4a'],
+      videoPaths: const <String>['/app/attachments/video.mp4'],
+      createdAt: created,
+      updatedAt: created,
+    );
+
+    await repo.upsertNote(note);
+    final Note loaded = (await repo.loadNotes()).single;
+    expect(loaded, note);
+    expect(loaded.videoPaths, note.videoPaths);
+
+    await repo.upsertNote(loaded.copyWith(body: 'Updated note'));
+    expect((await repo.loadNotes()).single.videoPaths, note.videoPaths);
+  });
+
   test('deleting a task retains immutable activity history', () async {
     await repo.upsertTask(makeStoredTask());
     final TaskActivity event = TaskActivity(
@@ -141,12 +164,8 @@ void main() {
 
   test('schema is created at the current version', () async {
     expect(await db.getVersion(), AppDatabase.version);
-    final List<Map<String, Object?>> noteColumns =
-        await db.rawQuery('PRAGMA table_info(notes)');
-    expect(
-      noteColumns.map((Map<String, Object?> column) => column['name']),
-      contains('videos_json'),
-    );
+    final List<Map<String, Object?>> noteColumns = await db.rawQuery('PRAGMA table_info(notes)');
+    expect(noteColumns.map((Map<String, Object?> column) => column['name']), contains('video_json'));
     final List<Map<String, Object?>> tables = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
     );
@@ -210,6 +229,53 @@ void main() {
     }
   });
 
+  test('version-4 databases gain video attachment storage without losing notes', () async {
+    final String oldPath = p.join(await getDatabasesPath(), 'v4-video-migration-test.db');
+    await databaseFactory.deleteDatabase(oldPath);
+    final Database oldDb = await databaseFactory.openDatabase(
+      oldPath,
+      options: OpenDatabaseOptions(
+        version: 4,
+        onCreate: (Database database, int version) async {
+          await database.execute('''
+            CREATE TABLE notes (
+              id TEXT PRIMARY KEY,
+              habit_id TEXT,
+              log_date TEXT,
+              title TEXT NOT NULL DEFAULT '',
+              body TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              photos_json TEXT NOT NULL DEFAULT '[]',
+              audio_json TEXT NOT NULL DEFAULT '[]'
+            )
+          ''');
+          await database.insert('notes', <String, Object?>{
+            'id': 'existing-note',
+            'title': 'Keep this note',
+            'body': 'Existing content must remain unchanged.',
+            'log_date': '2026-11-04',
+            'created_at': '2026-11-04T08:00:00.000',
+            'updated_at': '2026-11-04T08:00:00.000',
+          });
+        },
+      ),
+    );
+    await oldDb.close();
+
+    final Database upgraded = await AppDatabase.open(path: oldPath);
+    try {
+      final List<Map<String, Object?>> rows = await upgraded.query('notes');
+      expect(rows.single['id'], 'existing-note');
+      expect(rows.single['title'], 'Keep this note');
+      expect(rows.single['video_json'], '[]');
+      expect(await upgraded.getVersion(), AppDatabase.version);
+    } finally {
+      await upgraded.close();
+      await databaseFactory.deleteDatabase(oldPath);
+    }
+  });
+
   test('version-3 standalone notes become dated journal entries', () async {
     final String oldPath = p.join(await getDatabasesPath(), 'v3-journal-migration-test.db');
     await databaseFactory.deleteDatabase(oldPath);
@@ -257,56 +323,6 @@ void main() {
       final Note habitNote = notes.singleWhere((Note note) => note.id == 'habit-old');
       expect(standalone.logDate, DateTime(2026, 10, 31));
       expect(habitNote.logDate, isNull);
-      expect(await upgraded.getVersion(), AppDatabase.version);
-    } finally {
-      await upgraded.close();
-      await databaseFactory.deleteDatabase(oldPath);
-    }
-  });
-
-  test('version-4 notes gain an empty video attachment list', () async {
-    final String oldPath =
-        p.join(await getDatabasesPath(), 'v4-video-attachment-migration-test.db');
-    await databaseFactory.deleteDatabase(oldPath);
-    final Database oldDb = await databaseFactory.openDatabase(
-      oldPath,
-      options: OpenDatabaseOptions(
-        version: 4,
-        onCreate: (Database database, int version) async {
-          await database.execute('''
-            CREATE TABLE notes (
-              id TEXT PRIMARY KEY,
-              habit_id TEXT,
-              log_date TEXT,
-              title TEXT NOT NULL DEFAULT '',
-              body TEXT NOT NULL DEFAULT '',
-              created_at TEXT NOT NULL,
-              updated_at TEXT NOT NULL,
-              photos_json TEXT NOT NULL DEFAULT '[]',
-              audio_json TEXT NOT NULL DEFAULT '[]'
-            )
-          ''');
-          await database.insert('notes', <String, Object?>{
-            'id': 'existing-note',
-            'title': 'Keep this note',
-            'body': 'Existing text remains intact',
-            'created_at': '2026-11-01T08:00:00.000',
-            'updated_at': '2026-11-01T08:00:00.000',
-            'photos_json': '["/local/photo.jpg"]',
-            'audio_json': '["/local/audio.m4a"]',
-          });
-        },
-      ),
-    );
-    await oldDb.close();
-
-    final Database upgraded = await AppDatabase.open(path: oldPath);
-    try {
-      final Note note = (await SqliteAppRepository(upgraded).loadNotes()).single;
-      expect(note.title, 'Keep this note');
-      expect(note.photoPaths, <String>['/local/photo.jpg']);
-      expect(note.audioPaths, <String>['/local/audio.m4a']);
-      expect(note.videoPaths, isEmpty);
       expect(await upgraded.getVersion(), AppDatabase.version);
     } finally {
       await upgraded.close();
@@ -438,7 +454,6 @@ void main() {
       updatedAt: DateTime(2026, 10, 27, 10),
       photoPaths: const <String>['/data/p1.jpg'],
       audioPaths: const <String>['/data/a1.m4a', '/data/a2.m4a'],
-      videoPaths: const <String>['/data/v1.mp4'],
     );
     await repo.upsertNote(n);
     expect((await repo.loadNotes()).single, n);
@@ -446,7 +461,6 @@ void main() {
     await repo.upsertNote(n.copyWith(title: 'Edited'));
     expect(await countRows(db, 'notes'), 1);
     expect((await repo.loadNotes()).single.title, 'Edited');
-    expect((await repo.loadNotes()).single.videoPaths, <String>['/data/v1.mp4']);
 
     await repo.deleteNote('n1');
     expect(await repo.loadNotes(), isEmpty);

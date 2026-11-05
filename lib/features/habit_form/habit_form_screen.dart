@@ -187,18 +187,14 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
     setState(() => _saving = false);
     if (ok) {
       // Reminder scheduling continues in the background after the habit is
-      // saved locally. For an edit, pop the form route so the existing detail
-      // route (and the Dashboard/branch route beneath it) remains in the stack.
-      // Replacing the route with go() here discarded that history, so the
-      // detail screen's Back button could no longer return to its caller.
-      if (widget.habitId == null) {
-        router.go(AppRoutes.habits);
-      } else if (context.canPop()) {
-        context.pop();
-      } else {
-        // A deep link can open an edit route without an in-app caller.
-        router.go(AppRoutes.habitDetail(widget.habitId!));
-      }
+      // saved locally. Do not make navigation depend on a platform channel.
+      // A direct route replacement returns to the intended destination.
+      router.go(widget.habitId == null
+          ? AppRoutes.habits
+          : AppRoutes.habitDetail(
+              widget.habitId!,
+              returnToDashboard: true,
+            ));
     }
   }
 

@@ -54,25 +54,24 @@ class AppDatabase {
         4: _migrateV5,
       };
 
+
+
   static Future<void> _migrateV5(Database db) async {
-    // Video attachments are stored as local file paths, just like photos and
-    // audio. Add the column defensively for older/minimal database fixtures.
+    // Preserve all existing journal and habit notes while adding the optional
+    // JSON list used to store local video attachment paths.
     final List<Map<String, Object?>> noteTables = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'notes'",
     );
     if (noteTables.isEmpty) return;
     final List<Map<String, Object?>> columns =
         await db.rawQuery('PRAGMA table_info(notes)');
-    if (!columns.any(
-      (Map<String, Object?> column) => column['name'] == 'videos_json',
-    )) {
+    if (!columns.any((Map<String, Object?> column) =>
+        column['name'] == 'video_json')) {
       await db.execute(
-        "ALTER TABLE notes ADD COLUMN videos_json TEXT NOT NULL DEFAULT '[]'",
+        "ALTER TABLE notes ADD COLUMN video_json TEXT NOT NULL DEFAULT '[]'",
       );
     }
   }
-
-
 
   static Future<void> _migrateV4(Database db) async {
     // Existing standalone notes become journal entries on their creation day.

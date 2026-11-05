@@ -12,12 +12,17 @@ class AppRoutes {
 
   // Habits (full-screen, no bottom bar)
   static const String habitNew = '/habit/new';
-  static String habitDetail(String id, {DateTime? date}) {
-    final String path = '/habit/$id';
-    if (date == null) return path;
+  static String habitDetail(
+    String id, {
+    DateTime? date,
+    bool returnToDashboard = false,
+  }) {
+    final Map<String, String> query = <String, String>{};
+    if (date != null) query['date'] = dateKey(date);
+    if (returnToDashboard) query['returnTo'] = 'dashboard';
     return Uri(
-      path: path,
-      queryParameters: <String, String>{'date': dateKey(date)},
+      path: '/habit/$id',
+      queryParameters: query.isEmpty ? null : query,
     ).toString();
   }
   static String habitEdit(String id) => '/habit/$id/edit';

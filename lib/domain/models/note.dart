@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-/// A note, optionally linked to a habit, with optional local media attachments
-/// (file paths inside the app's private storage).
+/// A note, optionally linked to a habit, with local photo, audio and video
+/// attachment paths stored in the app's private documents directory.
 @immutable
 class Note {
   const Note({
