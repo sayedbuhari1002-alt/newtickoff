@@ -12,6 +12,7 @@ import '../../shared/utils/format.dart';
 import '../../shared/utils/guarded.dart';
 import '../../shared/utils/habit_ui.dart';
 import '../../shared/widgets/widgets.dart';
+import '../../shared/utils/modal_navigation.dart';
 import '../../state/app_data.dart';
 import '../../state/app_state.dart';
 import '../dashboard/day_actions.dart';
@@ -422,6 +423,8 @@ class HabitDetailScreen extends ConsumerWidget {
     );
 
     if (!context.mounted || action == null) return;
+    await waitForModalDismissal();
+    if (!context.mounted) return;
 
     switch (action) {
       case 'share':
@@ -442,11 +445,9 @@ class HabitDetailScreen extends ConsumerWidget {
           context,
           habit.isArchived ? 'Habit restored.' : 'Habit archived.',
         );
-        if (router.canPop()) {
-          router.pop();
-        } else {
-          router.go(AppRoutes.habits);
-        }
+        // Archive is a terminal action for this detail view. Replace the
+        // full-screen route with the Habits destination explicitly.
+        router.go(AppRoutes.habits);
         return;
       case 'delete':
         final bool sure = await showConfirmDialog(
@@ -458,17 +459,16 @@ class HabitDetailScreen extends ConsumerWidget {
           destructive: true,
         );
         if (!sure || !context.mounted) return;
+        await waitForModalDismissal();
+        if (!context.mounted) return;
         final bool ok = await guarded(
           context,
           () => ref.read(appDataProvider.notifier).deleteHabit(habit.id),
           message: 'Could not delete',
         );
         if (ok && context.mounted) {
-          if (router.canPop()) {
-            router.pop();
-          } else {
-            router.go(AppRoutes.habits);
-          }
+          // The deleted detail route is no longer a valid destination.
+          router.go(AppRoutes.habits);
         }
         return;
     }

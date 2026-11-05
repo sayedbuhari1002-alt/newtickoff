@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/router/routes.dart';
 import '../../shared/widgets/widgets.dart';
+import '../../shared/utils/modal_navigation.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.navigationShell});
@@ -58,6 +59,8 @@ class AppShell extends StatelessWidget {
     );
 
     if (!context.mounted || choice == null) return;
+    await waitForModalDismissal();
+    if (!context.mounted) return;
     switch (choice) {
       case 'habit':
         context.push(AppRoutes.habitNew);

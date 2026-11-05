@@ -186,17 +186,11 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
           SnackBar(content: Text(reminderIssue)),
         );
       }
-      // Pop through GoRouter so its declarative match list and the root
-      // Navigator remain synchronized. This restores the caller (the shell
-      // for a new habit, or the detail page when editing).
-      if (router.canPop()) {
-        router.pop();
-      } else {
-        // Support a direct launch without a previous route.
-        router.go(widget.habitId == null
-            ? AppRoutes.habits
-            : AppRoutes.habitDetail(widget.habitId!));
-      }
+      // A direct route replacement avoids relying on the nested branch's
+      // pop capability after a root-Navigator form route.
+      router.go(widget.habitId == null
+          ? AppRoutes.habits
+          : AppRoutes.habitDetail(widget.habitId!));
     }
   }
 

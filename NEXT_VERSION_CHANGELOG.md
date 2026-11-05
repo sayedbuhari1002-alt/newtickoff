@@ -158,3 +158,12 @@ The Flutter and Dart SDKs were not available in the implementation environment. 
 - Habit Options now returns the selected action from the sheet and performs navigation or persistence only after the options sheet has fully dismissed.
 - This prevents a second navigation pop from consuming a modal sheet that is still completing its reverse transition instead of closing the intended page.
 - No database schema, saved habit/task data, or reminder behavior changes.
+
+
+## 0.4.8+14 — Modal/navigation hardening
+
+- Added a shared modal-dismissal wait before pushing or replacing routes after bottom-sheet/dialog actions.
+- Habit archive and delete now navigate explicitly to the Habits destination rather than conditionally popping a Navigator whose top route may still be a dismissing modal.
+- Saving a new habit explicitly navigates to Habits; saving an edit explicitly returns to that habit's detail route.
+- No database schema, database filename, attachment directory, or Android application ID changes.
+- Flutter widget tests and Android build must still be run in GitHub Actions; this environment does not contain the Flutter SDK.

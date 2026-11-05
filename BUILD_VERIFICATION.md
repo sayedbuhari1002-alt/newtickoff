@@ -93,3 +93,10 @@ The Flutter/Dart SDK is not installed in this preparation environment. `dart for
 ## 0.4.7+13 navigation investigation
 
 The 0.4.6+12 GitHub Actions run checked commit `149d5e2` but reproduced the same three widget failures. Inspection showed that the Create menu and Habit Options handlers initiated a second navigation action immediately after calling `Navigator.pop` on their modal sheet. Since the modal and page routes share the root Navigator, the page pop could race the sheet's reverse transition. In 0.4.7+13, both flows await the modal result before pushing or popping page routes. Flutter tests and APK compilation must still be confirmed by the next GitHub Actions run.
+
+
+## 0.4.8+14 review
+
+- Added explicit modal reverse-transition wait before route changes.
+- Removed conditional pop logic for archive/delete/new-habit save and replaced it with deterministic GoRouter destinations.
+- Source assertions, YAML parsing, shell syntax, and ZIP integrity are checked during packaging. Flutter tests/analyze/APK build are not claimed as locally verified.
