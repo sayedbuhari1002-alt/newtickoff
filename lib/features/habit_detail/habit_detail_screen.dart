@@ -12,7 +12,6 @@ import '../../shared/utils/format.dart';
 import '../../shared/utils/guarded.dart';
 import '../../shared/utils/habit_ui.dart';
 import '../../shared/widgets/widgets.dart';
-import '../../shared/utils/modal_navigation.dart';
 import '../../state/app_data.dart';
 import '../../state/app_state.dart';
 import '../dashboard/day_actions.dart';
@@ -423,8 +422,6 @@ class HabitDetailScreen extends ConsumerWidget {
     );
 
     if (!context.mounted || action == null) return;
-    await waitForModalDismissal();
-    if (!context.mounted) return;
 
     switch (action) {
       case 'share':
@@ -459,8 +456,6 @@ class HabitDetailScreen extends ConsumerWidget {
           destructive: true,
         );
         if (!sure || !context.mounted) return;
-        await waitForModalDismissal();
-        if (!context.mounted) return;
         final bool ok = await guarded(
           context,
           () => ref.read(appDataProvider.notifier).deleteHabit(habit.id),

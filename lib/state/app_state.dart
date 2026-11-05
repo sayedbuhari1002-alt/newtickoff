@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/utils/date_utils.dart';
@@ -167,13 +168,15 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     data = data.copyWith(habits: habits);
     data = await _syncAchievements(data, habit);
     state = AsyncData<AppData>(data);
-    // Publish the saved habit immediately. Reminder scheduling is a separate
-    // platform operation and must never delay the visible local-data update.
-    await TaskReminderService.instance.scheduleHabit(
+    // Reminder scheduling uses platform channels and may be slow or
+    // unavailable (for example, during widget tests or while Android is
+    // starting). It is not part of the local save transaction and must not
+    // delay form navigation after the repository and app state are updated.
+    unawaited(_scheduleHabitInBackground(
       habit,
       requestPermissions: habit.reminder.enabled,
       skipToday: skipToday,
-    );
+    ));
   }
 
   Future<void> setArchived(String habitId, bool archived) async {
@@ -189,7 +192,6 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
   /// Permanently deletes a habit, its history, achievements and notes.
   Future<void> deleteHabit(String habitId) async {
     await _repo.deleteHabit(habitId);
-    await TaskReminderService.instance.cancelHabit(habitId);
     final AppData data = _current;
     final Map<String, Map<String, CompletionRecord>> completions =
         Map<String, Map<String, CompletionRecord>>.of(data.completions)
@@ -204,6 +206,38 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         notes: data.notes.where((Note n) => n.habitId != habitId).toList(),
       ),
     );
+    // The habit is already deleted locally. Cancelling Android notifications
+    // is cleanup and must not hold the delete action or its navigation open.
+    unawaited(_cancelHabitInBackground(habitId));
+  }
+
+  Future<void> _scheduleHabitInBackground(
+    Habit habit, {
+    required bool requestPermissions,
+    required bool skipToday,
+  }) async {
+    try {
+      await TaskReminderService.instance.scheduleHabit(
+        habit,
+        requestPermissions: requestPermissions,
+        skipToday: skipToday,
+      );
+    } catch (error, stackTrace) {
+      // Keep platform/plugin failures out of the local persistence path.
+      // The service also records its user-facing scheduling issue when
+      // possible; this catch is a final guard against unhandled async errors.
+      debugPrint('Background habit reminder scheduling failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<void> _cancelHabitInBackground(String habitId) async {
+    try {
+      await TaskReminderService.instance.cancelHabit(habitId);
+    } catch (error, stackTrace) {
+      debugPrint('Background habit reminder cancellation failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   // -------------------------------------------------------------- completions
@@ -246,10 +280,13 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     final bool completedToday = habit.type == HabitType.build &&
         HabitEngine(today: today).isCompleted(habit, currentDayRecord);
     if (habit.type == HabitType.build) {
-      await TaskReminderService.instance.scheduleHabit(
+      // Completion state is already persisted and published. Rescheduling the
+      // platform alarm is follow-up work and must not block the interaction.
+      unawaited(_scheduleHabitInBackground(
         habit,
+        requestPermissions: false,
         skipToday: completedToday,
-      );
+      ));
     }
   }
 

@@ -167,3 +167,13 @@ The Flutter and Dart SDKs were not available in the implementation environment. 
 - Saving a new habit explicitly navigates to Habits; saving an edit explicitly returns to that habit's detail route.
 - No database schema, database filename, attachment directory, or Android application ID changes.
 - Flutter widget tests and Android build must still be run in GitHub Actions; this environment does not contain the Flutter SDK.
+
+
+## Version 0.4.9+15 — non-blocking reminder work and route-complete modals
+
+- Habit persistence updates the repository and Riverpod state before starting reminder scheduling as a guarded background task. Notification plugin/platform-channel latency no longer delays save, archive, or form navigation. Build-habit completion updates also reschedule reminders in the background after the completion record is published.
+- Habit deletion updates local repository/state immediately and cancels its Android reminder asynchronously, so plugin cleanup cannot hold the delete route open.
+- Replaced fixed 350 ms modal delays with explicit `ModalBottomSheetRoute.completed` and `DialogRoute.completed` waits. Follow-up navigation now waits for the actual route transition rather than an arbitrary timer.
+- Removed the immediate reminder-status snackbar read from the habit form because background scheduling can complete after the form has closed; reminder status remains available from the reminders settings flow.
+- No database schema, database filename, attachment directory, or Android application ID changes.
+- Flutter tests and Android build must still pass in GitHub Actions before this build is considered verified.

@@ -24,11 +24,8 @@ class AppShell extends StatelessWidget {
   }
 
   Future<void> _showCreateMenu(BuildContext context) async {
-    // Wait for the modal route's reverse transition to finish before pushing
-    // another route. Pushing during Navigator.pop can leave the sheet above
-    // the new page in the route stack and cause the next pop to close the sheet
-    // instead of the page the user intended to leave.
-    final String? choice = await showModalBottomSheet<String>(
+    // Wait for the actual route transition to finish before pushing the form.
+    final String? choice = await showModalBottomSheetAndWait<String>(
       context: context,
       backgroundColor: const Color(0xFF202126),
       builder: (BuildContext sheetContext) => SafeArea(
@@ -59,8 +56,6 @@ class AppShell extends StatelessWidget {
     );
 
     if (!context.mounted || choice == null) return;
-    await waitForModalDismissal();
-    if (!context.mounted) return;
     switch (choice) {
       case 'habit':
         context.push(AppRoutes.habitNew);

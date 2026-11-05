@@ -100,3 +100,17 @@ The 0.4.6+12 GitHub Actions run checked commit `149d5e2` but reproduced the same
 - Added explicit modal reverse-transition wait before route changes.
 - Removed conditional pop logic for archive/delete/new-habit save and replaced it with deterministic GoRouter destinations.
 - Source assertions, YAML parsing, shell syntax, and ZIP integrity are checked during packaging. Flutter tests/analyze/APK build are not claimed as locally verified.
+
+
+## 0.4.9+15 root-cause correction
+
+The 0.4.8+14 workflow checked commit `3b284d961c00118cc30a6af3e855a05a2c2c683d`. It reproduced three widget failures: archive persisted the archived flag but the detail page remained visible; deletion had not reached the repository by the test assertion; and new-habit persistence completed but the shell did not appear after saving. The workflow also emitted reminder initialization/platform-channel warnings in the test process.
+
+Source inspection found that `AppDataNotifier.saveHabit` published the local state and then still awaited `TaskReminderService.scheduleHabit`; `deleteHabit` awaited `cancelHabit` before publishing the updated app state. UI navigation was therefore indirectly gated by non-critical platform-channel work. The delete action also used an arbitrary 350 ms delay after confirmation, which `pumpAndSettle` does not guarantee to advance when no frame is scheduled. The previous fixed-delay helper did not represent actual route completion.
+
+In 0.4.9+15:
+- Habit reminder schedule/cancel operations are guarded background work after local persistence/state updates. Completion-state reminder rescheduling also runs after the local completion state has been published.
+- Modal sheet and dialog helpers now await their transition route's `completed` future rather than a fixed-duration timer.
+- Existing archive/delete/create widget tests remain the regression checks for the reported navigation failures.
+
+The container does not include the Flutter/Dart SDK. ZIP integrity, project structure, YAML and shell checks can be performed here, but `dart format`, `flutter analyze`, `flutter test`, and the release APK build cannot be honestly marked as passed until GitHub Actions runs on this commit.

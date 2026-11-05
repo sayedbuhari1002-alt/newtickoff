@@ -7,7 +7,6 @@ import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../domain/models/models.dart';
-import '../../data/services/task_reminder_service.dart';
 import '../../shared/utils/format.dart';
 import '../../shared/utils/guarded.dart';
 import '../../shared/widgets/widgets.dart';
@@ -180,14 +179,9 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
     if (!mounted) return;
     setState(() => _saving = false);
     if (ok) {
-      final String? reminderIssue = TaskReminderService.instance.lastSchedulingIssue;
-      if (reminderIssue != null && _reminder.enabled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(reminderIssue)),
-        );
-      }
-      // A direct route replacement avoids relying on the nested branch's
-      // pop capability after a root-Navigator form route.
+      // Reminder scheduling continues in the background after the habit is
+      // saved locally. Do not make navigation depend on a platform channel.
+      // A direct route replacement returns to the intended destination.
       router.go(widget.habitId == null
           ? AppRoutes.habits
           : AppRoutes.habitDetail(widget.habitId!));
