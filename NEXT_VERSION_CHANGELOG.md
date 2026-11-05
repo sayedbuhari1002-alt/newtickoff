@@ -150,3 +150,11 @@ The Flutter and Dart SDKs were not available in the implementation environment. 
 - Archive, restore, delete, and successful habit-form saves now pop through GoRouter, keeping the router match list synchronized with the visible Navigator stack and restoring the actual caller.
 - Preserved the safe direct-entry fallback when there is no previous route.
 - No database schema or stored habit/task data changes.
+
+
+## Version 0.4.7+13 — modal-to-page navigation sequencing
+
+- The Create menu now waits for the bottom sheet to finish closing before opening the selected Habit or Task form.
+- Habit Options now returns the selected action from the sheet and performs navigation or persistence only after the options sheet has fully dismissed.
+- This prevents a second navigation pop from consuming a modal sheet that is still completing its reverse transition instead of closing the intended page.
+- No database schema, saved habit/task data, or reminder behavior changes.

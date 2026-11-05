@@ -377,11 +377,15 @@ class HabitDetailScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     Habit habit,
-  ) {
-    // Capture the router before dismissing the sheet or awaiting repository
-    // work. Habit detail is explicitly owned by the root GoRouter Navigator.
+  ) async {
     final GoRouter router = GoRouter.of(context);
-    return showTickSheet<void>(
+
+    // Return the selected action from the sheet, then wait for the sheet's
+    // reverse transition to finish before performing navigation. Previously,
+    // the action callback popped the sheet and immediately popped the router;
+    // both routes share the root Navigator, so the second pop could consume the
+    // still-dismissing sheet instead of the habit detail page.
+    final String? action = await showTickSheet<String>(
       context: context,
       title: 'Options',
       builder: (BuildContext sheetContext) {
@@ -391,85 +395,85 @@ class HabitDetailScreen extends ConsumerWidget {
             SheetOptionTile(
               icon: Icons.ios_share_rounded,
               label: 'Share Progress',
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                context.push(AppRoutes.shareProgressFor(habit.id));
-              },
+              onTap: () => Navigator.of(sheetContext).pop('share'),
             ),
             SheetOptionTile(
               icon: Icons.edit_outlined,
               label: 'Edit',
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                context.push(AppRoutes.habitEdit(habit.id));
-              },
+              onTap: () => Navigator.of(sheetContext).pop('edit'),
             ),
             SheetOptionTile(
               icon: habit.isArchived
                   ? Icons.unarchive_outlined
                   : Icons.archive_outlined,
               label: habit.isArchived ? 'Restore' : 'Archive',
-              onTap: () async {
-                Navigator.of(sheetContext).pop();
-                final bool ok = await guarded(
-                  context,
-                  () => ref
-                      .read(appDataProvider.notifier)
-                      .setArchived(habit.id, !habit.isArchived),
-                );
-                if (!ok || !context.mounted) return;
-                showMessage(
-                  context,
-                  habit.isArchived ? 'Habit restored.' : 'Habit archived.',
-                );
-                // Use GoRouter's page-stack API rather than popping the
-                // Navigator directly; this keeps the router's match list in
-                // sync and restores the exact shell branch that opened detail.
-                if (router.canPop()) {
-                  router.pop();
-                } else {
-                  router.go(AppRoutes.habits);
-                }
-              },
+              onTap: () => Navigator.of(sheetContext).pop('archive'),
             ),
             SheetOptionTile(
               icon: Icons.delete_outline_rounded,
               label: 'Delete',
               color: AppColors.danger,
-              onTap: () async {
-                Navigator.of(sheetContext).pop();
-                final bool sure = await showConfirmDialog(
-                  context,
-                  title: 'Delete habit?',
-                  message: 'This permanently deletes "${habit.title}" with its '
-                      'history, achievements and notes.',
-                  confirmLabel: 'Delete',
-                  destructive: true,
-                );
-                if (!sure || !context.mounted) return;
-                final bool ok = await guarded(
-                  context,
-                  () => ref.read(appDataProvider.notifier).deleteHabit(habit.id),
-                  message: 'Could not delete',
-                );
-                if (ok && context.mounted) {
-                  // The deleted item no longer has a valid detail destination.
-                  // Pop through GoRouter so its route configuration is updated
-                  // together with the root Navigator page stack.
-                  if (router.canPop()) {
-                    router.pop();
-                  } else {
-                    router.go(AppRoutes.habits);
-                  }
-                }
-              },
+              onTap: () => Navigator.of(sheetContext).pop('delete'),
             ),
             const SizedBox(height: AppDimens.gapSm),
           ],
         );
       },
     );
+
+    if (!context.mounted || action == null) return;
+
+    switch (action) {
+      case 'share':
+        context.push(AppRoutes.shareProgressFor(habit.id));
+        return;
+      case 'edit':
+        context.push(AppRoutes.habitEdit(habit.id));
+        return;
+      case 'archive':
+        final bool ok = await guarded(
+          context,
+          () => ref
+              .read(appDataProvider.notifier)
+              .setArchived(habit.id, !habit.isArchived),
+        );
+        if (!ok || !context.mounted) return;
+        showMessage(
+          context,
+          habit.isArchived ? 'Habit restored.' : 'Habit archived.',
+        );
+        if (router.canPop()) {
+          router.pop();
+        } else {
+          router.go(AppRoutes.habits);
+        }
+        return;
+      case 'delete':
+        final bool sure = await showConfirmDialog(
+          context,
+          title: 'Delete habit?',
+          message: 'This permanently deletes "${habit.title}" with its '
+              'history, achievements and notes.',
+          confirmLabel: 'Delete',
+          destructive: true,
+        );
+        if (!sure || !context.mounted) return;
+        final bool ok = await guarded(
+          context,
+          () => ref.read(appDataProvider.notifier).deleteHabit(habit.id),
+          message: 'Could not delete',
+        );
+        if (ok && context.mounted) {
+          if (router.canPop()) {
+            router.pop();
+          } else {
+            router.go(AppRoutes.habits);
+          }
+        }
+        return;
+    }
   }
+
 }
 
 class _StatusChip extends StatelessWidget {
