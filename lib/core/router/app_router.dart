@@ -85,7 +85,6 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
         builder: (BuildContext c, GoRouterState s) => HabitDetailScreen(
           habitId: s.pathParameters['id'] ?? '',
           selectedDate: parseDateKey(s.uri.queryParameters['date'] ?? ''),
-          returnToDashboard: s.uri.queryParameters['returnTo'] == 'dashboard',
         ),
         routes: <RouteBase>[
           GoRoute(path: 'edit', builder: (BuildContext c, GoRouterState s) => HabitFormScreen(habitId: s.pathParameters['id'])),

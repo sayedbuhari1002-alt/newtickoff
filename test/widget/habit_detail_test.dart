@@ -21,6 +21,38 @@ Future<void> openDetail(WidgetTester tester, InMemoryAppRepository repo) async {
 }
 
 void main() {
+  testWidgets(
+      'saving an edited habit preserves Dashboard behind its detail route',
+      (WidgetTester tester) async {
+    final InMemoryAppRepository repo = seeded();
+    await pumpApp(tester, repo: repo);
+
+    // Open the habit from Dashboard, not from the Habits tab, so this checks
+    // the exact navigation stack reported by the user.
+    await tester.tap(find.text('Reading Books').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Current Streak'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit Habit'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'Reading More');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reading More'), findsOneWidget);
+    expect(repo.habits['h1']!.title, 'Reading More');
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    // Back now returns to the original Dashboard, not a new/empty route.
+    expect(find.text('Habits Due'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+  });
+
   testWidgets('shows status, streaks and score from the stored history',
       (WidgetTester tester) async {
     await openDetail(tester, seeded());
@@ -32,26 +64,6 @@ void main() {
     expect(find.text('100%'), findsOneWidget);
     expect(find.text('Task Started'), findsOneWidget);
     expect(find.text('Everyday'), findsOneWidget);
-  });
-
-  testWidgets('back from habit details after editing returns to Dashboard',
-      (WidgetTester tester) async {
-    final InMemoryAppRepository repo = seeded();
-    await openDetail(tester, repo);
-
-    await tester.tap(find.byIcon(Icons.more_vert));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Edit'));
-    await tester.pumpAndSettle();
-    expect(find.text('Edit Habit'), findsOneWidget);
-
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-    expect(find.text('Reading Books'), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.arrow_back));
-    await tester.pumpAndSettle();
-    expect(find.text("Today's Tasks"), findsOneWidget);
   });
 
   testWidgets('Done completes today and can be undone',

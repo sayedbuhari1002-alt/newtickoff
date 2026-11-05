@@ -111,7 +111,7 @@ grep -q 'proguard-rules.pro' "$APP_GRADLE"
 echo "Applied Gson TypeToken keep rules and R8 compatibility-mode workaround."
 
 # Runtime permissions and receivers required by exact local reminders and recording.
-for permission in POST_NOTIFICATIONS RECEIVE_BOOT_COMPLETED RECORD_AUDIO SCHEDULE_EXACT_ALARM; do
+for permission in POST_NOTIFICATIONS RECEIVE_BOOT_COMPLETED RECORD_AUDIO CAMERA SCHEDULE_EXACT_ALARM; do
   if ! grep -q "android.permission.${permission}" "$MANIFEST"; then
     sed -i "/<application/i\    <uses-permission android:name=\"android.permission.${permission}\" />" "$MANIFEST"
   fi

@@ -353,6 +353,14 @@ class _NoteTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String title = note.title.trim().isEmpty ? 'Untitled note' : note.title.trim();
+    final List<String> media = <String>[
+      if (note.photoPaths.isNotEmpty)
+        '${note.photoPaths.length} ${note.photoPaths.length == 1 ? 'photo' : 'photos'}',
+      if (note.audioPaths.isNotEmpty)
+        '${note.audioPaths.length} ${note.audioPaths.length == 1 ? 'audio note' : 'audio notes'}',
+      if (note.videoPaths.isNotEmpty)
+        '${note.videoPaths.length} ${note.videoPaths.length == 1 ? 'video' : 'videos'}',
+    ];
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => context.push(AppRoutes.noteEdit(note.id)),
@@ -367,28 +375,9 @@ class _NoteTile extends StatelessWidget {
               const SizedBox(height: 4),
               Text(note.body.trim(), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
             ],
-            if (note.photoPaths.isNotEmpty || note.audioPaths.isNotEmpty || note.videoPaths.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 5),
-              Row(children: <Widget>[
-                if (note.photoPaths.isNotEmpty) ...<Widget>[
-                  const Icon(Icons.image_outlined, size: 14, color: AppColors.textHint),
-                  const SizedBox(width: 3),
-                  Text('${note.photoPaths.length}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
-                  const SizedBox(width: 9),
-                ],
-                if (note.audioPaths.isNotEmpty) ...<Widget>[
-                  const Icon(Icons.mic_none_rounded, size: 14, color: AppColors.textHint),
-                  const SizedBox(width: 3),
-                  Text('${note.audioPaths.length}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
-                  const SizedBox(width: 9),
-                ],
-                if (note.videoPaths.isNotEmpty) ...<Widget>[
-                  const Icon(Icons.videocam_outlined, size: 14, color: AppColors.textHint),
-                  const SizedBox(width: 3),
-                  Text('${note.videoPaths.length}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
-                ],
-                const Text('attachments', style: TextStyle(fontSize: 11, color: AppColors.textHint)),
-              ]),
+            if (media.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 4),
+              Text(media.join(' · '), style: const TextStyle(color: AppColors.textHint, fontSize: 11)),
             ],
             if (habit != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text('Habit · ${habit!.title}', style: const TextStyle(fontSize: 11, color: AppColors.textHint))),
           ])),
