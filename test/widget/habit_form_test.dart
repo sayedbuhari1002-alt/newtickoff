@@ -39,6 +39,10 @@ void main() {
 
     expect(repo.habits.length, 1);
     final Habit saved = repo.habits.values.single;
+    // The form must use the same injected calendar date as the app state.
+    // Otherwise a habit created from DateTime.now() can appear to be in the
+    // future relative to the selected test day and be hidden by the Due filter.
+    expect(saved.createdAt, kToday);
     expect(saved.title, 'Meditate');
     expect(saved.type, HabitType.build);
     expect(saved.tracking, TrackingMethod.tick);

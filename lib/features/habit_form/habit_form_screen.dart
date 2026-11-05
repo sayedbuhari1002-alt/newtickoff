@@ -141,8 +141,15 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
       return;
     }
 
-    final Habit base =
-        _editing ?? Habit.create(title: title, sortOrder: data.nextSortOrder);
+    // Use the app's shared calendar clock for the creation date. This keeps
+    // habit lifetime calculations aligned with todayProvider (including tests
+    // and date-boundary handling) instead of reading the system clock twice.
+    final DateTime creationDate = ref.read(todayProvider);
+    final Habit base = _editing ?? Habit.create(
+      title: title,
+      sortOrder: data.nextSortOrder,
+      now: creationDate,
+    );
     final Habit habit = base.copyWith(
       title: title,
       description: _description.text.trim(),

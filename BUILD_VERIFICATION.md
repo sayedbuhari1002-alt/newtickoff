@@ -114,3 +114,17 @@ In 0.4.9+15:
 - Existing archive/delete/create widget tests remain the regression checks for the reported navigation failures.
 
 The container does not include the Flutter/Dart SDK. ZIP integrity, project structure, YAML and shell checks can be performed here, but `dart format`, `flutter analyze`, `flutter test`, and the release APK build cannot be honestly marked as passed until GitHub Actions runs on this commit.
+
+
+## 0.4.10+16 — analysis of the 0.4.9+15 workflow
+
+The uploaded workflow checked commit `29921f1c443216f81312a28701593b4a7920a80e` on `fix/navigation-settings` using Flutter 3.47.9 and Dart 3.13.7. The archive and delete widget tests passed in this run; the only app test failure was `a new habit is saved to the database and listed` (164 app tests passed, 1 failed). The database suite passed 19 tests and the release APK compiled successfully, but the workflow withheld the artifact because the app test step failed.
+
+The failing assertion was `find.text('Meditate')` after navigating to the Habits destination. The habit had been persisted, but the test's `todayProvider` is fixed at 27 October 2026 while the CI system date was 5 November 2026. `Habit.create` defaulted `createdAt` to the host's `DateTime.now()` (5 November). The Habits page defaults to the `Due` filter and the selected test date (27 October) is earlier than the habit's `createdAt`; `HabitEngine.isDueOn` correctly excludes a habit on a date before its start date. This was a test-clock consistency bug, not a remaining route-stack failure.
+
+In 0.4.10+16:
+- New-habit creation passes `ref.read(todayProvider)` into `Habit.create(now: ...)`, making `createdAt` consistent with the same app calendar clock used by `HabitEngine` and selected-date initialization.
+- The creation widget test now asserts `createdAt == kToday` before asserting that the new habit is visible under the Due filter.
+- The existing archive and delete regression tests remain unchanged and were passing in the preceding 0.4.9+15 workflow.
+
+The preparation environment does not contain Flutter/Dart. Static source assertions, YAML parsing, shell syntax checks, project-structure checks, and ZIP integrity can be performed here, but `dart format`, `flutter analyze`, `flutter test`, and a new APK build have **not** been executed for 0.4.10+16. GitHub Actions must verify this version. The log also contains non-fatal platform-channel/time-zone diagnostics from reminder initialization in tests; these did not cause the single reported app-test failure and did not prevent the APK build.

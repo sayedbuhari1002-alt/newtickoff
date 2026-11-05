@@ -177,3 +177,10 @@ The Flutter and Dart SDKs were not available in the implementation environment. 
 - Removed the immediate reminder-status snackbar read from the habit form because background scheduling can complete after the form has closed; reminder status remains available from the reminders settings flow.
 - No database schema, database filename, attachment directory, or Android application ID changes.
 - Flutter tests and Android build must still pass in GitHub Actions before this build is considered verified.
+
+
+## Version 0.4.10+16 — consistent habit creation date
+
+- New habits now take their `createdAt` date from the shared `todayProvider` clock rather than calling `DateTime.now()` independently. This keeps the habit's lifetime start date aligned with the app's current calendar date and makes date-controlled tests deterministic.
+- Added a regression assertion that a newly created habit uses the injected app date and appears in the Habits destination under the Due filter.
+- No database schema, database filename, attachment directory, Android application ID, or notification scheduling behavior changes.
