@@ -35,7 +35,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
   DateTime? _reminderAt;
   TaskPriority _priority = TaskPriority.medium;
   TaskRepeat _repeat = TaskRepeat.none;
-  int _colorValue = 0xFFFFC857;
+  int _colorValue = 0xFFA78BFA;
   String _iconKey = 'task';
   List<Subtask> _subtasks = <Subtask>[];
   List<String> _photoPaths = <String>[];
@@ -315,7 +315,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
               ),
               const SizedBox(height: 16),
               Wrap(spacing: 12, children: <Widget>[
-                for (final int color in <int>[0xFFFFC857, 0xFF80CBC4, 0xFF90CAF9, 0xFFCE93D8, 0xFFEF9A9A, 0xFFA5D6A7])
+                for (final int color in <int>[0xFFA78BFA, 0xFF80CBC4, 0xFF90CAF9, 0xFFCE93D8, 0xFFEF9A9A, 0xFFA5D6A7])
                   GestureDetector(key: ValueKey<int>(color), onTap: () => setState(() => _colorValue = color), child: Container(width: 34, height: 34, decoration: BoxDecoration(color: Color(color), shape: BoxShape.circle, border: Border.all(color: _colorValue == color ? Colors.white : Colors.transparent, width: 3)), child: _colorValue == color ? const Icon(Icons.check, color: Colors.black, size: 18) : null)),
               ]),
               const SizedBox(height: 18),

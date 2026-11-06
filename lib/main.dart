@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'app.dart';
+import 'core/theme/app_colors.dart';
 import 'data/database/app_database.dart';
 import 'data/services/task_reminder_service.dart';
 import 'data/repositories/sqlite_app_repository.dart';
@@ -16,7 +17,7 @@ Future<void> main() async {
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Colors.black,
+      systemNavigationBarColor: AppColors.background,
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );

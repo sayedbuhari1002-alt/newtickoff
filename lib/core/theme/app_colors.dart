@@ -2,45 +2,53 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Colour tokens estimated from the supplied Tazkiyane screenshots.
+/// Shared colour tokens for the Obsidian Graphite + Violet appearance.
 ///
-/// Two accent families are used on purpose, exactly as in the reference:
-/// * [gold] on the dashboard and habit-detail screens;
-/// * [cyan] on the Add/Edit Habit screens.
+/// The historic [gold] and [cyan] names remain as compatibility aliases so
+/// existing screens keep their layout and behaviour while using the new,
+/// unified accent system.
 class AppColors {
   AppColors._();
 
   // Surfaces
-  static const Color background = Color(0xFF000000);
-  static const Color surface = Color(0xFF111111);
-  static const Color surfaceRaised = Color(0xFF181818);
-  static const Color field = Color(0xFF0E0E0E);
-  static const Color sheet = Color(0xFF0A0A0A);
-  static const Color border = Color(0xFF242424);
-  static const Color divider = Color(0xFF1C1C1C);
+  static const Color background = Color(0xFF17171C);
+  static const Color surface = Color(0xFF22212A);
+  static const Color surfaceRaised = Color(0xFF2B2935);
+  static const Color field = Color(0xFF1D1C24);
+  static const Color sheet = Color(0xFF201F28);
+  static const Color border = Color(0xFF393642);
+  static const Color divider = Color(0xFF302E39);
 
   // Text
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFF9A9A9A);
-  static const Color textHint = Color(0xFF5E5E5E);
+  static const Color textPrimary = Color(0xFFEEEAF5);
+  static const Color textSecondary = Color(0xFFA6A1B2);
+  static const Color textHint = Color(0xFF777285);
 
-  // Accents
-  static const Color gold = Color(0xFFFFC62B);
-  static const Color goldDim = Color(0xFF3A2F0C);
-  static const Color cyan = Color(0xFFE0F7FA);
-  static const Color selectedSegment = Color(0xFF3C4043);
-  static const Color switchTrackOn = Color(0xFF6F7A7E);
+  // Accent system
+  static const Color primaryAccent = Color(0xFFA78BFA);
+  static const Color secondaryAccent = Color(0xFF8B9BB4);
+  static const Color accentDim = Color(0xFF3B3154);
+  static const Color onAccent = Color(0xFF201A2E);
 
-  // Status
+  // Compatibility aliases used by the existing screens.
+  static const Color gold = primaryAccent;
+  static const Color goldDim = accentDim;
+  static const Color cyan = secondaryAccent;
+
+  static const Color selectedSegment = Color(0xFF393544);
+  static const Color switchTrackOn = Color(0xFF71638F);
+
+  // Status and data visualisation
   static const Color danger = Color(0xFFE53935);
-  static const Color heatmapEmpty = Color(0xFF1A1A1A);
+  static const Color heatmapEmpty = Color(0xFF2B2935);
 
-  /// Default colour of a new habit (the pale cyan swatch in the form).
-  static const Color defaultHabitColor = cyan;
+  /// Default colour for a newly created habit.
+  static const Color defaultHabitColor = primaryAccent;
 
-  /// Habit colour palette: two rows of twelve swatches.
+  /// Habit colour palette. The first swatch follows the current app accent;
+  /// the remaining user-selectable colours are intentionally unchanged.
   static const List<Color> habitPalette = <Color>[
-    Color(0xFFE0F7FA),
+    primaryAccent,
     Color(0xFFFFE0B2),
     Color(0xFFFFCC80),
     Color(0xFFFFA726),

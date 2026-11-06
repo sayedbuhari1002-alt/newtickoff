@@ -6,7 +6,7 @@ class ExpenseCategory {
     required this.id,
     required this.name,
     this.iconKey = 'category',
-    this.colorValue = 0xFFFFC62B,
+    this.colorValue = 0xFFA78BFA,
     this.sortOrder = 0,
     this.isBuiltIn = false,
   });

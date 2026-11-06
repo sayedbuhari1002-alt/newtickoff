@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/routes.dart';
+import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/widgets.dart';
 import '../../shared/utils/modal_navigation.dart';
 
@@ -27,7 +28,7 @@ class AppShell extends StatelessWidget {
     // Wait for the actual route transition to finish before pushing the form.
     final String? choice = await showModalBottomSheetAndWait<String>(
       context: context,
-      backgroundColor: const Color(0xFF202126),
+      backgroundColor: AppColors.sheet,
       builder: (BuildContext sheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),

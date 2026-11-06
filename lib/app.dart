@@ -9,7 +9,6 @@ import 'data/services/task_reminder_service.dart';
 import 'domain/models/models.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
-import 'state/app_settings.dart';
 import 'state/app_data.dart';
 import 'state/app_state.dart';
 
@@ -95,12 +94,11 @@ class _TickOffAppState extends ConsumerState<TickOffApp>
 
   @override
   Widget build(BuildContext context) {
-    final String themeName = ref.watch(appDataProvider).valueOrNull?.settings[AppSettingKeys.theme] ?? 'original';
     return MaterialApp.router(
       title: 'Tazkiyane',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark(graphite: themeName == 'graphite'),
-      darkTheme: AppTheme.dark(graphite: themeName == 'graphite'),
+      theme: AppTheme.dark(),
+      darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.dark,
       routerConfig: ref.watch(appRouterProvider),
     );

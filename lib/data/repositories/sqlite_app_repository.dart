@@ -327,7 +327,7 @@ class SqliteAppRepository implements AppRepository {
       id: row['id'] as String,
       name: row['name'] as String,
       iconKey: row['icon_key'] as String? ?? 'category',
-      colorValue: row['color_value'] as int? ?? 0xFFFFC62B,
+      colorValue: row['color_value'] as int? ?? 0xFFA78BFA,
       sortOrder: row['sort_order'] as int? ?? 0,
       isBuiltIn: (row['is_builtin'] as int? ?? 0) != 0,
     )).toList();
@@ -390,7 +390,7 @@ class SqliteAppRepository implements AppRepository {
           ),
           category: row['category'] as String? ?? '',
           iconKey: row['icon_key'] as String? ?? 'task',
-          colorValue: row['color_value'] as int? ?? 0xFFFFC857,
+          colorValue: row['color_value'] as int? ?? 0xFFA78BFA,
           isCompleted: (row['is_completed'] as int? ?? 0) != 0,
           completedAt: DateTime.tryParse(row['completed_at'] as String? ?? ''),
           isPaused: (row['is_paused'] as int? ?? 0) != 0,

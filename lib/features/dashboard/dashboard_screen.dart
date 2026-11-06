@@ -197,7 +197,7 @@ class _OverviewBody extends ConsumerWidget {
             value: habitProgress,
             detail: '$doneHabits of $totalHabits',
             icon: Icons.repeat_rounded,
-            color: const Color(0xFF83D3CF),
+            color: AppColors.cyan,
             onTap: () => context.go(AppRoutes.habits),
           ),
         ),

@@ -86,7 +86,7 @@ class _DayItem extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? Colors.white : const Color(0xFF3A3A3A),
+                  color: selected ? AppColors.primaryAccent : AppColors.border,
                   width: selected ? 2.5 : 1.5,
                 ),
               ),
@@ -95,7 +95,7 @@ class _DayItem extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? Colors.white : AppColors.textSecondary,
+                  color: selected ? AppColors.primaryAccent : AppColors.textSecondary,
                 ),
               ),
             ),

@@ -36,8 +36,8 @@ class Habit {
   /// Icon shown by default in the form (resolved by the icon catalogue, Stage 2).
   static const String defaultIconKey = 'medical_services';
 
-  /// 0xFFE0F7FA, the pale cyan swatch selected by default in the form.
-  static const int defaultColorValue = 0xFFE0F7FA;
+  /// The Obsidian theme violet accent used for newly created habits.
+  static const int defaultColorValue = 0xFFA78BFA;
 
   /// Creates a new habit with a fresh id and today's creation time.
   factory Habit.create({

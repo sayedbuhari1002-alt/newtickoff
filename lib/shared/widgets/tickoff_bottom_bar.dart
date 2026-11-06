@@ -37,8 +37,8 @@ class TickoffBottomBar extends StatelessWidget {
                   child: Container(
                     width: 48,
                     height: 48,
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-                    child: const Icon(Icons.add, color: Colors.black, size: 28),
+                    decoration: BoxDecoration(color: AppColors.primaryAccent, borderRadius: BorderRadius.circular(15)),
+                    child: const Icon(Icons.add, color: AppColors.onAccent, size: 28),
                   ),
                 ),
               ),

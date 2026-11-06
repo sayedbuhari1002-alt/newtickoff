@@ -3,38 +3,33 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_dimens.dart';
 
-/// Dark appearance presets for the reference UI.
-///
-/// The default preset preserves the original black/gold/cyan palette. The
-/// optional Graphite preset changes Material surfaces without recolouring
-/// user-selected habit or task accents.
+/// Material theme for Tazkiyane's Obsidian Graphite + Violet appearance.
 class AppTheme {
   AppTheme._();
 
-  static ThemeData dark({bool graphite = false}) {
-    final Color background = graphite ? const Color(0xFF101114) : AppColors.background;
-    final Color surface = graphite ? const Color(0xFF202126) : AppColors.surface;
-    final Color sheet = graphite ? const Color(0xFF17181B) : AppColors.sheet;
+  static ThemeData dark() {
     final ColorScheme scheme = ColorScheme.dark(
-      primary: AppColors.gold,
-      onPrimary: Colors.black,
-      secondary: AppColors.cyan,
-      onSecondary: Colors.black,
-      surface: surface,
+      primary: AppColors.primaryAccent,
+      onPrimary: AppColors.onAccent,
+      secondary: AppColors.secondaryAccent,
+      onSecondary: AppColors.background,
+      surface: AppColors.surface,
       onSurface: AppColors.textPrimary,
       error: AppColors.danger,
       onError: Colors.white,
+      outline: AppColors.border,
+      outlineVariant: AppColors.divider,
     );
 
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: scheme,
-      scaffoldBackgroundColor: background,
-      canvasColor: background,
+      scaffoldBackgroundColor: AppColors.background,
+      canvasColor: AppColors.background,
       dividerColor: AppColors.divider,
-      appBarTheme: AppBarTheme(
-        backgroundColor: background,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.background,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -47,8 +42,8 @@ class AppTheme {
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: sheet,
-        modalBackgroundColor: sheet,
+        backgroundColor: AppColors.sheet,
+        modalBackgroundColor: AppColors.sheet,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
@@ -56,21 +51,52 @@ class AppTheme {
           ),
         ),
       ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.field,
+        hintStyle: const TextStyle(color: AppColors.textHint),
+        labelStyle: const TextStyle(color: AppColors.textSecondary),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+          borderSide: const BorderSide(color: AppColors.primaryAccent, width: 1.4),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+          borderSide: const BorderSide(color: AppColors.danger),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+          borderSide: const BorderSide(color: AppColors.danger, width: 1.4),
+        ),
+      ),
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: AppColors.primaryAccent,
+        selectionColor: Color(0x66A78BFA),
+        selectionHandleColor: AppColors.primaryAccent,
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppColors.primaryAccent,
+        linearTrackColor: AppColors.surfaceRaised,
+      ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith<Color>(
           (Set<WidgetState> states) => states.contains(WidgetState.selected)
-              ? AppColors.cyan
-              : Colors.white,
+              ? AppColors.primaryAccent
+              : AppColors.textSecondary,
         ),
         trackColor: WidgetStateProperty.resolveWith<Color>(
           (Set<WidgetState> states) => states.contains(WidgetState.selected)
               ? AppColors.switchTrackOn
-              : Colors.black,
+              : AppColors.surfaceRaised,
         ),
         trackOutlineColor: WidgetStateProperty.resolveWith<Color>(
           (Set<WidgetState> states) => states.contains(WidgetState.selected)
               ? Colors.transparent
-              : Colors.white,
+              : AppColors.border,
         ),
       ),
     );

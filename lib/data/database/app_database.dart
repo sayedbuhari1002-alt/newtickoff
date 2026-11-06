@@ -99,7 +99,7 @@ class AppDatabase {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL COLLATE NOCASE UNIQUE,
         icon_key TEXT NOT NULL DEFAULT 'category',
-        color_value INTEGER NOT NULL DEFAULT 4294959147,
+        color_value INTEGER NOT NULL DEFAULT 4289170426,
         sort_order INTEGER NOT NULL DEFAULT 0,
         is_builtin INTEGER NOT NULL DEFAULT 0
       )
@@ -165,7 +165,7 @@ class AppDatabase {
         priority TEXT NOT NULL DEFAULT 'medium',
         category TEXT NOT NULL DEFAULT '',
         icon_key TEXT NOT NULL DEFAULT 'task',
-        color_value INTEGER NOT NULL DEFAULT 4294953047,
+        color_value INTEGER NOT NULL DEFAULT 4289170426,
         is_completed INTEGER NOT NULL DEFAULT 0,
         completed_at TEXT,
         is_paused INTEGER NOT NULL DEFAULT 0,
