@@ -5,17 +5,26 @@ import '../../domain/logic/task_engine.dart';
 import '../../domain/models/models.dart';
 
 class TaskCard extends StatelessWidget {
-  const TaskCard({super.key, required this.task, required this.selectedDate, required this.onOpen, required this.onToggle, this.titleFontSize = 14});
+  const TaskCard({
+    super.key,
+    required this.task,
+    required this.selectedDate,
+    required this.onOpen,
+    required this.onToggle,
+    this.showOverdue = true,
+    this.titleFontSize = 14,
+  });
   final Task task;
   final DateTime selectedDate;
   final VoidCallback onOpen;
   final ValueChanged<bool> onToggle;
+  final bool showOverdue;
   final double titleFontSize;
 
   @override
   Widget build(BuildContext context) {
     final Color accent = Color(task.colorValue);
-    final bool overdue = isTaskOverdueOnDate(task, selectedDate);
+    final bool overdue = showOverdue && isTaskOverdueOnDate(task, selectedDate);
     final bool blocked = task.subtasks.any((Subtask s) => !s.isCompleted);
     final String? dueLabel = task.dueAt == null ? null : '${task.dueAt!.day.toString().padLeft(2, '0')}/${task.dueAt!.month.toString().padLeft(2, '0')}/${task.dueAt!.year}${task.dueAt!.hour == 0 && task.dueAt!.minute == 0 ? '' : ' · ${TimeOfDay.fromDateTime(task.dueAt!).format(context)}'}';
     return Material(

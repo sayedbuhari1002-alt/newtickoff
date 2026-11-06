@@ -19,9 +19,16 @@ import 'habit_sheets.dart';
 
 /// Habit detail: status, streaks, score, quick actions, history and timeline.
 class HabitDetailScreen extends ConsumerWidget {
-  const HabitDetailScreen({super.key, required this.habitId});
+  const HabitDetailScreen({
+    super.key,
+    required this.habitId,
+    this.selectedDate,
+    this.returnToDashboard = false,
+  });
 
   final String habitId;
+  final DateTime? selectedDate;
+  final bool returnToDashboard;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -45,221 +52,308 @@ class HabitDetailScreen extends ConsumerWidget {
     }
 
     final DateTime today = ref.watch(todayProvider);
+    final DateTime trackingDate = selectedDate == null
+        ? today
+        : dateOnly(selectedDate!);
     final HabitEngine engine = ref.watch(habitEngineProvider);
     final HabitStats stats =
         ref.watch(habitStatsProvider)[habit.id] ?? HabitStats.empty;
-    final CompletionRecord? record = data.recordsFor(habit.id)[dateKey(today)];
+    final CompletionRecord? record = data.recordsFor(habit.id)[dateKey(trackingDate)];
     final Color color = habit.color;
     final bool quit = habit.type == HabitType.quit;
     final bool slipped = quit && engine.isSlipped(habit, record);
     final bool complete = quit ? !slipped : engine.isCompleted(habit, record);
+    final bool canPop = !returnToDashboard && context.canPop();
 
-    return Scaffold(
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[color.withAlpha(70), Colors.black],
-            stops: const <double>[0, 0.5],
+    void goBack() {
+      if (returnToDashboard) {
+        context.go(AppRoutes.dashboard);
+      } else if (context.canPop()) {
+        context.pop();
+      } else {
+        // The edit-save flow replaces the form route with this detail route.
+        // If there is no prior route to pop, return to the main Dashboard.
+        context.go(AppRoutes.dashboard);
+      }
+    }
+
+    return PopScope<Object?>(
+      canPop: canPop,
+      onPopInvokedWithResult: (bool didPop, Object? _) {
+        if (!didPop && !canPop && context.mounted) {
+          context.go(AppRoutes.dashboard);
+        }
+      },
+      child: Scaffold(
+        body: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: <Color>[color.withAlpha(70), Colors.black],
+              stops: const <double>[0, 0.5],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Row(
-                  children: <Widget>[
-                    IconButton(
-                      tooltip: 'Back',
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () => context.pop(),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: 'Options',
-                      icon: const Icon(Icons.more_vert),
-                      onPressed: () => _showOptions(context, ref, habit),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.pagePadding,
-                    0,
-                    AppDimens.pagePadding,
-                    AppDimens.gapLg,
+          child: SafeArea(
+            child: Column(
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    children: <Widget>[
+                      IconButton(
+                        tooltip: 'Back',
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: goBack,
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Options',
+                        icon: const Icon(Icons.more_vert),
+                        onPressed: () => _showOptions(context, ref, habit),
+                      ),
+                    ],
                   ),
-                  children: <Widget>[
-                    Center(
-                      child: Container(
-                        width: 76,
-                        height: 76,
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(20),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppDimens.pagePadding,
+                      0,
+                      AppDimens.pagePadding,
+                      AppDimens.gapLg,
+                    ),
+                    children: <Widget>[
+                      Center(
+                        child: Container(
+                          width: 76,
+                          height: 76,
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Icon(habit.icon, color: Colors.black, size: 40),
                         ),
-                        child: Icon(habit.icon, color: Colors.black, size: 40),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      habit.title,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
+                      const SizedBox(height: 12),
+                      Text(
+                        habit.title,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Center(
-                      child: _StatusChip(
-                        color: slipped ? AppColors.danger : color,
-                        label: _statusLabel(habit, complete, slipped, record),
-                      ),
-                    ),
-                    const SizedBox(height: AppDimens.gapLg),
-                    Row(
-                      children: <Widget>[
-                        _InfoChip(
-                          label: frequencyLabel(habit),
-                          onTap: () => showHabitInfoSheet(context, habit),
-                        ),
-                        const Spacer(),
-                        _IconAction(
-                          icon: Icons.emoji_events_outlined,
-                          tooltip: 'Achievements',
-                          onTap: () => showAchievementsSheet(context, habit.id),
-                        ),
-                        const SizedBox(width: 8),
-                        _IconAction(
-                          icon: Icons.bar_chart_rounded,
-                          tooltip: 'Analytics',
-                          onTap: () =>
-                              context.push(AppRoutes.habitAnalytics(habit.id)),
-                        ),
-                        const SizedBox(width: 8),
-                        _IconAction(
-                          icon: Icons.calendar_month_outlined,
-                          tooltip: 'History',
-                          onTap: () => showHistorySheet(context, habit.id),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppDimens.gap),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: StatTile(
-                            value: '${stats.currentStreak}',
-                            label: 'Current Streak',
+                      const SizedBox(height: 8),
+                      Center(
+                        child: _StatusChip(
+                          color: slipped ? AppColors.danger : color,
+                          label: _statusLabel(
+                            habit,
+                            complete,
+                            slipped,
+                            record,
+                            trackingDate.isAtSameMomentAs(dateOnly(today)),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: StatTile(
-                            value: '${stats.bestStreak}',
-                            label: 'Best Streak',
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: StatTile(
-                            value: percentLabel(stats.score),
-                            label: 'Score',
+                      ),
+                      if (habit.tracking == TrackingMethod.count) ...<Widget>[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Current count: ${countLabel(habit, record?.count ?? 0)}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: AppDimens.gap),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: _ActionButton(
-                            icon: Icons.note_add_outlined,
-                            label: 'Note',
-                            color: color,
-                            onTap: () => context
-                                .push(AppRoutes.noteNew(habitId: habit.id)),
+                      const SizedBox(height: AppDimens.gapLg),
+                      Row(
+                        children: <Widget>[
+                          _InfoChip(
+                            label: frequencyLabel(habit),
+                            onTap: () => showHabitInfoSheet(context, habit),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _ActionButton(
-                            icon: Icons.photo_camera_outlined,
-                            label: 'Photo',
-                            color: color,
-                            onTap: () => showMessage(
-                              context,
-                              'Photo attachments need the camera plugin, '
-                              'planned for Stage 4.',
+                          const Spacer(),
+                          _IconAction(
+                            icon: Icons.emoji_events_outlined,
+                            tooltip: 'Achievements',
+                            onTap: () => showAchievementsSheet(context, habit.id),
+                          ),
+                          const SizedBox(width: 8),
+                          _IconAction(
+                            icon: Icons.bar_chart_rounded,
+                            tooltip: 'Analytics',
+                            onTap: () =>
+                                context.push(AppRoutes.habitAnalytics(habit.id)),
+                          ),
+                          const SizedBox(width: 8),
+                          _IconAction(
+                            icon: Icons.calendar_month_outlined,
+                            tooltip: 'History',
+                            onTap: () => showHistorySheet(context, habit.id),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppDimens.gap),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: StatTile(
+                              value: '${stats.currentStreak}',
+                              label: 'Current Streak',
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _ActionButton(
-                            icon: Icons.mic_none_rounded,
-                            label: 'Audio',
-                            color: color,
-                            onTap: () => showMessage(
-                              context,
-                              'Voice notes need the microphone plugin, '
-                              'planned for Stage 4.',
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: StatTile(
+                              value: '${stats.bestStreak}',
+                              label: 'Best Streak',
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: () => tapDay(context, ref, habit, today),
-                      onLongPress: () =>
-                          longPressDay(context, ref, habit, today),
-                      child: Container(
-                        height: 54,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: slipped
-                              ? AppColors.danger.withAlpha(120)
-                              : color.withAlpha(complete ? 200 : 90),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: StatTile(
+                              value: percentLabel(stats.score),
+                              label: 'Score',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppDimens.gap),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _ActionButton(
+                              icon: Icons.note_add_outlined,
+                              label: 'Note',
+                              color: color,
+                              onTap: () => context
+                                  .push(AppRoutes.noteNew(habitId: habit.id)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _ActionButton(
+                              icon: Icons.photo_camera_outlined,
+                              label: 'Photo',
+                              color: color,
+                              onTap: () => showMessage(
+                                context,
+                                'Photo attachments need the camera plugin, '
+                                'planned for Stage 4.',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _ActionButton(
+                              icon: Icons.mic_none_rounded,
+                              label: 'Audio',
+                              color: color,
+                              onTap: () => showMessage(
+                                context,
+                                'Voice notes need the microphone plugin, '
+                                'planned for Stage 4.',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (habit.tracking == TrackingMethod.count) ...<Widget>[
+                        Row(
                           children: <Widget>[
-                            Icon(
-                              slipped
-                                  ? Icons.close_rounded
-                                  : Icons.check_circle_rounded,
-                              color: complete && !slipped
-                                  ? Colors.black
-                                  : Colors.white,
+                            _CountActionButton(
+                              icon: Icons.remove_rounded,
+                              tooltip: 'Decrease by ${formatNumber(habit.step)}',
+                              onTap: () => decreaseCountDay(context, ref, habit, trackingDate),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              _doneLabel(habit, complete, slipped),
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
-                                color: complete && !slipped
-                                    ? Colors.black
-                                    : Colors.white,
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => tapDay(context, ref, habit, trackingDate),
+                                onLongPress: () => longPressDay(context, ref, habit, trackingDate),
+                                child: Container(
+                                  height: 54,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: slipped
+                                        ? AppColors.danger.withAlpha(120)
+                                        : color.withAlpha(complete ? 200 : 90),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      Icon(
+                                        slipped ? Icons.close_rounded : Icons.add_rounded,
+                                        color: complete && !slipped ? Colors.black : Colors.white,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _doneLabel(habit, complete, slipped),
+                                        style: TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w600,
+                                          color: complete && !slipped ? Colors.black : Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
+                            ),
+                            const SizedBox(width: 8),
+                            _CountActionButton(
+                              icon: Icons.restart_alt_rounded,
+                              tooltip: "Reset this day's count",
+                              onTap: () => resetCountDay(context, ref, habit, trackingDate),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: AppDimens.gapLg),
-                    _Timeline(habit: habit, data: data),
-                  ],
+                      ] else
+                        GestureDetector(
+                          onTap: () => tapDay(context, ref, habit, trackingDate),
+                          onLongPress: () => longPressDay(context, ref, habit, trackingDate),
+                          child: Container(
+                            height: 54,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: slipped
+                                  ? AppColors.danger.withAlpha(120)
+                                  : color.withAlpha(complete ? 200 : 90),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Icon(
+                                  slipped ? Icons.close_rounded : Icons.check_circle_rounded,
+                                  color: complete && !slipped ? Colors.black : Colors.white,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _doneLabel(habit, complete, slipped),
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                    color: complete && !slipped ? Colors.black : Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: AppDimens.gapLg),
+                      _Timeline(habit: habit, data: data),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -271,9 +365,11 @@ class HabitDetailScreen extends ConsumerWidget {
     bool complete,
     bool slipped,
     CompletionRecord? record,
+    bool isToday,
   ) {
     if (habit.type == HabitType.quit) {
-      return slipped ? 'Slipped today' : 'Slip-free today';
+      if (isToday) return slipped ? 'Slipped today' : 'Slip-free today';
+      return slipped ? 'Slip recorded' : 'No slip recorded';
     }
     if (complete) return 'Completed';
     if (habit.tracking == TrackingMethod.count) {
@@ -308,8 +404,15 @@ class HabitDetailScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     Habit habit,
-  ) {
-    return showTickSheet<void>(
+  ) async {
+    final GoRouter router = GoRouter.of(context);
+
+    // Return the selected action from the sheet, then wait for the sheet's
+    // reverse transition to finish before performing navigation. Previously,
+    // the action callback popped the sheet and immediately popped the router;
+    // both routes share the root Navigator, so the second pop could consume the
+    // still-dismissing sheet instead of the habit detail page.
+    final String? action = await showTickSheet<String>(
       context: context,
       title: 'Options',
       builder: (BuildContext sheetContext) {
@@ -319,69 +422,80 @@ class HabitDetailScreen extends ConsumerWidget {
             SheetOptionTile(
               icon: Icons.ios_share_rounded,
               label: 'Share Progress',
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                context.push(AppRoutes.shareProgressFor(habit.id));
-              },
+              onTap: () => Navigator.of(sheetContext).pop('share'),
             ),
             SheetOptionTile(
               icon: Icons.edit_outlined,
               label: 'Edit',
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                context.push(AppRoutes.habitEdit(habit.id));
-              },
+              onTap: () => Navigator.of(sheetContext).pop('edit'),
             ),
             SheetOptionTile(
               icon: habit.isArchived
                   ? Icons.unarchive_outlined
                   : Icons.archive_outlined,
               label: habit.isArchived ? 'Restore' : 'Archive',
-              onTap: () async {
-                Navigator.of(sheetContext).pop();
-                final bool ok = await guarded(
-                  context,
-                  () => ref
-                      .read(appDataProvider.notifier)
-                      .setArchived(habit.id, !habit.isArchived),
-                );
-                if (!ok || !context.mounted) return;
-                showMessage(
-                  context,
-                  habit.isArchived ? 'Habit restored.' : 'Habit archived.',
-                );
-                if (!habit.isArchived) context.pop();
-              },
+              onTap: () => Navigator.of(sheetContext).pop('archive'),
             ),
             SheetOptionTile(
               icon: Icons.delete_outline_rounded,
               label: 'Delete',
               color: AppColors.danger,
-              onTap: () async {
-                Navigator.of(sheetContext).pop();
-                final bool sure = await showConfirmDialog(
-                  context,
-                  title: 'Delete habit?',
-                  message: 'This permanently deletes "${habit.title}" with its '
-                      'history, achievements and notes.',
-                  confirmLabel: 'Delete',
-                  destructive: true,
-                );
-                if (!sure || !context.mounted) return;
-                final bool ok = await guarded(
-                  context,
-                  () => ref.read(appDataProvider.notifier).deleteHabit(habit.id),
-                  message: 'Could not delete',
-                );
-                if (ok && context.mounted) context.pop();
-              },
+              onTap: () => Navigator.of(sheetContext).pop('delete'),
             ),
             const SizedBox(height: AppDimens.gapSm),
           ],
         );
       },
     );
+
+    if (!context.mounted || action == null) return;
+
+    switch (action) {
+      case 'share':
+        context.push(AppRoutes.shareProgressFor(habit.id));
+        return;
+      case 'edit':
+        context.push(AppRoutes.habitEdit(habit.id));
+        return;
+      case 'archive':
+        final bool ok = await guarded(
+          context,
+          () => ref
+              .read(appDataProvider.notifier)
+              .setArchived(habit.id, !habit.isArchived),
+        );
+        if (!ok || !context.mounted) return;
+        showMessage(
+          context,
+          habit.isArchived ? 'Habit restored.' : 'Habit archived.',
+        );
+        // Archive is a terminal action for this detail view. Replace the
+        // full-screen route with the Habits destination explicitly.
+        router.go(AppRoutes.habits);
+        return;
+      case 'delete':
+        final bool sure = await showConfirmDialog(
+          context,
+          title: 'Delete habit?',
+          message: 'This permanently deletes "${habit.title}" with its '
+              'history, achievements and notes.',
+          confirmLabel: 'Delete',
+          destructive: true,
+        );
+        if (!sure || !context.mounted) return;
+        final bool ok = await guarded(
+          context,
+          () => ref.read(appDataProvider.notifier).deleteHabit(habit.id),
+          message: 'Could not delete',
+        );
+        if (ok && context.mounted) {
+          // The deleted detail route is no longer a valid destination.
+          router.go(AppRoutes.habits);
+        }
+        return;
+    }
   }
+
 }
 
 class _StatusChip extends StatelessWidget {
@@ -404,6 +518,36 @@ class _StatusChip extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CountActionButton extends StatelessWidget {
+  const _CountActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: Material(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: SizedBox(
+              width: 48,
+              height: 54,
+              child: Icon(icon, color: AppColors.textPrimary),
+            ),
+          ),
+        ),
+      );
 }
 
 class _InfoChip extends StatelessWidget {

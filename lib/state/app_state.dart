@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/utils/date_utils.dart';
@@ -51,10 +52,13 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     final List<HabitCategory> categories = await repo.loadCategories();
     final List<CompletionRecord> records = await repo.loadCompletions();
     final List<Note> notes = await repo.loadNotes();
+    final List<Expense> expenses = await repo.loadExpenses();
+    final List<ExpenseCategory> expenseCategories = await repo.loadExpenseCategories();
     final Map<String, Map<int, String>> achievements =
         await repo.loadAchievements();
     final List<Task> tasks = await repo.loadTasks();
     final List<TaskActivity> taskActivities = await repo.loadTaskActivities();
+    final Map<String, String> settings = await repo.loadSettings();
 
     final Map<String, Map<String, CompletionRecord>> index =
         <String, Map<String, CompletionRecord>>{};
@@ -68,16 +72,27 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       completions: index,
       achievements: achievements,
       notes: notes,
+      expenses: expenses,
+      expenseCategories: expenseCategories,
       tasks: tasks,
       taskActivities: taskActivities,
+      settings: settings,
     );
     // Refresh local notifications after every launch. A notification failure
     // never prevents local data from loading.
     for (final Task task in tasks) {
       unawaited(TaskReminderService.instance.scheduleTask(task));
     }
+    final DateTime today = ref.read(todayProvider);
+    final HabitEngine reminderEngine = HabitEngine(today: today);
     for (final Habit habit in habits.where((Habit h) => !h.isArchived)) {
-      unawaited(TaskReminderService.instance.scheduleHabit(habit));
+      final CompletionRecord? todayRecord = index[habit.id]?[dateKey(today)];
+      final bool skipToday = habit.type == HabitType.build &&
+          reminderEngine.isCompleted(habit, todayRecord);
+      unawaited(TaskReminderService.instance.scheduleHabit(
+        habit,
+        skipToday: skipToday,
+      ));
     }
     // Back-fill achievements reached before this version stored them.
     for (final Habit h in habits.where((Habit h) => !h.isArchived)) {
@@ -117,15 +132,32 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     return data.copyWith(achievements: all);
   }
 
+  // --------------------------------------------------------------- preferences
+
+  /// Persists a small UI preference locally and publishes it to the app.
+  Future<void> saveSetting(String key, String value) async {
+    if (state.valueOrNull == null) await future;
+    await _repo.saveSetting(key, value);
+    final AppData data = _current;
+    state = AsyncData<AppData>(data.copyWith(
+      settings: <String, String>{...data.settings, key: value},
+    ));
+  }
+
   // ------------------------------------------------------------------ habits
 
   /// Creates or updates a habit after validating it.
   Future<void> saveHabit(Habit habit) async {
     final String? problem = habit.validate();
     if (problem != null) throw ArgumentError(problem);
-    await _repo.upsertHabit(habit);
-    await TaskReminderService.instance.scheduleHabit(habit);
     AppData data = _current;
+    final DateTime today = ref.read(todayProvider);
+    final bool skipToday = habit.type == HabitType.build &&
+        HabitEngine(today: today).isCompleted(
+          habit,
+          data.recordsFor(habit.id)[dateKey(today)],
+        );
+    await _repo.upsertHabit(habit);
     final List<Habit> habits = List<Habit>.of(data.habits);
     final int i = habits.indexWhere((Habit h) => h.id == habit.id);
     if (i >= 0) {
@@ -136,6 +168,15 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     data = data.copyWith(habits: habits);
     data = await _syncAchievements(data, habit);
     state = AsyncData<AppData>(data);
+    // Reminder scheduling uses platform channels and may be slow or
+    // unavailable (for example, during widget tests or while Android is
+    // starting). It is not part of the local save transaction and must not
+    // delay form navigation after the repository and app state are updated.
+    unawaited(_scheduleHabitInBackground(
+      habit,
+      requestPermissions: habit.reminder.enabled,
+      skipToday: skipToday,
+    ));
   }
 
   Future<void> setArchived(String habitId, bool archived) async {
@@ -151,7 +192,6 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
   /// Permanently deletes a habit, its history, achievements and notes.
   Future<void> deleteHabit(String habitId) async {
     await _repo.deleteHabit(habitId);
-    await TaskReminderService.instance.cancelHabit(habitId);
     final AppData data = _current;
     final Map<String, Map<String, CompletionRecord>> completions =
         Map<String, Map<String, CompletionRecord>>.of(data.completions)
@@ -166,6 +206,38 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         notes: data.notes.where((Note n) => n.habitId != habitId).toList(),
       ),
     );
+    // The habit is already deleted locally. Cancelling Android notifications
+    // is cleanup and must not hold the delete action or its navigation open.
+    unawaited(_cancelHabitInBackground(habitId));
+  }
+
+  Future<void> _scheduleHabitInBackground(
+    Habit habit, {
+    required bool requestPermissions,
+    required bool skipToday,
+  }) async {
+    try {
+      await TaskReminderService.instance.scheduleHabit(
+        habit,
+        requestPermissions: requestPermissions,
+        skipToday: skipToday,
+      );
+    } catch (error, stackTrace) {
+      // Keep platform/plugin failures out of the local persistence path.
+      // The service also records its user-facing scheduling issue when
+      // possible; this catch is a final guard against unhandled async errors.
+      debugPrint('Background habit reminder scheduling failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<void> _cancelHabitInBackground(String habitId) async {
+    try {
+      await TaskReminderService.instance.cancelHabit(habitId);
+    } catch (error, stackTrace) {
+      debugPrint('Background habit reminder cancellation failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   // -------------------------------------------------------------- completions
@@ -198,6 +270,24 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     AppData next = data.copyWith(completions: all);
     next = await _syncAchievements(next, habit);
     state = AsyncData<AppData>(next);
+
+    // When a Build habit is completed today, suppress only today's upcoming
+    // reminder. Its selected weekday reminder resumes next week. Reopening or
+    // reducing a count below goal restores today's reminder if its time has
+    // not passed yet.
+    final DateTime today = dateOnly(DateTime.now());
+    final CompletionRecord? currentDayRecord = forHabit[dateKey(today)];
+    final bool completedToday = habit.type == HabitType.build &&
+        HabitEngine(today: today).isCompleted(habit, currentDayRecord);
+    if (habit.type == HabitType.build) {
+      // Completion state is already persisted and published. Rescheduling the
+      // platform alarm is follow-up work and must not block the interaction.
+      unawaited(_scheduleHabitInBackground(
+        habit,
+        requestPermissions: false,
+        skipToday: completedToday,
+      ));
+    }
   }
 
   /// Tick habits: toggles done (Build) or slipped (Quit).
@@ -211,14 +301,26 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
 
   /// Count habits: adds [delta] (may be negative); never below zero.
   Future<void> addCount(Habit habit, DateTime date, double delta) {
+    if (!delta.isFinite) {
+      throw ArgumentError('The count change must be a finite number.');
+    }
     return _edit(habit, date, (CompletionRecord r) {
       return r.copyWith(count: _clean(r.count + delta));
     });
   }
 
+  Future<void> decreaseCount(Habit habit, DateTime date) {
+    return addCount(habit, date, -habit.step);
+  }
+
+  /// Resets the selected day's count only. Other days' records are untouched.
+  Future<void> resetCount(Habit habit, DateTime date) {
+    return setCount(habit, date, 0);
+  }
+
   Future<void> setCount(Habit habit, DateTime date, double value) {
-    if (value.isNaN || value < 0) {
-      throw ArgumentError('The count must be zero or more.');
+    if (!value.isFinite || value < 0) {
+      throw ArgumentError('The count must be a finite number that is zero or more.');
     }
     return _edit(habit, date, (CompletionRecord r) {
       return r.copyWith(count: _clean(value));
@@ -329,7 +431,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       updatedAt: now,
     );
     await _repo.upsertTask(saved);
-    await TaskReminderService.instance.scheduleTask(saved);
+    await TaskReminderService.instance.scheduleTask(saved, requestPermissions: (saved.reminderAt != null || saved.dueAt != null) && !saved.isCompleted && !saved.isPaused);
     final List<Task> tasks = List<Task>.of(data.tasks);
     final int at = tasks.indexWhere((Task t) => t.id == saved.id);
     if (at >= 0) {
@@ -611,10 +713,71 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       data.copyWith(notes: data.notes.where((Note n) => n.id != noteId).toList()),
     );
   }
+
+  // --------------------------------------------------------------- expenses
+
+  Future<void> saveExpense(Expense expense) async {
+    final String? issue = expense.validate();
+    if (issue != null) throw ArgumentError(issue);
+    await _repo.upsertExpense(expense);
+    final AppData data = _current;
+    final List<Expense> expenses = List<Expense>.of(data.expenses);
+    final int index = expenses.indexWhere((Expense e) => e.id == expense.id);
+    if (index < 0) {
+      expenses.add(expense);
+    } else {
+      expenses[index] = expense;
+    }
+    state = AsyncData<AppData>(data.copyWith(expenses: expenses));
+  }
+
+  Future<void> deleteExpense(String expenseId) async {
+    await _repo.deleteExpense(expenseId);
+    final AppData data = _current;
+    state = AsyncData<AppData>(data.copyWith(
+      expenses: data.expenses.where((Expense e) => e.id != expenseId).toList(),
+    ));
+  }
+
+  Future<void> saveExpenseCategory(ExpenseCategory category) async {
+    final String name = category.name.trim();
+    if (name.isEmpty) throw ArgumentError('Enter a category name.');
+    final bool duplicate = _current.expenseCategories.any((ExpenseCategory c) =>
+        c.id != category.id && c.name.toLowerCase() == name.toLowerCase());
+    if (duplicate) throw ArgumentError('That expense category already exists.');
+    final ExpenseCategory saved = category.copyWith(name: name);
+    await _repo.upsertExpenseCategory(saved);
+    final AppData data = _current;
+    final List<ExpenseCategory> categories = List<ExpenseCategory>.of(data.expenseCategories);
+    final int index = categories.indexWhere((ExpenseCategory c) => c.id == saved.id);
+    if (index < 0) {
+      categories.add(saved);
+    } else {
+      categories[index] = saved;
+    }
+    state = AsyncData<AppData>(data.copyWith(expenseCategories: categories));
+  }
+
+  Future<void> deleteExpenseCategory(String categoryId) async {
+    final ExpenseCategory? category = _current.expenseCategoryById(categoryId);
+    if (category == null || category.isBuiltIn) return;
+    await _repo.deleteExpenseCategory(categoryId);
+    final AppData data = _current;
+    final List<Expense> expenses = data.expenses.map((Expense e) =>
+      e.categoryId == categoryId ? e.copyWith(clearCategory: true) : e).toList();
+    state = AsyncData<AppData>(data.copyWith(
+      expenseCategories: data.expenseCategories.where((ExpenseCategory c) => c.id != categoryId).toList(),
+      expenses: expenses,
+    ));
+  }
 }
 
 final AsyncNotifierProvider<AppDataNotifier, AppData> appDataProvider =
     AsyncNotifierProvider<AppDataNotifier, AppData>(AppDataNotifier.new);
+final reminderPermissionProvider =
+    FutureProvider.autoDispose<ReminderPermissionStatus>(
+  (ref) => TaskReminderService.instance.checkPermissions(),
+);
 
 /// Stats for every habit, recomputed only when data or the date changes.
 final Provider<Map<String, HabitStats>> habitStatsProvider =

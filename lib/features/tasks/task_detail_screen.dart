@@ -21,17 +21,38 @@ class TaskDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<AppData> async = ref.watch(appDataProvider);
-    return async.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (Object error, StackTrace _) => Scaffold(appBar: AppBar(), body: Center(child: Text('$error'))),
+    final bool canPop = context.canPop();
+    void goBack() {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(AppRoutes.dashboard);
+      }
+    }
+    final Widget backButton = IconButton(
+      tooltip: 'Back',
+      icon: const Icon(Icons.arrow_back_rounded),
+      onPressed: goBack,
+    );
+    return PopScope<Object?>(
+      canPop: canPop,
+      onPopInvokedWithResult: (bool didPop, Object? _) {
+        if (!didPop && !canPop && context.mounted) {
+          context.go(AppRoutes.dashboard);
+        }
+      },
+      child: async.when(
+      loading: () => Scaffold(appBar: AppBar(leading: backButton), body: const Center(child: CircularProgressIndicator())),
+      error: (Object error, StackTrace _) => Scaffold(appBar: AppBar(leading: backButton), body: Center(child: Text('$error'))),
       data: (AppData data) {
         final Task? task = data.taskById(taskId);
-        if (task == null) return Scaffold(appBar: AppBar(), body: const Center(child: Text('This task is no longer available.')));
+        if (task == null) return Scaffold(appBar: AppBar(leading: backButton), body: const Center(child: Text('This task is no longer available.')));
         final List<TaskActivity> history = data.activitiesForTask(task.id).reversed.toList();
         final Color accent = Color(task.colorValue);
         final bool overdue = isTaskOverdueOnDate(task, DateTime.now());
         return Scaffold(
           appBar: AppBar(
+            leading: backButton,
             title: const Text('Task Details'),
             actions: <Widget>[
               PopupMenuButton<String>(
@@ -125,6 +146,7 @@ class TaskDetailScreen extends ConsumerWidget {
           ])),
         );
       },
+      ),
     );
   }
 }

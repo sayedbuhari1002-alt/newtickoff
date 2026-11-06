@@ -119,6 +119,20 @@ void main() {
       expect(repo.notes.length, 1);
     });
 
+    testWidgets('daily note editor offers photo, audio and video attachments',
+        (WidgetTester tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.byIcon(Icons.sticky_note_2_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add Note'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Attachments'), findsOneWidget);
+      expect(find.text('Photo'), findsOneWidget);
+      expect(find.text('Record audio'), findsOneWidget);
+      expect(find.text('Video'), findsOneWidget);
+    });
+
     testWidgets('leaving an empty note stores nothing',
         (WidgetTester tester) async {
       final InMemoryAppRepository repo = InMemoryAppRepository()
@@ -139,8 +153,8 @@ void main() {
           id: 'n1',
           habitId: 'h1',
           title: 'Keep me?',
-          createdAt: DateTime(2026, 10, 26),
-          updatedAt: DateTime(2026, 10, 26),
+          createdAt: kToday,
+          updatedAt: kToday,
         );
       await pumpApp(tester, repo: repo);
       await tester.tap(find.byIcon(Icons.sticky_note_2_rounded));

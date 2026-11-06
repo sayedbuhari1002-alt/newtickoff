@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tickoff_replacement/core/utils/date_utils.dart';
 import 'package:tickoff_replacement/domain/models/models.dart';
 
 import '../support/in_memory_repository.dart';
@@ -20,6 +21,30 @@ void main() {
     expect(find.text('No habits yet'), findsOneWidget);
     expect(find.text('All (0)'), findsOneWidget);
     expect(find.text('Due (0)'), findsOneWidget);
+  });
+
+  testWidgets('quit habits with no slip count as successful in Daily Progress',
+      (WidgetTester tester) async {
+    final InMemoryAppRepository repo = InMemoryAppRepository()
+      ..habits['b1'] = sampleHabit(id: 'b1', title: 'Build One')
+      ..habits['b2'] = sampleHabit(id: 'b2', title: 'Build Two')
+      ..habits['q1'] = sampleHabit(id: 'q1', title: 'Quit One', type: HabitType.quit)
+      ..habits['q2'] = sampleHabit(id: 'q2', title: 'Quit Two', type: HabitType.quit);
+    for (final String habitId in <String>['b1', 'b2']) {
+      final CompletionRecord completedBuild = doneOn(habitId, kToday);
+      repo.records[completedBuild.key] = completedBuild;
+    }
+    final CompletionRecord slippedQuit = CompletionRecord(
+      habitId: 'q2',
+      dateKey: dateKey(kToday),
+      updatedAt: kToday,
+      slipped: true,
+    );
+    repo.records[slippedQuit.key] = slippedQuit;
+
+    await pumpApp(tester, repo: repo);
+    expect(find.text('75%'), findsOneWidget);
+    expect(find.text('3 of 4'), findsOneWidget);
   });
 
   testWidgets('stored habits appear with real counts and streaks',
@@ -62,7 +87,7 @@ void main() {
     // Select Monday the 26th: now it is due.
     await tester.tap(find.text('26'));
     await tester.pumpAndSettle();
-    expect(find.text('Mon, 26th Oct'), findsOneWidget);
+    expect(find.text('Mon · 26th Oct'), findsOneWidget);
     expect(find.text('Due (1)'), findsOneWidget);
   });
 
@@ -74,7 +99,7 @@ void main() {
     await goToHabits(tester);
     await tester.tap(find.text('25'));
     await tester.pumpAndSettle();
-    expect(find.text('Sun, 25th Oct'), findsOneWidget);
+    expect(find.text('Sun · 25th Oct'), findsOneWidget);
     expect(find.text('Due (0)'), findsOneWidget);
   });
 
@@ -104,6 +129,19 @@ void main() {
     expect(repo.records, isEmpty);
   });
 
+  testWidgets('Dashboard allows a Build habit to be completed directly',
+      (WidgetTester tester) async {
+    final InMemoryAppRepository repo = InMemoryAppRepository()
+      ..habits['b1'] = sampleHabit(id: 'b1', title: 'Stretching');
+    await pumpApp(tester, repo: repo);
+
+    expect(find.text('0 of 1'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.circle_outlined));
+    await tester.pumpAndSettle();
+    expect(repo.records['b1|${dateKey(kToday)}']!.done, isTrue);
+    expect(find.text('1 of 1'), findsOneWidget);
+  });
+
   testWidgets('count habits add one step per tap and show progress',
       (WidgetTester tester) async {
     final InMemoryAppRepository repo = InMemoryAppRepository()
@@ -124,6 +162,17 @@ void main() {
     expect(find.textContaining('2/2'), findsOneWidget);
     expect(find.text('Streak: 1 day  ·  2/2'), findsOneWidget);
     expect(repo.records.values.single.count, 2);
+
+    await tester.tap(find.byIcon(Icons.remove_rounded));
+    await tester.pumpAndSettle();
+    expect(repo.records.values.single.count, 1);
+
+    await tester.tap(find.byIcon(Icons.restart_alt_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Reset'), findsOneWidget);
+    await tester.tap(find.text('Reset'));
+    await tester.pumpAndSettle();
+    expect(repo.records, isEmpty);
   });
 
   testWidgets('quit habits record a slip instead of a completion',
@@ -161,16 +210,18 @@ void main() {
     expect(find.text('Guitar'), findsNothing);
   });
 
-  testWidgets('the habit score pill reflects stored records',
+  testWidgets('dashboard habit progress reflects today\'s stored records',
       (WidgetTester tester) async {
     final InMemoryAppRepository repo = InMemoryAppRepository()
-      ..habits['h1'] = sampleHabit(created: DateTime(2026, 10, 25));
-    final CompletionRecord r = doneOn('h1', DateTime(2026, 10, 25));
-    repo.records[r.key] = r;
+      ..habits['h1'] = sampleHabit(id: 'h1', title: 'Reading')
+      ..habits['h2'] = sampleHabit(id: 'h2', title: 'Walking', sortOrder: 1);
+    final CompletionRecord completed = doneOn('h1', kToday);
+    repo.records[completed.key] = completed;
+
     await pumpApp(tester, repo: repo);
-    await goToHabits(tester);
-    // Oct 25 done, Oct 26 missed, today pending -> 50%.
-    expect(find.text('50.0%'), findsOneWidget);
+    expect(find.text('Habits'), findsWidgets);
+    expect(find.text('50%'), findsOneWidget);
+    expect(find.text('1 of 2'), findsOneWidget);
   });
 
   testWidgets('settings has no premium or cloud entries',

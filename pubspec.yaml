@@ -1,8 +1,8 @@
 
 name: tickoff_replacement
-description: Offline Android habit tracker modelled on the supplied TickOff screenshots.
+description: Offline-first personal productivity app for habits, tasks, daily journal and expenses.
 publish_to: 'none'
-version: 0.2.0+2
+version: 0.4.10+16
 
 environment:
   sdk: '>=3.5.0 <4.0.0'
@@ -24,6 +24,7 @@ dependencies:
   record: ^6.2.1
   audioplayers: ^6.1.0
   path_provider: ^2.1.4
+  video_player: ^2.9.2
 
 dev_dependencies:
   flutter_test:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../utils/modal_navigation.dart';
 
 /// Shows a dark bottom sheet with a drag handle and a centred title, the
 /// pattern used by Options, Habit Info, Achievements, Icon and Voice Note.
@@ -10,7 +11,7 @@ Future<T?> showTickSheet<T>({
   required String title,
   required WidgetBuilder builder,
 }) {
-  return showModalBottomSheet<T>(
+  return showModalBottomSheetAndWait<T>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,

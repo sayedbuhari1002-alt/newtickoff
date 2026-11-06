@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/icons/habit_icons.dart';
+import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../domain/models/models.dart';
@@ -140,8 +141,15 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
       return;
     }
 
-    final Habit base =
-        _editing ?? Habit.create(title: title, sortOrder: data.nextSortOrder);
+    // Use the app's shared calendar clock for the creation date. This keeps
+    // habit lifetime calculations aligned with todayProvider (including tests
+    // and date-boundary handling) instead of reading the system clock twice.
+    final DateTime creationDate = ref.read(todayProvider);
+    final Habit base = _editing ?? Habit.create(
+      title: title,
+      sortOrder: data.nextSortOrder,
+      now: creationDate,
+    );
     final Habit habit = base.copyWith(
       title: title,
       description: _description.text.trim(),
@@ -167,6 +175,9 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
       return;
     }
 
+    // Capture the GoRouter before awaiting persistence. Habit form routes are
+    // explicitly attached to the root Navigator by the route configuration.
+    final GoRouter router = GoRouter.of(context);
     setState(() => _saving = true);
     final bool ok = await guarded(
       context,
@@ -174,7 +185,17 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    if (ok) context.pop();
+    if (ok) {
+      // Reminder scheduling continues in the background after the habit is
+      // saved locally. Do not make navigation depend on a platform channel.
+      // A direct route replacement returns to the intended destination.
+      router.go(widget.habitId == null
+          ? AppRoutes.habits
+          : AppRoutes.habitDetail(
+              widget.habitId!,
+              returnToDashboard: true,
+            ));
+    }
   }
 
   @override

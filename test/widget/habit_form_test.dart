@@ -11,15 +11,15 @@ Future<InMemoryAppRepository> openNewForm(WidgetTester tester) async {
   final InMemoryAppRepository repo = await pumpApp(tester);
   await tester.tap(find.byIcon(Icons.add));
   await tester.pumpAndSettle();
+  await tester.tap(find.text('Add Habit'));
+  await tester.pumpAndSettle();
   return repo;
 }
 
 void main() {
   testWidgets('saving without a title shows a validation message',
       (WidgetTester tester) async {
-    final InMemoryAppRepository repo = await pumpApp(tester);
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pumpAndSettle();
+    final InMemoryAppRepository repo = await openNewForm(tester);
     expect(find.text('Add Habit'), findsOneWidget);
 
     await tester.tap(find.text('Save'));
@@ -31,9 +31,7 @@ void main() {
 
   testWidgets('a new habit is saved to the database and listed',
       (WidgetTester tester) async {
-    final InMemoryAppRepository repo = await pumpApp(tester);
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pumpAndSettle();
+    final InMemoryAppRepository repo = await openNewForm(tester);
 
     await tester.enterText(find.byType(TextField).first, 'Meditate');
     await tester.tap(find.text('Save'));
@@ -41,14 +39,19 @@ void main() {
 
     expect(repo.habits.length, 1);
     final Habit saved = repo.habits.values.single;
+    // The form must use the same injected calendar date as the app state.
+    // Otherwise a habit created from DateTime.now() can appear to be in the
+    // future relative to the selected test day and be hidden by the Due filter.
+    expect(saved.createdAt, kToday);
     expect(saved.title, 'Meditate');
     expect(saved.type, HabitType.build);
     expect(saved.tracking, TrackingMethod.tick);
     expect(saved.schedule.type, FrequencyType.everyday);
 
-    // Back on the dashboard.
-    await tester.tap(find.textContaining('All ('));
-    await tester.pumpAndSettle();
+    // Saving closes the root form route and restores the shell/bottom bar.
+    expect(find.text('Habits'), findsWidgets);
+    // Verify it in the dedicated Habits destination.
+    await goToHabits(tester);
     expect(find.text('Meditate'), findsOneWidget);
   });
 
@@ -145,7 +148,9 @@ void main() {
     expect(find.text('Select at least one weekday.'), findsOneWidget);
 
     await tester.tap(find.text('Mo'));
+    await tester.pump(); // Rebuild with Monday selected before the next tap.
     await tester.tap(find.text('Th'));
+    await tester.pump();
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     final Habit saved = repo.habits.values.single;

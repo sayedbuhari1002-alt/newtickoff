@@ -10,10 +10,19 @@ class InMemoryAppRepository implements AppRepository {
   final Map<String, HabitCategory> categories = <String, HabitCategory>{};
   final Map<String, CompletionRecord> records = <String, CompletionRecord>{};
   final Map<String, Note> notes = <String, Note>{};
+  final Map<String, Expense> expenses = <String, Expense>{};
+  final Map<String, ExpenseCategory> expenseCategories = <String, ExpenseCategory>{};
   final Map<String, Map<int, String>> achievements =
       <String, Map<int, String>>{};
   final Map<String, Task> tasks = <String, Task>{};
   final Map<String, TaskActivity> taskActivities = <String, TaskActivity>{};
+  final Map<String, String> settings = <String, String>{};
+
+  @override
+  Future<Map<String, String>> loadSettings() async => Map<String, String>.of(settings);
+
+  @override
+  Future<void> saveSetting(String key, String value) async => settings[key] = value;
 
   @override
   Future<List<Habit>> loadHabits() async => habits.values.toList();
@@ -68,6 +77,32 @@ class InMemoryAppRepository implements AppRepository {
 
   @override
   Future<void> deleteNote(String noteId) async => notes.remove(noteId);
+
+  @override
+  Future<List<Expense>> loadExpenses() async => expenses.values.toList();
+
+  @override
+  Future<void> upsertExpense(Expense expense) async => expenses[expense.id] = expense;
+
+  @override
+  Future<void> deleteExpense(String expenseId) async => expenses.remove(expenseId);
+
+  @override
+  Future<List<ExpenseCategory>> loadExpenseCategories() async => expenseCategories.values.toList();
+
+  @override
+  Future<void> upsertExpenseCategory(ExpenseCategory category) async => expenseCategories[category.id] = category;
+
+  @override
+  Future<void> deleteExpenseCategory(String categoryId) async {
+    expenseCategories.remove(categoryId);
+    for (final String id in expenses.keys.toList()) {
+      final Expense expense = expenses[id]!;
+      if (expense.categoryId == categoryId) {
+        expenses[id] = expense.copyWith(clearCategory: true);
+      }
+    }
+  }
 
   @override
   Future<Map<String, Map<int, String>>> loadAchievements() async =>

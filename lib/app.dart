@@ -1,21 +1,106 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
+import 'core/router/routes.dart';
+import 'data/services/task_reminder_service.dart';
+import 'domain/models/models.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
+import 'state/app_settings.dart';
+import 'state/app_data.dart';
+import 'state/app_state.dart';
 
 /// Root widget: dark theme + router.
-class TickOffApp extends ConsumerWidget {
+class TickOffApp extends ConsumerStatefulWidget {
   const TickOffApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TickOffApp> createState() => _TickOffAppState();
+}
+
+class _TickOffAppState extends ConsumerState<TickOffApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    TaskReminderService.instance.setTaskActionHandler(
+      (String taskId, String actionId) async {
+        try {
+          await ref.read(appDataProvider.future);
+          if (!mounted) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!mounted) return;
+            try {
+              final AppData? data = ref.read(appDataProvider).valueOrNull;
+              final Task? task = data?.taskById(taskId);
+              if (task == null) return;
+              final router = ref.read(appRouterProvider);
+
+              if (actionId == TaskReminderService.actionPostponeTask) {
+                router.push(AppRoutes.taskEdit(taskId));
+                return;
+              }
+              if (actionId == TaskReminderService.actionMarkTaskCompleted) {
+                final AppDataNotifier notifier = ref.read(appDataProvider.notifier);
+                // Complete outstanding subtasks through the normal task state
+                // path. The final subtask completion automatically completes
+                // the parent, records history, and creates a repeating task
+                // instance when the task uses a repeat rule.
+                for (final Subtask item in task.subtasks.where(
+                  (Subtask item) => !item.isCompleted,
+                )) {
+                  await notifier.toggleSubtask(taskId, item.id);
+                }
+                final Task? latest = ref.read(appDataProvider).valueOrNull?.taskById(taskId);
+                if (latest != null && !latest.isCompleted && !latest.isPaused) {
+                  await notifier.setTaskCompleted(taskId, true);
+                }
+                return;
+              }
+              router.push(AppRoutes.taskDetail(taskId));
+            } catch (error) {
+              debugPrint('Could not process task notification action: $error');
+            }
+          });
+        } catch (error) {
+          debugPrint('Could not process task notification action: $error');
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshReminders());
+    }
+  }
+
+  Future<void> _refreshReminders() async {
+    await TaskReminderService.instance.refreshTimeZone();
+    // Reconcile the saved data and notification schedules after returning
+    // from Android Settings or a task notification action.
+    await ref.read(appDataProvider.notifier).reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String themeName = ref.watch(appDataProvider).valueOrNull?.settings[AppSettingKeys.theme] ?? 'original';
     return MaterialApp.router(
-      title: 'TickOff',
+      title: 'Tazkiyane',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.dark(graphite: themeName == 'graphite'),
+      darkTheme: AppTheme.dark(graphite: themeName == 'graphite'),
       themeMode: ThemeMode.dark,
       routerConfig: ref.watch(appRouterProvider),
     );
@@ -48,7 +133,7 @@ class StartupErrorApp extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'TickOff could not open its database',
+                  'Tazkiyane could not open its database',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),

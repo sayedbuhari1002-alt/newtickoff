@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   workflow_dispatch:
 
 jobs:
@@ -73,10 +73,10 @@ jobs:
         continue-on-error: true
 
       - name: Upload release APK artifact
-        if: steps.apk.outcome == 'success'
+        if: steps.apk.outcome == 'success' && steps.android_scaffold.outcome == 'success' && steps.sqlite.outcome == 'success' && steps.pub_get.outcome == 'success' && steps.format.outcome == 'success' && steps.analyze.outcome == 'success' && steps.app_tests.outcome == 'success' && steps.db_tests.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: tickoff-stage5-release-apk
+          name: tazkiyane-next-version-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
@@ -100,6 +100,6 @@ jobs:
             if [ "$value" != "success" ]; then failed=1; fi
           done
           if [ "$failed" -ne 0 ]; then
-            echo "One or more required checks failed. Review the earlier step logs; an APK artifact is uploaded only if the APK build succeeded."
+            echo "One or more required checks failed. Review the earlier step logs; an APK artifact is uploaded only if every required check succeeds."
             exit 1
           fi

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../domain/models/models.dart';
+import '../../core/utils/date_utils.dart';
 import 'app_repository.dart';
 
 /// SQLite-backed [AppRepository].
@@ -26,6 +27,33 @@ class SqliteAppRepository implements AppRepository {
       whereArgs: <Object?>[row['id']],
     );
     if (updated == 0) await executor.insert(table, row);
+  }
+
+  // ------------------------------------------------------------- app settings
+
+  @override
+  Future<Map<String, String>> loadSettings() async {
+    final List<Map<String, Object?>> rows = await _db.query('app_settings');
+    return <String, String>{
+      for (final Map<String, Object?> row in rows)
+        row['setting_key'] as String: row['setting_value'] as String,
+    };
+  }
+
+  @override
+  Future<void> saveSetting(String key, String value) async {
+    final int changed = await _db.update(
+      'app_settings',
+      <String, Object?>{'setting_key': key, 'setting_value': value},
+      where: 'setting_key = ?',
+      whereArgs: <Object?>[key],
+    );
+    if (changed == 0) {
+      await _db.insert('app_settings', <String, Object?>{
+        'setting_key': key,
+        'setting_value': value,
+      });
+    }
   }
 
   // ------------------------------------------------------------------ habits
@@ -207,12 +235,14 @@ class SqliteAppRepository implements AppRepository {
           Note.fromJson(<String, dynamic>{
             'id': r['id'],
             'habitId': r['habit_id'],
+            'logDate': r['log_date'] == null ? null : '${r['log_date']}T00:00:00',
             'title': r['title'],
             'body': r['body'],
             'createdAt': r['created_at'],
             'updatedAt': r['updated_at'],
             'photoPaths': jsonDecode(r['photos_json'] as String),
             'audioPaths': jsonDecode(r['audio_json'] as String),
+            'videoPaths': jsonDecode(r['video_json'] as String? ?? '[]'),
           }),
         );
       } catch (e) {
@@ -228,12 +258,14 @@ class SqliteAppRepository implements AppRepository {
       await _upsert(txn, 'notes', <String, Object?>{
         'id': n.id,
         'habit_id': n.habitId,
+        'log_date': n.logDate == null ? null : dateKey(n.logDate!),
         'title': n.title,
         'body': n.body,
         'created_at': n.createdAt.toIso8601String(),
         'updated_at': n.updatedAt.toIso8601String(),
         'photos_json': jsonEncode(n.photoPaths),
         'audio_json': jsonEncode(n.audioPaths),
+        'video_json': jsonEncode(n.videoPaths),
       });
     });
   }
@@ -241,6 +273,85 @@ class SqliteAppRepository implements AppRepository {
   @override
   Future<void> deleteNote(String noteId) async {
     await _db.delete('notes', where: 'id = ?', whereArgs: <Object?>[noteId]);
+  }
+
+  // -------------------------------------------------------------- expenses
+
+  @override
+  Future<List<Expense>> loadExpenses() async {
+    final List<Map<String, Object?>> rows = await _db.query(
+      'expenses',
+      orderBy: 'expense_date DESC, created_at DESC',
+    );
+    return rows.map((Map<String, Object?> row) {
+      final String date = row['expense_date'] as String;
+      return Expense(
+        id: row['id'] as String,
+        amountPaise: (row['amount_paise'] as num).toInt(),
+        expenseDate: DateTime.tryParse('${date}T00:00:00') ?? DateTime.now(),
+        categoryId: row['category_id'] as String?,
+        description: row['description'] as String? ?? '',
+        paymentMethod: row['payment_method'] as String? ?? '',
+        createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.now(),
+        updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? '') ?? DateTime.now(),
+      );
+    }).toList();
+  }
+
+  @override
+  Future<void> upsertExpense(Expense expense) async {
+    await _upsert(_db, 'expenses', <String, Object?>{
+      'id': expense.id,
+      'amount_paise': expense.amountPaise,
+      'expense_date': dateKey(expense.expenseDate),
+      'category_id': expense.categoryId,
+      'description': expense.description,
+      'payment_method': expense.paymentMethod,
+      'created_at': expense.createdAt.toIso8601String(),
+      'updated_at': expense.updatedAt.toIso8601String(),
+    });
+  }
+
+  @override
+  Future<void> deleteExpense(String expenseId) async {
+    await _db.delete('expenses', where: 'id = ?', whereArgs: <Object?>[expenseId]);
+  }
+
+  @override
+  Future<List<ExpenseCategory>> loadExpenseCategories() async {
+    final List<Map<String, Object?>> rows = await _db.query(
+      'expense_categories',
+      orderBy: 'sort_order ASC, name COLLATE NOCASE ASC',
+    );
+    return rows.map((Map<String, Object?> row) => ExpenseCategory(
+      id: row['id'] as String,
+      name: row['name'] as String,
+      iconKey: row['icon_key'] as String? ?? 'category',
+      colorValue: row['color_value'] as int? ?? 0xFFFFC62B,
+      sortOrder: row['sort_order'] as int? ?? 0,
+      isBuiltIn: (row['is_builtin'] as int? ?? 0) != 0,
+    )).toList();
+  }
+
+  @override
+  Future<void> upsertExpenseCategory(ExpenseCategory category) async {
+    await _upsert(_db, 'expense_categories', <String, Object?>{
+      'id': category.id,
+      'name': category.name.trim(),
+      'icon_key': category.iconKey,
+      'color_value': category.colorValue,
+      'sort_order': category.sortOrder,
+      'is_builtin': category.isBuiltIn ? 1 : 0,
+    });
+  }
+
+  @override
+  Future<void> deleteExpenseCategory(String categoryId) async {
+    await _db.delete(
+      'expense_categories',
+      where: 'id = ? AND is_builtin = 0',
+      whereArgs: <Object?>[categoryId],
+    );
   }
 
   // -------------------------------------------------------------------- tasks

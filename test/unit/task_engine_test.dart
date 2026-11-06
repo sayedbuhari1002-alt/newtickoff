@@ -68,53 +68,82 @@ Map<String, dynamic> snapshot({
     };
 
 void main() {
-  group('Reminder-aware visibility', () {
+  group('Reminder-window visibility and overdue filtering', () {
     final Task task = makeTask(dueAt: d(4), reminderAt: d(3));
 
-    test('reminder begins visibility and overdue tasks stay visible', () {
-      expect(isTaskVisibleOnDate(task, d(2)), isFalse);
-      expect(isTaskVisibleOnDate(task, d(3)), isTrue);
-      expect(isTaskVisibleOnDate(task, d(4)), isTrue);
-      expect(isTaskVisibleOnDate(task, d(5)), isTrue);
-      expect(isTaskOverdueOnDate(task, d(5)), isTrue);
+    test('task is visible from its reminder date through its deadline only', () {
+      expect(isTaskScheduledOnDate(task, d(2)), isFalse);
+      expect(isTaskScheduledOnDate(task, d(3)), isTrue);
+      expect(isTaskScheduledOnDate(task, d(4)), isTrue);
+      expect(isTaskScheduledOnDate(task, d(5)), isFalse);
     });
 
-    test('without reminder, deadline begins visibility', () {
+    test('without a reminder, task appears only on its deadline date', () {
       final Task noReminder = makeTask(dueAt: d(4), reminderAt: null);
-      expect(isTaskVisibleOnDate(noReminder, d(3)), isFalse);
-      expect(isTaskVisibleOnDate(noReminder, d(4)), isTrue);
-      expect(isTaskVisibleOnDate(noReminder, d(5)), isTrue);
+      expect(isTaskScheduledOnDate(noReminder, d(3)), isFalse);
+      expect(isTaskScheduledOnDate(noReminder, d(4)), isTrue);
+      expect(isTaskScheduledOnDate(noReminder, d(5)), isFalse);
     });
 
-    test('completed and paused tasks are not listed as pending', () {
-      expect(isTaskVisibleOnDate(makeTask(dueAt: d(1), completed: true), d(5)), isFalse);
-      expect(isTaskVisibleOnDate(makeTask(dueAt: d(1), paused: true), d(5)), isFalse);
+    test('a reminder without a deadline remains active from its reminder date', () {
+      final Task reminderOnly = makeTask(dueAt: null, reminderAt: d(3));
+      expect(isTaskScheduledOnDate(reminderOnly, d(2)), isFalse);
+      expect(isTaskScheduledOnDate(reminderOnly, d(3)), isTrue);
+      expect(isTaskScheduledOnDate(reminderOnly, d(4)), isTrue);
+    });
+
+    test('previous incomplete task appears as overdue in Today only', () {
+      final Task overdue = makeTask(dueAt: d(4), reminderAt: d(3));
+      expect(isTaskOverdueOnDate(overdue, d(5)), isTrue);
+      final List<Task> todayList = filterAndSortTasks(
+        <Task>[overdue],
+        filter: TaskListFilter.today,
+        selectedDate: d(5),
+        todayOverride: d(5),
+      );
+      final List<Task> historicalOrFutureDateList = filterAndSortTasks(
+        <Task>[overdue],
+        filter: TaskListFilter.selectedDate,
+        selectedDate: d(5),
+        todayOverride: d(5),
+      );
+      expect(todayList.map((Task t) => t.id), <String>['t1']);
+      expect(historicalOrFutureDateList, isEmpty);
+    });
+
+    test('same-day deadline never becomes overdue before the next day', () {
+      final Task dueToday = makeTask(dueAt: DateTime(2026, 11, 4, 9));
+      expect(isTaskOverdueOnDate(dueToday, DateTime(2026, 11, 4, 23, 59)), isFalse);
+      expect(isTaskOverdueOnDate(dueToday, DateTime(2026, 11, 5)), isTrue);
+    });
+
+    test('paused tasks are not scheduled on a date', () {
+      expect(isTaskScheduledOnDate(makeTask(dueAt: d(4), paused: true), d(4)), isFalse);
     });
   });
 
-  test('filters combine priority and category; default order puts overdue first', () {
+  test('category filtering and sorting still work without a priority filter', () {
     final List<Task> tasks = <Task>[
-      makeTask(id: 'future-high', title: 'Future', dueAt: d(7), priority: TaskPriority.high, category: 'Study'),
-      makeTask(id: 'overdue-high', title: 'Overdue', dueAt: d(1), priority: TaskPriority.high, category: 'Study'),
-      makeTask(id: 'overdue-low', title: 'Low', dueAt: d(1), priority: TaskPriority.low, category: 'Study'),
-      makeTask(id: 'other-category', title: 'Other', dueAt: d(1), priority: TaskPriority.high, category: 'Work'),
+      makeTask(id: 'high', title: 'High', dueAt: d(7), priority: TaskPriority.high, category: 'Study'),
+      makeTask(id: 'low', title: 'Low', dueAt: d(7), priority: TaskPriority.low, category: 'Study'),
+      makeTask(id: 'other-category', title: 'Other', dueAt: d(7), priority: TaskPriority.medium, category: 'Work'),
     ];
-    final List<Task> filtered = filterAndSortTasks(
+    final List<Task> byCategory = filterAndSortTasks(
       tasks,
       filter: TaskListFilter.all,
       selectedDate: d(3),
-      priority: TaskPriority.high,
       category: 'Study',
+      sort: TaskSort.priority,
     );
-    expect(filtered.map((Task t) => t.id), <String>['overdue-high', 'future-high']);
+    expect(byCategory.map((Task t) => t.id), <String>['high', 'low']);
 
-    final List<Task> byCategory = filterAndSortTasks(
+    final List<Task> byName = filterAndSortTasks(
       tasks,
       filter: TaskListFilter.all,
       selectedDate: d(3),
       sort: TaskSort.categoryDescending,
     );
-    expect(byCategory.first.category, 'Work');
+    expect(byName.first.category, 'Work');
   });
 
   test('subtask activity is attributed to its own completion date while parent remains incomplete', () {

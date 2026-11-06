@@ -1,92 +1,67 @@
-# TickOff — Stage 5 source project
+# Tazkiyane — offline-first personal productivity app
 
-TickOff is an offline-first Flutter application that combines the supplied Stage 3 habit tracker with a local task-management system. Records are stored on-device in SQLite. Ordinary use does not require an account, internet connection, Firebase, cloud sync, ads, subscriptions, or paid services.
+Tazkiyane combines habit tracking, task management, a date-based daily journal, and personal expense tracking in one offline-first Flutter application. User data is stored on-device in SQLite. The app does not require an account, cloud synchronisation, Firebase, ads, or subscriptions for ordinary use.
 
-> **Verification status:** This archive was assembled and checked for ZIP integrity in an environment without the Flutter/Dart SDK. The source changes, build script, and tests are included, but `flutter pub get`, `dart format`, `flutter analyze`, `flutter test`, and the Android release build could not be run here. Treat compilation and runtime behavior as **unverified** until the GitHub Actions workflow or a local Flutter environment passes. See `BUILD_VERIFICATION.md`.
+> **Verification status:** The source archive has been updated and checked for basic script and ZIP integrity. The Flutter/Dart SDK is not installed in the preparation environment, so `flutter pub get`, `dart format`, `flutter analyze`, `flutter test`, and the Android release build have not been run here. Do not treat the APK as verified until the GitHub Actions workflow passes and the generated APK is tested on the phone.
 
-## Stage 5 overview
+## Main modules
 
-- Four primary destinations: Dashboard, Habits, Tasks, and Notes, with a single central Add control offering Add Habit and Add Task.
-- Dashboard overview with independent task and habit progress; the full habit list is managed on the Habits tab.
-- Full-screen task creation/editing and task details, plus Progress, Edit, Delete, pause/resume, postpone, duplicate, and repeat actions.
-- Task priority, category, icon, accent colour, deadline and optional time, reminder, repeat rule, text notes, local photo/audio attachments, and ordered subtasks with independent deadlines.
-- Combined task priority/category filters; All, Today, Due Tasks, and selected-date views; default overdue-first ordering and explicit priority/deadline/category sorts.
-- Local reminders for tasks and supported habit reminders, with permission requests and failure handling so notification errors do not block saving.
-- Persisted task activity snapshots for task/subtask creation, updates, completion/reopening, deadline changes, pause/resume, postponement, duplication, deletion, and subtask edits.
-- Task analytics with day/week/month/30-day/90-day/year/custom ranges; task summary metrics, completion bars/trends, comparison charts, weighted score trend, and selected-day historical breakdown.
-- SQLite schema migration from version 1 to version 2 that adds task tables while leaving Stage 3 habit tables and records intact.
-- GitHub Actions workflow that runs formatting, analysis, unit/widget tests, database/migration tests, and builds/uploads a release APK; the workflow fails if a required check fails.
+- **Dashboard:** Daily habit/task overview, progress, and scrolling date navigation.
+- **Habits:** Build, Quit, tick, checklist, and count-based habits; scheduling, completion history, streaks, heatmaps, analytics, categories, notes, and reminders.
+- **Tasks:** Task details, priorities, categories, deadlines, optional manual reminders, repeat rules, subtasks, local attachments, pause/resume, postpone, and task analytics.
+- **Journal & Notes:** A horizontally scrolling date selector matching the Dashboard; multiple general journal entries per date; photo, recorded audio and video attachments are stored locally; existing habit-linked notes remain separately accessible.
+- **Expenses:** Daily expense entry, edit/delete, built-in and custom categories, daily totals, and monthly spending analytics.
+- **Notifications:** Exact local task reminders, 30-minute pre-deadline alerts with action buttons, and recurring Build-habit reminders that are suppressed when the habit is already complete for the day.
 
-## Stage 3 habit functionality retained
+## Daily journal and expenses
 
-The existing habit models and screens remain part of the project. The source retains Build/Quit habits, Tick/Count/Checklist tracking, schedule handling, completion records, category management, streaks, score calculations, analytics/heatmaps, achievements, habit details, archive/restore, and notes linked to habits. The full habit list now lives on the dedicated **Habits** destination rather than being duplicated on Dashboard. Dashboard shows a compact due-habits overview.
+The Notes destination is not a month-grid calendar. Journal and daily expense views reuse the Dashboard's horizontal date strip. General notes are associated with a calendar date; existing habit-linked notes remain linked to their habit. Expense amounts are persisted as integer paise. A day with no expense rows has a computed total of ₹0 and is included as a zero-spending day in the monthly averages and charts. The current month only counts days through today, so future dates do not reduce the average.
 
-As with the new task implementation, retained habit functionality is not certified by a successful compile/test run in this environment.
+Monthly expense analytics display total expenses, average per elapsed day in the current month (or per calendar day for completed months), highest-spending day, transaction count, zero-expense days, category totals, and a daily bar chart. Built-in categories are Food, Transportation, Shopping, Education, Entertainment, Healthcare, Bills, Personal, and Others.
 
-## Requirements
+## Automatic task deadline notification
 
-- Flutter SDK with Dart compatible with `pubspec.yaml` (`>=3.4.0 <4.0.0`). Use a current stable Flutter release.
-- Java 17 for the Android build.
-- Linux SQLite development library for the desktop-backed SQLite repository tests (`libsqlite3-dev` on Ubuntu/Debian).
+An active task with a deadline is scheduled to show one local alert 30 minutes before the deadline if it is still incomplete. The Android notification has `Mark as Completed` and `Postpone` actions. Both actions open the app: Mark as Completed uses the normal task state flow (including subtasks and repeating-task rules), while Postpone opens the task editor; saving a new deadline replaces the previous deadline alert. There are no repeated daily overdue notifications. A date-only deadline is treated as 23:59 local time, so the alert is planned for 23:29.
 
-The uploaded project did not include an Android Gradle scaffold. `tool/prepare_android.sh` generates the Android scaffold using the installed Flutter SDK if `android/app` is absent and applies the notification/microphone manifest permissions and local-notification receivers. If you already have a configured `android/` directory in your own checkout, the script leaves that directory intact and only reapplies the manifest changes.
+## Database compatibility
 
-## Open and build in VS Code
+- Database file remains `tickoff.db` so the existing installation retains its database location.
+- Schema version 1 contains the original categories, habits, completion records, notes, and achievements.
+- Schema version 2 adds tasks, subtasks, and task activity history.
+- Schema version 3 adds local app settings.
+- Schema version 4 adds `notes.log_date`, `expense_categories`, and `expenses` with indexes. Existing standalone notes are assigned the date of their original creation; habit-linked notes remain linked to their habits.
+- Schema version 5 adds `notes.video_json` for local video attachment paths without deleting existing note data.
+- Existing Android application ID and attachment directory remain unchanged for update compatibility.
 
-From the extracted project root (the folder containing `pubspec.yaml`):
+## Build on GitHub Actions
+
+The repository workflow builds on the current stable Flutter channel with Java 17. It runs formatting, static analysis, unit/widget tests, SQLite repository/migration tests, and a release APK build. It uploads an APK artifact only when the Android scaffold, dependency resolution, formatting, analysis, unit/widget tests, SQLite tests, and release build all succeed.
+
+After copying the source changes into the existing repository branch, push that branch and review every Actions step. Download the `tazkiyane-next-version-release-apk` artifact only after all required checks pass. Keep the existing working APK installed until the replacement has been tested. Do not merge into `main` until the new release is accepted.
+
+## Local build commands
+
+From the project root:
 
 ```bash
 bash tool/prepare_android.sh
 flutter pub get
-dart format --output=none --set-exit-if-changed lib test
-flutter analyze
-flutter test
+dart format lib test
+flutter analyze --no-fatal-infos
+flutter test test/unit test/widget
+flutter test test/data
 flutter build apk --release
 ```
 
-On a first build, Android Gradle dependencies need to be downloaded. The APK output path is:
-
-```text
-build/app/outputs/flutter-apk/app-release.apk
-```
-
-For the database repository tests on Ubuntu/Debian, install SQLite first:
+On Ubuntu/Debian, SQLite development headers may be needed for the FFI repository tests:
 
 ```bash
 sudo apt-get update && sudo apt-get install -y libsqlite3-dev
 ```
 
-## Build on GitHub without a local Flutter install
+## Important implementation notes
 
-1. Upload this project to your GitHub repository, including the hidden `.github/workflows/build_apk.yml` workflow and `tool/prepare_android.sh`.
-2. Push the source to `main`, or open **Actions → Build Android APK → Run workflow**.
-3. Review **every** format, analysis, test, scaffold, and APK-build step. A successful APK compilation alone is not a passing run.
-4. When the APK build succeeds, download the `tickoff-stage5-release-apk` artifact from that workflow run.
-
-The checked-in workflow does not merge branches or push source changes automatically. Release APK signing uses Flutter/Android's default configuration; it is suitable for local testing, not Play Store release without setting up a production signing key.
-
-## Data and migration notes
-
-- Database file: `tickoff.db` in the app's application-support database location.
-- Schema version 1 contains the original categories, habits, completion records, notes, and achievements tables.
-- Schema version 2 adds `tasks`, `subtasks`, and `task_activities` plus indexes. The migration is additive; it does not reset or rebuild the Stage 3 tables.
-- Task parent rows and subtasks use a SQLite transaction during upsert. Task activity rows intentionally do **not** use a foreign key to `tasks`, allowing historical events to remain after a task is deleted.
-- Photos and recordings are copied to an app-private `tickoff_attachments` directory. A task deletion removes an attachment file only when no remaining task or note references it.
-- The activity journal only starts recording after this version is installed. Historical task states that were never captured cannot be reconstructed retroactively.
-
-## Tests included
-
-- `test/unit`: existing habit logic, date/model/state/analytics tests plus task visibility, filtering/sorting, subtask completion date attribution, and late-completion tests.
-- `test/widget`: habit, notes, Dashboard, and navigation/widget tests updated for the dedicated Habits tab.
-- `test/data`: SQLite repository round trips, task/subtask/attachment metadata, retained task activity on deletion, and a version-1-to-version-2 migration test.
-
-Run all tests with `flutter test` after installing Flutter and resolving dependencies.
-
-## Known limitations / items to verify
-
-- No Dart formatter, analyzer, Flutter test runner, Android Gradle build, or device runtime was available when this archive was prepared. The included CI workflow is the intended next verification gate.
-- Android scaffold files are generated during the build rather than included in the source archive because the supplied ZIP lacked them.
-- Settings destinations for theme/layout/widgets/general/rearrange remain inherited placeholder pages; a native Android launcher widget is not included. The working Settings features from the source (including categories and archive) remain available.
-- Audio capture/playback and local notification behavior depend on Android permission and operating-system behavior and need device testing. If a notification cannot be scheduled, saved task/habit data remains local.
-- Habit-linked notes retain the Stage 3 behavior. Photo/audio attachment support in this change is implemented for tasks; existing note attachment controls should be verified separately.
-- Weighted task score is intentionally defined as 1 point for Low, 2 for Medium, and 3 for High priority per actual task or subtask completion. A parent auto-completion event is excluded from completion units when child completion events already represent that work.
+- The app label is `Tazkiyane`; the internal Flutter package name, Android application ID, database filename, and attachment directory are intentionally retained.
+- Task and habit reminders remain local. Android exact-alarm permission, notification permission, timezone handling, reboot restoration, and OEM battery settings affect delivery.
+- A date-only task deadline is defined as the end of that date for the advance-notification calculation.
+- The source archive excludes `.git` so it can be copied into the existing working repository without replacing Git history.

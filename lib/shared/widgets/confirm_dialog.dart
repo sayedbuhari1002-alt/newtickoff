@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../utils/modal_navigation.dart';
 
 /// Confirmation dialog for destructive actions (delete habit, delete note...).
 /// Resolves to true only when the user explicitly confirms.
@@ -11,7 +12,7 @@ Future<bool> showConfirmDialog(
   String confirmLabel = 'Confirm',
   bool destructive = false,
 }) async {
-  final bool? result = await showDialog<bool>(
+  final bool? result = await showDialogAndWait<bool>(
     context: context,
     builder: (BuildContext dialogContext) {
       return AlertDialog(

@@ -4,6 +4,10 @@ import '../../domain/models/models.dart';
 /// `SqliteAppRepository`; tests also use an in-memory version of this
 /// interface for fast widget tests.
 abstract class AppRepository {
+  // Local application preferences (never synced to a cloud service).
+  Future<Map<String, String>> loadSettings();
+  Future<void> saveSetting(String key, String value);
+
   // Habits
   Future<List<Habit>> loadHabits();
 
@@ -29,6 +33,14 @@ abstract class AppRepository {
   Future<List<Note>> loadNotes();
   Future<void> upsertNote(Note note);
   Future<void> deleteNote(String noteId);
+
+  // Daily expenses and user-defined expense categories.
+  Future<List<Expense>> loadExpenses();
+  Future<void> upsertExpense(Expense expense);
+  Future<void> deleteExpense(String expenseId);
+  Future<List<ExpenseCategory>> loadExpenseCategories();
+  Future<void> upsertExpenseCategory(ExpenseCategory category);
+  Future<void> deleteExpenseCategory(String categoryId);
 
   // Achievements: habitId -> milestone -> `yyyy-MM-dd` unlocked on
   Future<Map<String, Map<int, String>>> loadAchievements();

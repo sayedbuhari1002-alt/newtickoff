@@ -34,6 +34,26 @@ void main() {
     expect(find.text('Everyday'), findsOneWidget);
   });
 
+  testWidgets('back from habit details after editing returns to Dashboard',
+      (WidgetTester tester) async {
+    final InMemoryAppRepository repo = seeded();
+    await openDetail(tester, repo);
+
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit Habit'), findsOneWidget);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reading Books'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text("Today's Tasks"), findsOneWidget);
+  });
+
   testWidgets('Done completes today and can be undone',
       (WidgetTester tester) async {
     final InMemoryAppRepository repo = seeded();
@@ -101,7 +121,10 @@ void main() {
 
     expect(repo.habits['h1']!.isArchived, isTrue);
     expect(repo.records.length, 1);
-    expect(find.text('No habits yet'), findsOneWidget);
+    expect(find.text('Reading Books'), findsNothing);
+    // The detail route is gone and the original Habits shell destination is
+    // visible again, including its bottom navigation.
+    expect(find.text('Habits'), findsWidgets);
   });
 
   testWidgets('delete asks for confirmation and removes everything',
@@ -129,7 +152,8 @@ void main() {
 
     expect(repo.habits, isEmpty);
     expect(repo.records, isEmpty);
-    expect(find.text('No habits yet'), findsOneWidget);
+    expect(find.text('Reading Books'), findsNothing);
+    expect(find.text('Habits'), findsWidgets);
   });
 
   testWidgets('share progress builds a summary screen',

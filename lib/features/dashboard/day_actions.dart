@@ -49,6 +49,58 @@ Future<void> longPressDay(
   );
 }
 
+
+/// Decreases a count habit by its configured increment without going below 0.
+Future<void> decreaseCountDay(
+  BuildContext context,
+  WidgetRef ref,
+  Habit habit,
+  DateTime date,
+) async {
+  await guarded(
+    context,
+    () => ref.read(appDataProvider.notifier).decreaseCount(habit, date),
+  );
+}
+
+/// Resets only the selected day's count, after explicit confirmation.
+Future<void> resetCountDay(
+  BuildContext context,
+  WidgetRef ref,
+  Habit habit,
+  DateTime date,
+) async {
+  final bool confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext dialogContext) => AlertDialog(
+          backgroundColor: AppColors.surfaceRaised,
+          title: const Text("Reset this day's count?"),
+          content: const Text(
+            'This sets the count for the selected date to zero. Counts recorded on other dates will remain unchanged.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text(
+                'Reset',
+                style: TextStyle(color: AppColors.danger),
+              ),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+  if (!confirmed || !context.mounted) return;
+  await guarded(
+    context,
+    () => ref.read(appDataProvider.notifier).resetCount(habit, date),
+  );
+}
+
 /// Dialog to type an exact count or nudge it up and down.
 Future<double?> showCountEditor(
   BuildContext context, {

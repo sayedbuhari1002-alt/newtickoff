@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -6,37 +8,61 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../../domain/models/models.dart';
 
-/// Local reminder scheduling. All failures are contained here so a reminder
-/// failure never prevents an offline task or habit from being saved.
+class ReminderPermissionStatus {
+  const ReminderPermissionStatus({
+    required this.notificationsGranted,
+    required this.exactAlarmsGranted,
+    required this.timeZoneAvailable,
+    this.schedulingIssue,
+  });
+
+  final bool notificationsGranted;
+  final bool exactAlarmsGranted;
+  final bool timeZoneAvailable;
+  final String? schedulingIssue;
+
+  bool get ready =>
+      notificationsGranted && exactAlarmsGranted && timeZoneAvailable;
+}
+
+typedef TaskNotificationActionHandler =
+    Future<void> Function(String taskId, String actionId);
+
+/// Local-only reminder scheduling. Task alarms are one-shot exact alarms;
+/// habit alarms are weekly recurring exact alarms (one alarm per selected
+/// weekday), so they do not stop after a fixed scheduling window.
 class TaskReminderService {
   TaskReminderService._();
   static final TaskReminderService instance = TaskReminderService._();
 
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
-  bool _initialised = false;
+  static const String actionMarkTaskCompleted = 'mark_task_completed';
+  static const String actionPostponeTask = 'postpone_task';
+  static const String actionOpenTask = 'open_task';
 
-  Future<void> initialise() async {
-    if (_initialised) return;
-    try {
-      tz_data.initializeTimeZones();
-      try {
-        final String name = await FlutterTimezone.getLocalTimezone();
-        tz.setLocalLocation(tz.getLocation(name));
-      } catch (_) {
-        tz.setLocalLocation(tz.getLocation('UTC'));
-      }
-      const InitializationSettings settings = InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      );
-      await _plugin.initialize(settings);
-      await _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
-      _initialised = true;
-    } catch (error) {
-      debugPrint('Local notification initialisation unavailable: $error');
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
+
+  bool _initialised = false;
+  bool _timeZoneAvailable = false;
+  bool _notificationsGranted = true;
+  final Set<String> _legacyHabitIdsCleaned = <String>{};
+  final Map<String, Future<void>> _scheduleQueues = <String, Future<void>>{};
+  String? _lastSchedulingIssue;
+  TaskNotificationActionHandler? _taskActionHandler;
+  ({String taskId, String actionId})? _pendingAction;
+
+  String? get lastSchedulingIssue => _lastSchedulingIssue;
+
+  void setTaskActionHandler(TaskNotificationActionHandler handler) {
+    _taskActionHandler = handler;
+    final pending = _pendingAction;
+    _pendingAction = null;
+    if (pending != null) {
+      unawaited(handler(pending.taskId, pending.actionId));
     }
   }
 
-  int _stableId(String value) {
+  static int notificationIdFor(String value) {
     int hash = 0x811C9DC5;
     for (final int unit in value.codeUnits) {
       hash = ((hash ^ unit) * 0x01000193) & 0x7fffffff;
@@ -44,78 +70,462 @@ class TaskReminderService {
     return hash == 0 ? 1 : hash;
   }
 
-  Future<void> scheduleTask(Task task) async {
-    await initialise();
-    final int id = _stableId('task:${task.id}');
+  static String? taskIdFromPayload(String? payload) {
+    const String prefix = 'task-deadline|';
+    if (payload == null || !payload.startsWith(prefix)) return null;
+    final String id = payload.substring(prefix.length).trim();
+    return id.isEmpty ? null : id;
+  }
+
+  Future<void> initialise() async {
+    if (_initialised) return;
     try {
-      await _plugin.cancel(id);
-      final DateTime? reminder = task.reminderAt;
-      if (!_initialised || reminder == null || task.isCompleted || task.isPaused || !reminder.isAfter(DateTime.now())) return;
-      await _plugin.zonedSchedule(
-        id,
-        task.title,
-        task.description.isEmpty ? 'Task reminder' : task.description,
-        tz.TZDateTime.from(reminder, tz.local),
-        const NotificationDetails(android: AndroidNotificationDetails(
-          'tickoff_task_reminders', 'Task reminders',
-          channelDescription: 'Reminders for your TickOff tasks',
-          importance: Importance.high, priority: Priority.high,
-        )),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      tz_data.initializeTimeZones();
+      await _loadDeviceTimeZone();
+      const InitializationSettings settings = InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       );
+      await _plugin.initialize(
+        settings,
+        onDidReceiveNotificationResponse: _handleNotificationResponse,
+      );
+      _initialised = true;
+
+      // Actions with showsUserInterface=true launch the app. When Android
+      // starts a cold process for such an action, the plugin exposes the
+      // response through launch details rather than the regular callback.
+      try {
+        final NotificationAppLaunchDetails? launchDetails =
+            await _plugin.getNotificationAppLaunchDetails();
+        if (launchDetails?.didNotificationLaunchApp ?? false) {
+          final NotificationResponse? response =
+              launchDetails?.notificationResponse;
+          if (response != null) _handleNotificationResponse(response);
+        }
+      } catch (error) {
+        debugPrint('Could not read notification launch action: $error');
+      }
+
+      final AndroidFlutterLocalNotificationsPlugin? android = _androidPlugin;
+      if (android != null) {
+        final bool? granted = await android.requestNotificationsPermission();
+        _notificationsGranted = granted ?? true;
+      }
     } catch (error) {
-      debugPrint('Could not schedule task reminder ${task.id}: $error');
+      _lastSchedulingIssue = 'Tazkiyane could not initialise reminders: $error';
+      debugPrint(_lastSchedulingIssue);
     }
   }
 
-  Future<void> cancelTask(String taskId) async {
-    await initialise();
-    try { await _plugin.cancel(_stableId('task:$taskId')); } catch (error) { debugPrint('Could not cancel task reminder: $error'); }
+  void _handleNotificationResponse(NotificationResponse response) {
+    final String? taskId = taskIdFromPayload(response.payload);
+    if (taskId == null) return;
+    final String action = response.actionId ?? actionOpenTask;
+    final TaskNotificationActionHandler? handler = _taskActionHandler;
+    if (handler == null) {
+      _pendingAction = (taskId: taskId, actionId: action);
+      return;
+    }
+    unawaited(handler(taskId, action));
   }
 
-  Future<void> cancelHabit(String habitId) async {
+  AndroidFlutterLocalNotificationsPlugin? get _androidPlugin =>
+      _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+  Future<void> _loadDeviceTimeZone() async {
+    try {
+      final String name = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(name));
+      _timeZoneAvailable = true;
+    } catch (error) {
+      _timeZoneAvailable = false;
+      _lastSchedulingIssue =
+          'Tazkiyane could not determine the device time zone. Open the app again after checking your device date and time settings.';
+      debugPrint('Could not determine device time zone: $error');
+    }
+  }
+
+  Future<void> refreshTimeZone() async {
+    await initialise();
+    if (!_initialised) return;
+    await _loadDeviceTimeZone();
+  }
+
+  Future<ReminderPermissionStatus> checkPermissions() async {
+    await initialise();
+    bool exactGranted = true;
+    final AndroidFlutterLocalNotificationsPlugin? android = _androidPlugin;
+    if (android != null) {
+      try {
+        _notificationsGranted =
+            await android.areNotificationsEnabled() ?? _notificationsGranted;
+        exactGranted =
+            await android.canScheduleExactNotifications() ?? true;
+      } catch (error) {
+        exactGranted = false;
+        debugPrint('Could not check reminder permissions: $error');
+      }
+    }
+    return ReminderPermissionStatus(
+      notificationsGranted: _notificationsGranted,
+      exactAlarmsGranted: exactGranted,
+      timeZoneAvailable: _timeZoneAvailable,
+      schedulingIssue: _lastSchedulingIssue,
+    );
+  }
+
+  Future<ReminderPermissionStatus> requestPermissions() async {
+    await initialise();
+    final AndroidFlutterLocalNotificationsPlugin? android = _androidPlugin;
+    if (android == null) return checkPermissions();
+
+    try {
+      final bool? notificationResult =
+          await android.requestNotificationsPermission();
+      _notificationsGranted = notificationResult ?? true;
+    } catch (error) {
+      _notificationsGranted = false;
+      debugPrint('Could not request notification permission: $error');
+    }
+
+    bool exactGranted = true;
+    try {
+      exactGranted = await android.canScheduleExactNotifications() ?? true;
+      if (!exactGranted) {
+        await android.requestExactAlarmsPermission();
+        exactGranted = await android.canScheduleExactNotifications() ?? true;
+      }
+    } catch (error) {
+      exactGranted = false;
+      debugPrint('Could not request exact-alarm permission: $error');
+    }
+
+    final ReminderPermissionStatus status = ReminderPermissionStatus(
+      notificationsGranted: _notificationsGranted,
+      exactAlarmsGranted: exactGranted,
+      timeZoneAvailable: _timeZoneAvailable,
+    );
+    _lastSchedulingIssue = status.ready ? null : _permissionMessage(status);
+    return ReminderPermissionStatus(
+      notificationsGranted: status.notificationsGranted,
+      exactAlarmsGranted: status.exactAlarmsGranted,
+      timeZoneAvailable: status.timeZoneAvailable,
+      schedulingIssue: _lastSchedulingIssue,
+    );
+  }
+
+  String _permissionMessage(ReminderPermissionStatus status) {
+    if (!status.notificationsGranted) {
+      return 'Notifications are disabled for Tazkiyane. Open Android Settings → Apps → Tazkiyane → Notifications and allow notifications.';
+    }
+    if (!status.exactAlarmsGranted) {
+      return 'Exact alarms are not allowed. Open Android Settings → Apps → Special app access → Alarms & reminders → Tazkiyane, then allow alarms and reminders.';
+    }
+    if (!status.timeZoneAvailable) {
+      return 'Tazkiyane could not determine your device time zone, so the reminder was not scheduled.';
+    }
+    return 'Tazkiyane could not schedule this reminder. Please check Android notification and alarm settings.';
+  }
+
+  Future<bool> _canSchedule({required bool requestPermissions}) async {
+    await initialise();
+    if (!_initialised) {
+      _lastSchedulingIssue ??= 'Tazkiyane reminder services are unavailable.';
+      return false;
+    }
+    if (requestPermissions) {
+      final ReminderPermissionStatus status = await requestPermissionsFlow();
+      if (!status.ready) {
+        _lastSchedulingIssue = _permissionMessage(status);
+        return false;
+      }
+    } else {
+      final ReminderPermissionStatus status = await checkPermissions();
+      if (!status.ready) {
+        _lastSchedulingIssue = _permissionMessage(status);
+        return false;
+      }
+    }
+    _lastSchedulingIssue = null;
+    return true;
+  }
+
+  Future<ReminderPermissionStatus> requestPermissionsFlow() =>
+      requestPermissions();
+
+  Future<void> _runQueued(String key, Future<void> Function() operation) {
+    final Future<void> previous =
+        _scheduleQueues[key] ?? Future<void>.value();
+    late final Future<void> next;
+    next = previous
+        .catchError((Object _) {})
+        .then((_) => operation());
+    _scheduleQueues[key] = next;
+    return next.whenComplete(() {
+      if (identical(_scheduleQueues[key], next)) {
+        _scheduleQueues.remove(key);
+      }
+    });
+  }
+
+  int _taskReminderId(String taskId) =>
+      notificationIdFor('task:$taskId');
+  int _taskDeadlineId(String taskId) =>
+      notificationIdFor('task-deadline:$taskId');
+
+  /// A date-only deadline means the end of that calendar day. A date with an
+  /// explicit time uses that exact local time.
+  DateTime? taskDeadlineAlertTime(Task task) {
+    final DateTime? dueAt = task.dueAt;
+    if (dueAt == null) return null;
+    final bool hasExplicitTime = dueAt.hour != 0 || dueAt.minute != 0;
+    final DateTime deadline = hasExplicitTime
+        ? dueAt
+        : DateTime(dueAt.year, dueAt.month, dueAt.day + 1)
+            .subtract(const Duration(minutes: 1));
+    return deadline.subtract(const Duration(minutes: 30));
+  }
+
+  Future<void> scheduleTask(
+    Task task, {
+    bool requestPermissions = false,
+  }) =>
+      _runQueued('task:${task.id}', () => _scheduleTaskNow(
+            task,
+            requestPermissions: requestPermissions,
+          ));
+
+  Future<void> _scheduleTaskNow(
+    Task task, {
+    bool requestPermissions = false,
+  }) async {
     await initialise();
     try {
-      for (int i = 0; i < 21; i++) {
-        final DateTime day = DateTime.now().add(Duration(days: i));
-        await _plugin.cancel(_stableId('habit:$habitId:${day.year}-${day.month}-${day.day}'));
+      await _plugin.cancel(_taskReminderId(task.id));
+      await _plugin.cancel(_taskDeadlineId(task.id));
+      if (!_initialised || task.isCompleted || task.isPaused) {
+        _lastSchedulingIssue = null;
+        return;
+      }
+
+      final DateTime now = DateTime.now();
+      final DateTime? manualReminder = task.reminderAt;
+      final DateTime? deadlineReminder = taskDeadlineAlertTime(task);
+      final bool hasFutureReminder =
+          (manualReminder != null && manualReminder.isAfter(now)) ||
+          (deadlineReminder != null && deadlineReminder.isAfter(now));
+      if (!hasFutureReminder) {
+        _lastSchedulingIssue = null;
+        return;
+      }
+      if (!await _canSchedule(requestPermissions: requestPermissions)) return;
+
+      final bool manualMatchesDeadlineAlert =
+          manualReminder != null &&
+          deadlineReminder != null &&
+          manualReminder.year == deadlineReminder.year &&
+          manualReminder.month == deadlineReminder.month &&
+          manualReminder.day == deadlineReminder.day &&
+          manualReminder.hour == deadlineReminder.hour &&
+          manualReminder.minute == deadlineReminder.minute;
+      if (manualReminder != null &&
+          manualReminder.isAfter(now) &&
+          !manualMatchesDeadlineAlert) {
+        await _plugin.zonedSchedule(
+          _taskReminderId(task.id),
+          task.title,
+          task.description.isEmpty ? 'Task reminder' : task.description,
+          tz.TZDateTime.from(manualReminder, tz.local),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'tickoff_task_reminders',
+              'Task reminders',
+              channelDescription: 'Reminders for your tasks',
+              importance: Importance.high,
+              priority: Priority.high,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+      }
+
+      if (deadlineReminder != null && deadlineReminder.isAfter(now)) {
+        final List<AndroidNotificationAction> actions = <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            actionMarkTaskCompleted,
+            'Mark as Completed',
+            // Use the main app state/repository for every task so subtasks,
+            // repeating-task creation, task history, and visible UI stay in sync.
+            showsUserInterface: true,
+            cancelNotification: true,
+          ),
+          const AndroidNotificationAction(
+            actionPostponeTask,
+            'Postpone',
+            showsUserInterface: true,
+            // Keep the alert available if the user opens the editor and backs
+            // out without saving a new deadline. Saving re-schedules it.
+            cancelNotification: false,
+          ),
+        ];
+        await _plugin.zonedSchedule(
+          _taskDeadlineId(task.id),
+          'Task deadline approaching',
+          '${task.title} is due in 30 minutes.',
+          tz.TZDateTime.from(deadlineReminder, tz.local),
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              'tickoff_task_deadlines',
+              'Task deadline alerts',
+              channelDescription: 'Alerts 30 minutes before task deadlines',
+              importance: Importance.max,
+              priority: Priority.max,
+              category: AndroidNotificationCategory.reminder,
+              actions: actions,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          payload: 'task-deadline|${task.id}',
+        );
+      }
+      _lastSchedulingIssue = null;
+    } catch (error) {
+      _lastSchedulingIssue =
+          'Could not schedule reminders for "${task.title}": $error';
+      debugPrint(_lastSchedulingIssue);
+    }
+  }
+
+  Future<void> cancelTask(String taskId) =>
+      _runQueued('task:$taskId', () => _cancelTaskNow(taskId));
+
+  Future<void> _cancelTaskNow(String taskId) async {
+    await initialise();
+    try {
+      await _plugin.cancel(_taskReminderId(taskId));
+      await _plugin.cancel(_taskDeadlineId(taskId));
+    } catch (error) {
+      debugPrint('Could not cancel task reminders: $error');
+    }
+  }
+
+  int _habitWeekdayId(String habitId, int weekday) =>
+      notificationIdFor('habit:$habitId:weekday:$weekday');
+
+  Future<void> cancelHabit(String habitId) =>
+      _runQueued('habit:$habitId', () => _cancelHabitNow(habitId));
+
+  Future<void> _cancelHabitNow(String habitId) async {
+    await initialise();
+    try {
+      for (int weekday = DateTime.monday;
+          weekday <= DateTime.sunday;
+          weekday++) {
+        await _plugin.cancel(_habitWeekdayId(habitId, weekday));
+      }
+      if (_legacyHabitIdsCleaned.add(habitId)) {
+        final DateTime now = DateTime.now();
+        for (int offset = -1; offset <= 21; offset++) {
+          final DateTime day = now.add(Duration(days: offset));
+          final String legacyKey =
+              'habit:$habitId:${day.year}-${day.month}-${day.day}';
+          await _plugin.cancel(notificationIdFor(legacyKey));
+        }
       }
     } catch (error) {
       debugPrint('Could not cancel habit reminder: $error');
     }
   }
 
-  Future<void> scheduleHabit(Habit habit) async {
+  DateTime _nextWeekdayTime({
+    required DateTime now,
+    required int weekday,
+    required int hour,
+    required int minute,
+    required bool skipToday,
+  }) {
+    DateTime candidate = DateTime(now.year, now.month, now.day, hour, minute);
+    while (candidate.weekday != weekday ||
+        !candidate.isAfter(now) ||
+        (skipToday &&
+            candidate.year == now.year &&
+            candidate.month == now.month &&
+            candidate.day == now.day)) {
+      candidate = candidate.add(const Duration(days: 1));
+    }
+    return candidate;
+  }
+
+  Future<void> scheduleHabit(
+    Habit habit, {
+    bool requestPermissions = false,
+    bool skipToday = false,
+  }) =>
+      _runQueued('habit:${habit.id}', () => _scheduleHabitNow(
+            habit,
+            requestPermissions: requestPermissions,
+            skipToday: skipToday,
+          ));
+
+  Future<void> _scheduleHabitNow(
+    Habit habit, {
+    bool requestPermissions = false,
+    bool skipToday = false,
+  }) async {
     await initialise();
     final Reminder reminder = habit.reminder;
     try {
-      for (int i = 0; i < 21; i++) {
-        final DateTime day = DateTime.now().add(Duration(days: i));
-        await _plugin.cancel(_stableId('habit:${habit.id}:${day.year}-${day.month}-${day.day}'));
+      await _cancelHabitNow(habit.id);
+      if (!_initialised ||
+          !reminder.enabled ||
+          habit.isArchived ||
+          habit.type != HabitType.build ||
+          reminder.weekdays.isEmpty) {
+        _lastSchedulingIssue = null;
+        return;
       }
-      if (!_initialised || !reminder.enabled || habit.isArchived) return;
+      if (!await _canSchedule(requestPermissions: requestPermissions)) return;
+
       final DateTime now = DateTime.now();
-      for (int i = 0; i < 21; i++) {
-        final DateTime day = DateTime(now.year, now.month, now.day + i, reminder.hour, reminder.minute);
-        if (!reminder.weekdays.contains(day.weekday) || !day.isAfter(now)) continue;
-        final int id = _stableId('habit:${habit.id}:${day.year}-${day.month}-${day.day}');
+      for (final int weekday in reminder.weekdays.toList()..sort()) {
+        if (weekday < DateTime.monday || weekday > DateTime.sunday) continue;
+        final DateTime firstOccurrence = _nextWeekdayTime(
+          now: now,
+          weekday: weekday,
+          hour: reminder.hour,
+          minute: reminder.minute,
+          skipToday: skipToday,
+        );
         await _plugin.zonedSchedule(
-          id,
+          _habitWeekdayId(habit.id, weekday),
           habit.title,
           'Time for your habit',
-          tz.TZDateTime.from(day, tz.local),
-          const NotificationDetails(android: AndroidNotificationDetails(
-            'tickoff_habit_reminders', 'Habit reminders',
-            channelDescription: 'Reminders for your TickOff habits',
-            importance: Importance.defaultImportance, priority: Priority.defaultPriority,
-          )),
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          tz.TZDateTime.from(firstOccurrence, tz.local),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'tickoff_habit_reminders',
+              'Habit reminders',
+              channelDescription: 'Reminders for your build habits',
+              importance: Importance.defaultImportance,
+              priority: Priority.defaultPriority,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
         );
       }
+      _lastSchedulingIssue = null;
     } catch (error) {
-      debugPrint('Could not schedule habit reminder ${habit.id}: $error');
+      _lastSchedulingIssue =
+          'Could not schedule reminders for "${habit.title}": $error';
+      debugPrint(_lastSchedulingIssue);
     }
   }
 }
