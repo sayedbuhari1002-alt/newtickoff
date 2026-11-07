@@ -6,6 +6,7 @@ import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../domain/models/models.dart';
 import '../../state/app_data.dart';
+import '../../state/app_state.dart';
 import '../../shared/widgets/empty_state.dart';
 
 class NoteLibraryScreen extends ConsumerStatefulWidget {

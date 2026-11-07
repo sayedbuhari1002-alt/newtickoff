@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../state/app_settings.dart';
 import '../../data/services/home_screen_widget_service.dart';
+import '../../state/app_data.dart';
 import '../../state/app_state.dart';
 
 /// Controls which overview cards appear on the in-app Dashboard.
