@@ -130,14 +130,13 @@ jobs:
             -keystore "$ANDROID_KEYSTORE_PATH" \
             -storepass "$ANDROID_KEYSTORE_PASSWORD" \
             -alias "$ANDROID_KEY_ALIAS" | sha256sum | awk '{print tolower($1)}')"
-          # Newer Android Build Tools can label signers by SDK range, for example:
-          # "Signer (minSdkVersion=24, maxSdkVersion=...) certificate SHA-256 digest: ..."
-          # Older versions use "Signer #1 certificate SHA-256 digest: ...".
-          # Accept both formats and capture stderr too, so diagnostic output is retained.
+          # apksigner output varies by Build Tools version. The signer label may be
+          # "Signer #1", "Signer (minSdkVersion=...)" or "V2 Signer:".
+          # Match the stable certificate-digest field rather than the label.
           CERT_OUTPUT="$("$APKSIGNER" verify --print-certs "$APK_PATH" 2>&1)"
           printf '%s\n' "$CERT_OUTPUT"
           ACTUAL="$(printf '%s\n' "$CERT_OUTPUT" \
-            | sed -nE 's/.*Signer .* certificate SHA-256 digest: ([0-9a-fA-F:]+).*/\1/p' \
+            | sed -nE 's/.*certificate SHA-256 digest: ([0-9a-fA-F:]+).*/\1/p' \
             | tr -d ':' | tr '[:upper:]' '[:lower:]' | sort -u)"
 
 
