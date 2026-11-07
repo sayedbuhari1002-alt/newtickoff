@@ -76,7 +76,7 @@ Task makeStoredTask({String id = 'task-1'}) => Task(
       photoPaths: const <String>['/app/attachments/photo.jpg'],
       audioPaths: const <String>['/app/attachments/audio.m4a'],
       subtasks: <Subtask>[
-        Subtask(id: 'step-1', title: 'Gather notes', createdAt: DateTime(2026, 10, 27), dueAt: DateTime(2026, 11, 2, 11), sortOrder: 0),
+        Subtask(id: 'step-1', title: 'Gather notes', createdAt: DateTime(2026, 10, 27), dueAt: DateTime(2026, 11, 2, 11), reminderAt: DateTime(2026, 11, 1, 18), sortOrder: 0),
       ],
       createdAt: DateTime(2026, 10, 27, 8),
       updatedAt: DateTime(2026, 10, 27, 8),
@@ -114,6 +114,7 @@ void main() {
     expect(loaded.audioPaths, task.audioPaths);
     expect(loaded.subtasks.single.id, 'step-1');
     expect(loaded.subtasks.single.dueAt, DateTime(2026, 11, 2, 11));
+    expect(loaded.subtasks.single.reminderAt, DateTime(2026, 11, 1, 18));
 
     await repo.upsertTask(loaded.copyWith(title: 'Final report'));
     expect(await countRows(db, 'tasks'), 1);
@@ -130,6 +131,8 @@ void main() {
       photoPaths: const <String>['/app/attachments/photo.jpg'],
       audioPaths: const <String>['/app/attachments/audio.m4a'],
       videoPaths: const <String>['/app/attachments/video.mp4'],
+      noteType: NoteType.monthly,
+      periodDate: DateTime(2026, 11, 1),
       createdAt: created,
       updatedAt: created,
     );
@@ -138,6 +141,8 @@ void main() {
     final Note loaded = (await repo.loadNotes()).single;
     expect(loaded, note);
     expect(loaded.videoPaths, note.videoPaths);
+    expect(loaded.noteType, NoteType.monthly);
+    expect(loaded.periodDate, DateTime(2026, 11, 1));
 
     await repo.upsertNote(loaded.copyWith(body: 'Updated note'));
     expect((await repo.loadNotes()).single.videoPaths, note.videoPaths);
@@ -164,8 +169,10 @@ void main() {
 
   test('schema is created at the current version', () async {
     expect(await db.getVersion(), AppDatabase.version);
+    final List<Map<String, Object?>> subtaskColumns = await db.rawQuery('PRAGMA table_info(subtasks)');
+    expect(subtaskColumns.map((Map<String, Object?> column) => column['name']), contains('reminder_at'));
     final List<Map<String, Object?>> noteColumns = await db.rawQuery('PRAGMA table_info(notes)');
-    expect(noteColumns.map((Map<String, Object?> column) => column['name']), contains('video_json'));
+    expect(noteColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['video_json', 'note_type', 'period_date']));
     final List<Map<String, Object?>> tables = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
     );

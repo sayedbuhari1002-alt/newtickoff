@@ -61,7 +61,7 @@ class ArchiveScreen extends ConsumerWidget {
                                 ),
                                 IconButton(
                                   tooltip: 'Delete',
-                                  icon: const Icon(
+                                  icon: Icon(
                                     Icons.delete_outline_rounded,
                                     color: AppColors.danger,
                                   ),

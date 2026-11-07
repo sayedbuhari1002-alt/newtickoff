@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+enum NoteType { daily, general, monthly, yearly }
+
 /// A note, optionally linked to a habit, with local photo, audio and video
 /// attachment paths stored in the app's private documents directory.
 @immutable
@@ -10,6 +12,8 @@ class Note {
     required this.updatedAt,
     this.habitId,
     this.logDate,
+    this.noteType = NoteType.daily,
+    this.periodDate,
     this.title = '',
     this.body = '',
     this.photoPaths = const <String>[],
@@ -22,6 +26,9 @@ class Note {
 
   /// Calendar date for a daily journal entry. Habit notes may leave this null.
   final DateTime? logDate;
+  final NoteType noteType;
+  /// First day of a selected month or year for period-based notes.
+  final DateTime? periodDate;
   final String title;
   final String body;
   final DateTime createdAt;
@@ -43,6 +50,9 @@ class Note {
     bool clearHabit = false,
     DateTime? logDate,
     bool clearLogDate = false,
+    NoteType? noteType,
+    DateTime? periodDate,
+    bool clearPeriodDate = false,
     String? title,
     String? body,
     DateTime? updatedAt,
@@ -58,6 +68,8 @@ class Note {
           : (logDate == null
               ? this.logDate
               : DateTime(logDate.year, logDate.month, logDate.day)),
+      noteType: noteType ?? this.noteType,
+      periodDate: clearPeriodDate ? null : (periodDate == null ? this.periodDate : DateTime(periodDate.year, periodDate.month, periodDate.day)),
       title: title ?? this.title,
       body: body ?? this.body,
       createdAt: createdAt,
@@ -72,6 +84,8 @@ class Note {
         'id': id,
         'habitId': habitId,
         'logDate': logDate?.toIso8601String(),
+        'noteType': noteType.name,
+        'periodDate': periodDate?.toIso8601String(),
         'title': title,
         'body': body,
         'createdAt': createdAt.toIso8601String(),
@@ -87,10 +101,14 @@ class Note {
     final DateTime epoch = DateTime.fromMillisecondsSinceEpoch(0);
     final DateTime created =
         DateTime.tryParse((json['createdAt'] as String?) ?? '') ?? epoch;
+    final NoteType type = NoteType.values.where((NoteType item) => item.name == json['noteType']).firstOrNull ??
+        (json['logDate'] == null ? NoteType.general : NoteType.daily);
     return Note(
       id: json['id'] as String,
       habitId: json['habitId'] as String?,
       logDate: DateTime.tryParse((json['logDate'] as String?) ?? ''),
+      noteType: type,
+      periodDate: DateTime.tryParse((json['periodDate'] as String?) ?? ''),
       title: (json['title'] as String?) ?? '',
       body: (json['body'] as String?) ?? '',
       createdAt: created,
@@ -108,6 +126,8 @@ class Note {
       other.id == id &&
       other.habitId == habitId &&
       other.logDate == logDate &&
+      other.noteType == noteType &&
+      other.periodDate == periodDate &&
       other.title == title &&
       other.body == body &&
       other.createdAt == createdAt &&
@@ -121,6 +141,8 @@ class Note {
         id,
         habitId,
         logDate,
+        noteType,
+        periodDate,
         title,
         body,
         createdAt,
@@ -129,4 +151,8 @@ class Note {
         Object.hashAll(audioPaths),
         Object.hashAll(videoPaths),
       );
+}
+
+extension _NoteFirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

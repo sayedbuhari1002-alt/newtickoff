@@ -42,10 +42,10 @@ class TickTextField extends StatelessWidget {
       keyboardType: keyboardType,
       textInputAction: textInputAction,
       cursorColor: AppColors.cyan,
-      style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
+      style: TextStyle(fontSize: 16, color: AppColors.textPrimary),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: const TextStyle(
+        hintStyle: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
           color: AppColors.textHint,

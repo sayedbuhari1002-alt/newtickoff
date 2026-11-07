@@ -38,7 +38,7 @@ Future<T?> showTickSheet<T>({
               const SizedBox(height: AppDimens.gap),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary,
@@ -61,14 +61,14 @@ class SheetOptionTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.color = AppColors.textPrimary,
+    this.color,
     this.iconColor,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final Color color;
+  final Color? color;
   final Color? iconColor;
 
   @override
@@ -98,7 +98,7 @@ class SheetOptionTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: color,
+                      color: color ?? AppColors.textPrimary,
                     ),
                   ),
                 ),

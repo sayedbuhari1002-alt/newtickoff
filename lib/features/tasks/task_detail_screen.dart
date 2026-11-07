@@ -82,7 +82,7 @@ class TaskDetailScreen extends ConsumerWidget {
                   const PopupMenuItem(value: 'postpone_week', child: ListTile(leading: Icon(Icons.date_range_rounded), title: Text('Postpone 1 week'), contentPadding: EdgeInsets.zero)),
                   const PopupMenuItem(value: 'duplicate', child: ListTile(leading: Icon(Icons.copy_rounded), title: Text('Duplicate'), contentPadding: EdgeInsets.zero)),
                   const PopupMenuDivider(),
-                  const PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline_rounded, color: AppColors.danger), title: Text('Delete'), contentPadding: EdgeInsets.zero)),
+                  PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline_rounded, color: AppColors.danger), title: Text('Delete'), contentPadding: EdgeInsets.zero)),
                 ],
               ),
             ],
@@ -94,7 +94,7 @@ class TaskDetailScreen extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(child: Text(task.title, style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, decoration: task.isCompleted ? TextDecoration.lineThrough : null))),
               ]),
-              if (task.description.trim().isNotEmpty) ...<Widget>[const SizedBox(height: 12), Text(task.description, style: const TextStyle(color: AppColors.textSecondary, height: 1.4))],
+              if (task.description.trim().isNotEmpty) ...<Widget>[const SizedBox(height: 12), Text(task.description, style: TextStyle(color: AppColors.textSecondary, height: 1.4))],
               const SizedBox(height: 15),
               Wrap(spacing: 8, runSpacing: 8, children: <Widget>[
                 _StatusPill(label: task.isCompleted ? 'Completed' : task.isPaused ? 'Paused' : overdue ? 'Overdue' : 'Incomplete', color: task.isCompleted ? const Color(0xFF81C784) : task.isPaused ? AppColors.textSecondary : overdue ? AppColors.danger : accent),
@@ -115,7 +115,7 @@ class TaskDetailScreen extends ConsumerWidget {
             ]),
             if (task.subtasks.isNotEmpty) ...<Widget>[
               const SizedBox(height: 26),
-              Row(children: <Widget>[const Expanded(child: Text('Subtasks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))), Text('${task.completedSubtasks}/${task.subtasks.length}', style: const TextStyle(color: AppColors.textSecondary))]),
+              Row(children: <Widget>[const Expanded(child: Text('Subtasks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))), Text('${task.completedSubtasks}/${task.subtasks.length}', style: TextStyle(color: AppColors.textSecondary))]),
               const SizedBox(height: 10),
               ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: task.subtaskProgress, minHeight: 5, color: accent, backgroundColor: AppColors.border)),
               const SizedBox(height: 6),
@@ -140,7 +140,7 @@ class TaskDetailScreen extends ConsumerWidget {
             const SizedBox(height: 26),
             const Text('Activity History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            if (history.isEmpty) const Text('Activity is recorded as you create and update this task.', style: TextStyle(color: AppColors.textSecondary)),
+            if (history.isEmpty) Text('Activity is recorded as you create and update this task.', style: TextStyle(color: AppColors.textSecondary)),
             for (final TaskActivity event in history.take(20))
               ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: Icon(_eventIcon(event.eventType), color: AppColors.textSecondary, size: 19), title: Text(_eventLabel(event.eventType)), subtitle: Text('${event.occurredAt.day}/${event.occurredAt.month}/${event.occurredAt.year} · ${TimeOfDay.fromDateTime(event.occurredAt).format(context)}')),
           ])),
@@ -155,7 +155,7 @@ class _DetailRow extends StatelessWidget {
   const _DetailRow({required this.icon, required this.title, required this.value});
   final IconData icon; final String title; final String value;
   @override
-  Widget build(BuildContext context) => ListTile(contentPadding: EdgeInsets.zero, leading: Icon(icon, color: AppColors.textSecondary), title: Text(title, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)), subtitle: Text(value, style: const TextStyle(fontSize: 15, color: AppColors.textPrimary)));
+  Widget build(BuildContext context) => ListTile(contentPadding: EdgeInsets.zero, leading: Icon(icon, color: AppColors.textSecondary), title: Text(title, style: TextStyle(fontSize: 12, color: AppColors.textSecondary)), subtitle: Text(value, style: TextStyle(fontSize: 15, color: AppColors.textPrimary)));
 }
 
 class _StatusPill extends StatelessWidget {
@@ -207,7 +207,7 @@ class _PhotoAttachmentTile extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(path.split(Platform.pathSeparator).last, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        Text(path.split(Platform.pathSeparator).last, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
       ]),
     );
   }

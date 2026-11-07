@@ -69,6 +69,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                       ),
                     ),
                     if (_mode == _NotesMode.daily) ...<Widget>[
+                      IconButton(tooltip: 'Notes Library', icon: const Icon(Icons.library_books_outlined), onPressed: () => context.push(AppRoutes.noteLibrary)),
                       IconButton(
                         tooltip: 'Add daily note',
                         icon: const Icon(Icons.note_add_outlined),
@@ -140,14 +141,14 @@ class _DailyOverviewContent extends StatelessWidget {
           child: Column(
             children: <Widget>[
               if (notes.isEmpty)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Text('No notes recorded for this date.', style: TextStyle(color: AppColors.textSecondary)),
                 )
               else
                 for (int i = 0; i < notes.length; i++) ...<Widget>[
                   _NoteTile(note: notes[i]),
-                  if (i != notes.length - 1) const Divider(height: 18, color: AppColors.divider),
+                  if (i != notes.length - 1) Divider(height: 18, color: AppColors.divider),
                 ],
               const SizedBox(height: 6),
               SizedBox(
@@ -169,7 +170,7 @@ class _DailyOverviewContent extends StatelessWidget {
               children: <Widget>[
                 for (int i = 0; i < habitNotes.length; i++) ...<Widget>[
                   _NoteTile(note: habitNotes[i], habit: data.habitById(habitNotes[i].habitId ?? '')),
-                  if (i != habitNotes.length - 1) const Divider(height: 18, color: AppColors.divider),
+                  if (i != habitNotes.length - 1) Divider(height: 18, color: AppColors.divider),
                 ],
               ],
             ),
@@ -182,20 +183,20 @@ class _DailyOverviewContent extends StatelessWidget {
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  const Expanded(child: Text('Total Expenses', style: TextStyle(color: AppColors.textSecondary))),
-                  Text(_money(total), style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: AppColors.gold)),
+                  Expanded(child: Text('Total Expenses', style: TextStyle(color: AppColors.textSecondary))),
+                  Text(_money(total), style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: AppColors.gold)),
                 ],
               ),
               const SizedBox(height: 8),
               if (expenses.isEmpty)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Text('No expenses recorded. This date\'s total is ₹0.', style: TextStyle(color: AppColors.textSecondary)),
                 )
               else
                 for (int i = 0; i < expenses.length; i++) ...<Widget>[
                   _ExpenseTile(expense: expenses[i], category: data.expenseCategoryById(expenses[i].categoryId)),
-                  if (i != expenses.length - 1) const Divider(height: 18, color: AppColors.divider),
+                  if (i != expenses.length - 1) Divider(height: 18, color: AppColors.divider),
                 ],
               const SizedBox(height: 6),
               SizedBox(
@@ -267,11 +268,11 @@ class _ExpenseAnalyticsContent extends StatelessWidget {
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(color: AppColors.goldDim, borderRadius: BorderRadius.circular(AppDimens.radiusLg)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-            const Text('Total Expenses', style: TextStyle(color: AppColors.textSecondary)),
+            Text('Total Expenses', style: TextStyle(color: AppColors.textSecondary)),
             const SizedBox(height: 6),
-            Text(_money(total), style: const TextStyle(fontSize: 29, fontWeight: FontWeight.w800, color: AppColors.gold)),
+            Text(_money(total), style: TextStyle(fontSize: 29, fontWeight: FontWeight.w800, color: AppColors.gold)),
             const SizedBox(height: 4),
-            Text('$transactions transactions · ${_money(average.round())} $averageLabel', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            Text('$transactions transactions · ${_money(average.round())} $averageLabel', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           ]),
         ),
         const SizedBox(height: 12),
@@ -290,7 +291,7 @@ class _ExpenseAnalyticsContent extends StatelessWidget {
         SectionCard(
           title: 'Expense by Category',
           child: byCategory.isEmpty
-              ? const Padding(padding: EdgeInsets.symmetric(vertical: 18), child: Text('No expenses recorded for this month.', style: TextStyle(color: AppColors.textSecondary)))
+              ? Padding(padding: EdgeInsets.symmetric(vertical: 18), child: Text('No expenses recorded for this month.', style: TextStyle(color: AppColors.textSecondary)))
               : Column(children: <Widget>[
                   for (final MapEntry<String, int> entry in byCategory) ...<Widget>[
                     _CategoryBreakdownRow(
@@ -307,7 +308,7 @@ class _ExpenseAnalyticsContent extends StatelessWidget {
         SectionCard(
           title: 'Daily Spending',
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-            const Text('Every day in this reporting period is included. Days without expenses have a value of ₹0.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            Text('Every day in this reporting period is included. Days without expenses have a value of ₹0.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
             const SizedBox(height: 18),
             SizedBox(
               height: 142,
@@ -336,11 +337,11 @@ class _DateHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(children: <Widget>[
-    const Icon(Icons.event_note_rounded, color: AppColors.gold, size: 20),
+    Icon(Icons.event_note_rounded, color: AppColors.gold, size: 20),
     const SizedBox(width: 9),
     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
       Text('${weekdayShort(date)}, ${date.day} ${monthShort(date)} ${date.year}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-      Text(title, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      Text(title, style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
     ])),
   ]);
 }
@@ -359,40 +360,40 @@ class _NoteTile extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-          const Icon(Icons.sticky_note_2_outlined, color: AppColors.gold, size: 20),
+          Icon(Icons.sticky_note_2_outlined, color: AppColors.gold, size: 20),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
             Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
             if (note.body.trim().isNotEmpty) ...<Widget>[
               const SizedBox(height: 4),
-              Text(note.body.trim(), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              Text(note.body.trim(), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
             ],
             if (note.photoPaths.isNotEmpty || note.audioPaths.isNotEmpty || note.videoPaths.isNotEmpty) ...<Widget>[
               const SizedBox(height: 5),
               Row(children: <Widget>[
                 if (note.photoPaths.isNotEmpty) ...<Widget>[
-                  const Icon(Icons.image_outlined, size: 14, color: AppColors.textHint),
+                  Icon(Icons.image_outlined, size: 14, color: AppColors.textHint),
                   const SizedBox(width: 3),
-                  Text('${note.photoPaths.length}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                  Text('${note.photoPaths.length}', style: TextStyle(fontSize: 11, color: AppColors.textHint)),
                   const SizedBox(width: 9),
                 ],
                 if (note.audioPaths.isNotEmpty) ...<Widget>[
-                  const Icon(Icons.mic_none_rounded, size: 14, color: AppColors.textHint),
+                  Icon(Icons.mic_none_rounded, size: 14, color: AppColors.textHint),
                   const SizedBox(width: 3),
-                  Text('${note.audioPaths.length}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                  Text('${note.audioPaths.length}', style: TextStyle(fontSize: 11, color: AppColors.textHint)),
                   const SizedBox(width: 9),
                 ],
                 if (note.videoPaths.isNotEmpty) ...<Widget>[
-                  const Icon(Icons.videocam_outlined, size: 14, color: AppColors.textHint),
+                  Icon(Icons.videocam_outlined, size: 14, color: AppColors.textHint),
                   const SizedBox(width: 3),
-                  Text('${note.videoPaths.length}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                  Text('${note.videoPaths.length}', style: TextStyle(fontSize: 11, color: AppColors.textHint)),
                 ],
-                const Text('attachments', style: TextStyle(fontSize: 11, color: AppColors.textHint)),
+                Text('attachments', style: TextStyle(fontSize: 11, color: AppColors.textHint)),
               ]),
             ],
-            if (habit != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text('Habit · ${habit!.title}', style: const TextStyle(fontSize: 11, color: AppColors.textHint))),
+            if (habit != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text('Habit · ${habit!.title}', style: TextStyle(fontSize: 11, color: AppColors.textHint))),
           ])),
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
+          Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
         ]),
       ),
     );
@@ -415,12 +416,12 @@ class _ExpenseTile extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
           Text(expense.description.trim().isEmpty ? (category?.name ?? 'Expense') : expense.description.trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-          Text('${category?.name ?? 'Uncategorised'}${expense.paymentMethod.isEmpty ? '' : ' · ${expense.paymentMethod}'}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text('${category?.name ?? 'Uncategorised'}${expense.paymentMethod.isEmpty ? '' : ' · ${expense.paymentMethod}'}', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         ])),
         const SizedBox(width: 8),
-        Text(_money(expense.amountPaise), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold)),
+        Text(_money(expense.amountPaise), style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold)),
         const SizedBox(width: 6),
-        const Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),
+        Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),
       ]),
     ),
   );
@@ -441,10 +442,10 @@ class _MetricCard extends StatelessWidget {
       Icon(icon, color: AppColors.gold, size: 21),
       const SizedBox(width: 9),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        Text(label, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
         const SizedBox(height: 3),
         Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-        if (detail != null) Text(detail!, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+        if (detail != null) Text(detail!, style: TextStyle(fontSize: 10, color: AppColors.textHint)),
       ])),
     ]),
   );
@@ -459,11 +460,11 @@ class _CategoryBreakdownRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-    Row(children: <Widget>[Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))), Text(_money(amount), style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))]),
+    Row(children: <Widget>[Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))), Text(_money(amount), style: TextStyle(color: AppColors.textSecondary, fontSize: 13))]),
     const SizedBox(height: 7),
     ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(value: fraction.clamp(0.0, 1.0).toDouble(), minHeight: 7, color: color, backgroundColor: AppColors.border)),
     const SizedBox(height: 3),
-    Text('${(fraction * 100).round()}%', style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+    Text('${(fraction * 100).round()}%', style: TextStyle(fontSize: 10, color: AppColors.textHint)),
   ]);
 }
 
@@ -482,7 +483,7 @@ class _DailyBar extends StatelessWidget {
         const Spacer(),
         Container(height: barHeight, width: 11, decoration: BoxDecoration(color: amount == 0 ? AppColors.border : AppColors.gold, borderRadius: const BorderRadius.vertical(top: Radius.circular(4)))),
         const SizedBox(height: 6),
-        Text('$day', style: const TextStyle(fontSize: 9, color: AppColors.textHint)),
+        Text('$day', style: TextStyle(fontSize: 9, color: AppColors.textHint)),
       ]),
     );
   }

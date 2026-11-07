@@ -79,6 +79,6 @@ class TrendChart extends StatelessWidget {
 
   Widget _label(String text) => Text(
         text,
-        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
       );
 }

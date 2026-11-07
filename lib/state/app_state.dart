@@ -174,7 +174,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     // delay form navigation after the repository and app state are updated.
     unawaited(_scheduleHabitInBackground(
       habit,
-      requestPermissions: habit.reminder.enabled,
+      requestPermissions: habit.reminder.enabled || (habit.tracking == TrackingMethod.checklist && habit.checklist.any((ChecklistItem item) => item.reminder.enabled)),
       skipToday: skipToday,
     ));
   }
@@ -279,7 +279,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     final CompletionRecord? currentDayRecord = forHabit[dateKey(today)];
     final bool completedToday = habit.type == HabitType.build &&
         HabitEngine(today: today).isCompleted(habit, currentDayRecord);
-    if (habit.type == HabitType.build) {
+    if (habit.type == HabitType.build || habit.tracking == TrackingMethod.checklist) {
       // Completion state is already persisted and published. Rescheduling the
       // platform alarm is follow-up work and must not block the interaction.
       unawaited(_scheduleHabitInBackground(
@@ -431,7 +431,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       updatedAt: now,
     );
     await _repo.upsertTask(saved);
-    await TaskReminderService.instance.scheduleTask(saved, requestPermissions: (saved.reminderAt != null || saved.dueAt != null) && !saved.isCompleted && !saved.isPaused);
+    await TaskReminderService.instance.scheduleTask(saved, requestPermissions: (saved.reminderAt != null || saved.dueAt != null || saved.subtasks.any((Subtask item) => item.reminderAt != null)) && !saved.isCompleted && !saved.isPaused);
     final List<Task> tasks = List<Task>.of(data.tasks);
     final int at = tasks.indexWhere((Task t) => t.id == saved.id);
     if (at >= 0) {
@@ -471,7 +471,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         }
       } else if (previous.isCompleted != subtask.isCompleted) {
         await _recordTaskActivity(saved, subtask.isCompleted ? 'subtask_completed' : 'subtask_reopened', entityId: subtask.id, entityType: 'subtask', subtask: subtask, occurredAt: subtask.completedAt ?? now);
-      } else if (previous.title != subtask.title || previous.dueAt != subtask.dueAt || previous.sortOrder != subtask.sortOrder) {
+      } else if (previous.title != subtask.title || previous.dueAt != subtask.dueAt || previous.reminderAt != subtask.reminderAt || previous.sortOrder != subtask.sortOrder) {
         await _recordTaskActivity(saved, 'subtask_updated', entityId: subtask.id, entityType: 'subtask', subtask: subtask, occurredAt: now);
       }
     }
@@ -527,7 +527,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     }
     final DateTime now = DateTime.now();
     final List<Subtask> children = completed.subtasks.map((Subtask s) => Subtask(
-      id: newId(), title: s.title, createdAt: now, dueAt: shift(s.dueAt), sortOrder: s.sortOrder,
+      id: newId(), title: s.title, createdAt: now, dueAt: shift(s.dueAt), reminderAt: shift(s.reminderAt), sortOrder: s.sortOrder,
     )).toList();
     final Task next = Task(
       id: newId(), title: completed.title, description: completed.description,
@@ -588,7 +588,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       colorValue: original.colorValue, repeat: original.repeat, notes: original.notes,
       photoPaths: original.photoPaths, audioPaths: original.audioPaths,
       subtasks: original.subtasks.map((Subtask s) => Subtask(
-        id: newId(), title: s.title, createdAt: now, dueAt: s.dueAt, sortOrder: s.sortOrder,
+        id: newId(), title: s.title, createdAt: now, dueAt: s.dueAt, reminderAt: s.reminderAt, sortOrder: s.sortOrder,
       )).toList(),
       createdAt: now, updatedAt: now,
     );

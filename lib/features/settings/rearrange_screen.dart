@@ -66,7 +66,7 @@ class _RearrangeScreenState extends ConsumerState<RearrangeScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(18, 4, 18, 14),
             child: Text(
               'Drag sections into the order you prefer. The Dashboard will use this order.',
@@ -94,8 +94,8 @@ class _RearrangeScreenState extends ConsumerState<RearrangeScreen> {
                   child: ListTile(
                     leading: Icon(_icons[id], color: AppColors.textSecondary),
                     title: Text(dashboardSectionLabels[id]!, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text('Position ${index + 1}', style: const TextStyle(color: AppColors.textHint, fontSize: 12)),
-                    trailing: const Icon(Icons.drag_handle_rounded, color: AppColors.textSecondary),
+                    subtitle: Text('Position ${index + 1}', style: TextStyle(color: AppColors.textHint, fontSize: 12)),
+                    trailing: Icon(Icons.drag_handle_rounded, color: AppColors.textSecondary),
                   ),
                 );
               },

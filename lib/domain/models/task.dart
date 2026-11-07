@@ -12,6 +12,7 @@ class Subtask {
     required this.title,
     required this.createdAt,
     this.dueAt,
+    this.reminderAt,
     this.isCompleted = false,
     this.completedAt,
     this.sortOrder = 0,
@@ -21,6 +22,7 @@ class Subtask {
   final String title;
   final DateTime createdAt;
   final DateTime? dueAt;
+  final DateTime? reminderAt;
   final bool isCompleted;
   final DateTime? completedAt;
   final int sortOrder;
@@ -29,6 +31,8 @@ class Subtask {
     String? title,
     DateTime? dueAt,
     bool clearDueAt = false,
+    DateTime? reminderAt,
+    bool clearReminderAt = false,
     bool? isCompleted,
     DateTime? completedAt,
     bool clearCompletedAt = false,
@@ -38,6 +42,7 @@ class Subtask {
         title: title ?? this.title,
         createdAt: createdAt,
         dueAt: clearDueAt ? null : (dueAt ?? this.dueAt),
+        reminderAt: clearReminderAt ? null : (reminderAt ?? this.reminderAt),
         isCompleted: isCompleted ?? this.isCompleted,
         completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
         sortOrder: sortOrder ?? this.sortOrder,
@@ -48,6 +53,7 @@ class Subtask {
         'title': title,
         'createdAt': createdAt.toIso8601String(),
         'dueAt': dueAt?.toIso8601String(),
+        'reminderAt': reminderAt?.toIso8601String(),
         'isCompleted': isCompleted,
         'completedAt': completedAt?.toIso8601String(),
         'sortOrder': sortOrder,
@@ -61,6 +67,7 @@ class Subtask {
       title: (json['title'] as String? ?? '').trim(),
       createdAt: created,
       dueAt: DateTime.tryParse('${json['dueAt'] ?? ''}'),
+      reminderAt: DateTime.tryParse('${json['reminderAt'] ?? ''}'),
       isCompleted: json['isCompleted'] == true,
       completedAt: DateTime.tryParse('${json['completedAt'] ?? ''}'),
       sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,

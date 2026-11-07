@@ -1,15 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/router/routes.dart';
 import 'data/services/task_reminder_service.dart';
+import 'data/services/home_screen_widget_service.dart';
 import 'domain/models/models.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'state/app_data.dart';
+import 'state/app_settings.dart';
 import 'state/app_state.dart';
 
 /// Root widget: dark theme + router.
@@ -94,12 +97,27 @@ class _TickOffAppState extends ConsumerState<TickOffApp>
 
   @override
   Widget build(BuildContext context) {
+    final AppData? data = ref.watch(appDataProvider).valueOrNull;
+    final String themeId = data?.settings[AppSettingKeys.theme] ?? AppColors.obsidian;
+    final ThemeData selectedTheme = AppTheme.forId(themeId);
+    ref.listen<AsyncValue<AppData>>(appDataProvider, (previous, next) {
+      final AppData? latest = next.valueOrNull;
+      if (latest != null) unawaited(HomeScreenWidgetService.update(latest));
+    });
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: AppColors.isLight ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: AppColors.background,
+      systemNavigationBarIconBrightness: AppColors.isLight ? Brightness.dark : Brightness.light,
+    ));
+    if (data != null) unawaited(HomeScreenWidgetService.update(data));
     return MaterialApp.router(
       title: 'Tazkiyane',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark(),
-      darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.dark,
+      // The user's selected palette is authoritative regardless of the
+      // Android system-wide light/dark preference. Building a second theme
+      // here would also change the global AppColors palette used by widgets.
+      theme: selectedTheme,
       routerConfig: ref.watch(appRouterProvider),
     );
   }
@@ -124,7 +142,7 @@ class StartupErrorApp extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                const Icon(
+                Icon(
                   Icons.error_outline_rounded,
                   size: 48,
                   color: AppColors.danger,
@@ -139,7 +157,7 @@ class StartupErrorApp extends StatelessWidget {
                 Text(
                   message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
               ],
             ),

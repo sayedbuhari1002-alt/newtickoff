@@ -21,7 +21,7 @@ Future<bool> showConfirmDialog(
         title: Text(title),
         content: Text(
           message,
-          style: const TextStyle(color: AppColors.textSecondary),
+          style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: <Widget>[
           TextButton(

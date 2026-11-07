@@ -71,10 +71,14 @@ class TaskReminderService {
   }
 
   static String? taskIdFromPayload(String? payload) {
-    const String prefix = 'task-deadline|';
-    if (payload == null || !payload.startsWith(prefix)) return null;
-    final String id = payload.substring(prefix.length).trim();
-    return id.isEmpty ? null : id;
+    if (payload == null) return null;
+    for (final String prefix in <String>['task-deadline|', 'task-subtask|']) {
+      if (payload.startsWith(prefix)) {
+        final String id = payload.substring(prefix.length).split('|').first.trim();
+        return id.isEmpty ? null : id;
+      }
+    }
+    return null;
   }
 
   Future<void> initialise() async {
@@ -273,6 +277,8 @@ class TaskReminderService {
       notificationIdFor('task:$taskId');
   int _taskDeadlineId(String taskId) =>
       notificationIdFor('task-deadline:$taskId');
+  int _subtaskReminderId(String taskId, String subtaskId) =>
+      notificationIdFor('task-subtask:$taskId:$subtaskId');
 
   /// A date-only deadline means the end of that calendar day. A date with an
   /// explicit time uses that exact local time.
@@ -304,6 +310,7 @@ class TaskReminderService {
     try {
       await _plugin.cancel(_taskReminderId(task.id));
       await _plugin.cancel(_taskDeadlineId(task.id));
+      await _cancelSubtaskRemindersForTask(task.id);
       if (!_initialised || task.isCompleted || task.isPaused) {
         _lastSchedulingIssue = null;
         return;
@@ -312,9 +319,12 @@ class TaskReminderService {
       final DateTime now = DateTime.now();
       final DateTime? manualReminder = task.reminderAt;
       final DateTime? deadlineReminder = taskDeadlineAlertTime(task);
+      final List<Subtask> futureSubtasks = task.subtasks.where((Subtask item) =>
+        !item.isCompleted && item.reminderAt != null && item.reminderAt!.isAfter(now)).toList();
       final bool hasFutureReminder =
           (manualReminder != null && manualReminder.isAfter(now)) ||
-          (deadlineReminder != null && deadlineReminder.isAfter(now));
+          (deadlineReminder != null && deadlineReminder.isAfter(now)) ||
+          futureSubtasks.isNotEmpty;
       if (!hasFutureReminder) {
         _lastSchedulingIssue = null;
         return;
@@ -393,6 +403,29 @@ class TaskReminderService {
           payload: 'task-deadline|${task.id}',
         );
       }
+      for (final Subtask subtask in futureSubtasks) {
+        final DateTime reminderAt = subtask.reminderAt!;
+        await _plugin.zonedSchedule(
+          _subtaskReminderId(task.id, subtask.id),
+          task.title,
+          subtask.title,
+          tz.TZDateTime.from(reminderAt, tz.local),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'tickoff_subtask_reminders',
+              'Subtask reminders',
+              channelDescription: 'Independent reminders for task subtasks',
+              importance: Importance.high,
+              priority: Priority.high,
+              category: AndroidNotificationCategory.reminder,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          payload: 'task-subtask|${task.id}|${subtask.id}',
+        );
+      }
       _lastSchedulingIssue = null;
     } catch (error) {
       _lastSchedulingIssue =
@@ -404,11 +437,22 @@ class TaskReminderService {
   Future<void> cancelTask(String taskId) =>
       _runQueued('task:$taskId', () => _cancelTaskNow(taskId));
 
+  Future<void> _cancelSubtaskRemindersForTask(String taskId) async {
+    final String prefix = 'task-subtask|$taskId|';
+    final List<PendingNotificationRequest> pending = await _plugin.pendingNotificationRequests();
+    for (final PendingNotificationRequest request in pending) {
+      if (request.payload?.startsWith(prefix) ?? false) {
+        await _plugin.cancel(request.id);
+      }
+    }
+  }
+
   Future<void> _cancelTaskNow(String taskId) async {
     await initialise();
     try {
       await _plugin.cancel(_taskReminderId(taskId));
       await _plugin.cancel(_taskDeadlineId(taskId));
+      await _cancelSubtaskRemindersForTask(taskId);
     } catch (error) {
       debugPrint('Could not cancel task reminders: $error');
     }
@@ -416,6 +460,8 @@ class TaskReminderService {
 
   int _habitWeekdayId(String habitId, int weekday) =>
       notificationIdFor('habit:$habitId:weekday:$weekday');
+  int _checklistReminderId(String habitId, String itemId, int weekday) =>
+      notificationIdFor('habit:$habitId:checklist:$itemId:weekday:$weekday');
 
   Future<void> cancelHabit(String habitId) =>
       _runQueued('habit:$habitId', () => _cancelHabitNow(habitId));
@@ -427,6 +473,13 @@ class TaskReminderService {
           weekday <= DateTime.sunday;
           weekday++) {
         await _plugin.cancel(_habitWeekdayId(habitId, weekday));
+      }
+      final String checklistPrefix = 'habit-checklist|$habitId|';
+      final List<PendingNotificationRequest> pending = await _plugin.pendingNotificationRequests();
+      for (final PendingNotificationRequest request in pending) {
+        if (request.payload?.startsWith(checklistPrefix) ?? false) {
+          await _plugin.cancel(request.id);
+        }
       }
       if (_legacyHabitIdsCleaned.add(habitId)) {
         final DateTime now = DateTime.now();
@@ -478,48 +531,72 @@ class TaskReminderService {
     bool skipToday = false,
   }) async {
     await initialise();
-    final Reminder reminder = habit.reminder;
     try {
       await _cancelHabitNow(habit.id);
-      if (!_initialised ||
-          !reminder.enabled ||
-          habit.isArchived ||
-          habit.type != HabitType.build ||
-          reminder.weekdays.isEmpty) {
+      if (!_initialised || habit.isArchived) {
+        _lastSchedulingIssue = null;
+        return;
+      }
+
+      final List<({String title, Reminder reminder, String? itemId})> reminders =
+          <({String title, Reminder reminder, String? itemId})>[];
+      if (habit.type == HabitType.build &&
+          habit.reminder.enabled &&
+          habit.reminder.weekdays.isNotEmpty) {
+        reminders.add((title: habit.title, reminder: habit.reminder, itemId: null));
+      }
+      if (habit.tracking == TrackingMethod.checklist) {
+        for (final ChecklistItem item in habit.checklist) {
+          if (item.reminder.enabled && item.reminder.weekdays.isNotEmpty) {
+            reminders.add((title: item.title, reminder: item.reminder, itemId: item.id));
+          }
+        }
+      }
+      if (reminders.isEmpty) {
         _lastSchedulingIssue = null;
         return;
       }
       if (!await _canSchedule(requestPermissions: requestPermissions)) return;
 
       final DateTime now = DateTime.now();
-      for (final int weekday in reminder.weekdays.toList()..sort()) {
-        if (weekday < DateTime.monday || weekday > DateTime.sunday) continue;
-        final DateTime firstOccurrence = _nextWeekdayTime(
-          now: now,
-          weekday: weekday,
-          hour: reminder.hour,
-          minute: reminder.minute,
-          skipToday: skipToday,
-        );
-        await _plugin.zonedSchedule(
-          _habitWeekdayId(habit.id, weekday),
-          habit.title,
-          'Time for your habit',
-          tz.TZDateTime.from(firstOccurrence, tz.local),
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'tickoff_habit_reminders',
-              'Habit reminders',
-              channelDescription: 'Reminders for your build habits',
-              importance: Importance.defaultImportance,
-              priority: Priority.defaultPriority,
+      for (final entry in reminders) {
+        final List<int> weekdays = entry.reminder.weekdays.toList()..sort();
+        for (final int weekday in weekdays) {
+          if (weekday < DateTime.monday || weekday > DateTime.sunday) continue;
+          final DateTime firstOccurrence = _nextWeekdayTime(
+            now: now,
+            weekday: weekday,
+            hour: entry.reminder.hour,
+            minute: entry.reminder.minute,
+            skipToday: skipToday,
+          );
+          final bool checklistItem = entry.itemId != null;
+          final int id = checklistItem
+              ? _checklistReminderId(habit.id, entry.itemId!, weekday)
+              : _habitWeekdayId(habit.id, weekday);
+          await _plugin.zonedSchedule(
+            id,
+            habit.title,
+            checklistItem ? 'Checklist: ${entry.title}' : 'Time for your habit',
+            tz.TZDateTime.from(firstOccurrence, tz.local),
+            NotificationDetails(
+              android: AndroidNotificationDetails(
+                checklistItem ? 'tickoff_checklist_reminders' : 'tickoff_habit_reminders',
+                checklistItem ? 'Checklist reminders' : 'Habit reminders',
+                channelDescription: checklistItem
+                    ? 'Reminders for individual checklist items'
+                    : 'Reminders for your build habits',
+                importance: checklistItem ? Importance.high : Importance.defaultImportance,
+                priority: checklistItem ? Priority.high : Priority.defaultPriority,
+              ),
             ),
-          ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-        );
+            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+            matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+            payload: checklistItem ? 'habit-checklist|${habit.id}|${entry.itemId}' : 'habit|${habit.id}',
+          );
+        }
       }
       _lastSchedulingIssue = null;
     } catch (error) {
@@ -528,4 +605,5 @@ class TaskReminderService {
       debugPrint(_lastSchedulingIssue);
     }
   }
+
 }

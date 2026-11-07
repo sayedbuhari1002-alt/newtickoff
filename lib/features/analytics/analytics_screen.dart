@@ -57,7 +57,7 @@ class _ActualCountHistory extends StatelessWidget {
     return SectionCard(
       title: 'Actual Count History',
       child: values.isEmpty
-          ? const Text(
+          ? Text(
               'No count entries in this date range yet.',
               style: TextStyle(color: AppColors.textSecondary),
             )
@@ -81,7 +81,7 @@ class _ActualCountHistory extends StatelessWidget {
                             const SizedBox(height: 3),
                             Text(
                               dayMonthLabel(values[i].day),
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
                             ),
                           ],
                         ),
@@ -225,7 +225,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             title: TrendChart.caption(points),
             child: tally.hasData
                 ? TrendChart(points: points)
-                : const Text(
+                : Text(
                     'Nothing was due in this range yet. Complete a habit '
                     'and the chart will fill in.',
                     style: TextStyle(color: AppColors.textSecondary),
@@ -261,7 +261,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             SectionCard(
               padding: EdgeInsets.zero,
               child: ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.emoji_events_outlined,
                   color: AppColors.gold,
                 ),
@@ -365,7 +365,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           Expanded(child: Text(s.label)),
           Text(
             detail,
-            style: const TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: AppColors.textSecondary),
           ),
           SizedBox(
             width: 56,
@@ -392,7 +392,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           ),
           Text(
             '${s.currentStreak} / ${s.bestStreak} days',
-            style: const TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: AppColors.textSecondary),
           ),
         ],
       ),

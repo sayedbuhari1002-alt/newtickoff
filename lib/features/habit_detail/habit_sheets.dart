@@ -111,7 +111,7 @@ class _DailyCountHistory extends StatelessWidget {
         .toList()
       ..sort((MapEntry<String, CompletionRecord> a, MapEntry<String, CompletionRecord> b) => b.key.compareTo(a.key));
     if (entries.isEmpty) {
-      return const Text(
+      return Text(
         'No count entries recorded yet.',
         style: TextStyle(color: AppColors.textSecondary),
       );
@@ -127,7 +127,7 @@ class _DailyCountHistory extends StatelessWidget {
                   parseDateKey(entries[i].key) is DateTime
                       ? dayMonthLabel(parseDateKey(entries[i].key)!)
                       : entries[i].key,
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
               ),
               Text(
@@ -158,7 +158,7 @@ class _InfoRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 color: AppColors.textSecondary,
               ),
@@ -233,7 +233,7 @@ class AchievementsGrid extends StatelessWidget {
               ? 'All achievements unlocked!'
               : 'Best streak ${daysLabel(summary.bestStreak)} - next: ${daysLabel(next)}',
           textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.textSecondary),
+          style: TextStyle(color: AppColors.textSecondary),
         ),
         const SizedBox(height: 8),
         ClipRRect(
@@ -315,7 +315,7 @@ Future<void> showHistorySheet(BuildContext context, String habitId) {
             case HeatCell.clean:
               return DayDecoration(fill: habit.color, textColor: Colors.black);
             case HeatCell.slipped:
-              return const DayDecoration(
+              return DayDecoration(
                 fill: AppColors.danger,
                 textColor: Colors.white,
               );
@@ -347,7 +347,7 @@ Future<void> showHistorySheet(BuildContext context, String habitId) {
                 habit.type == HabitType.quit
                     ? 'Tap a day to mark or clear a slip.'
                     : 'Tap a day to change its completion.',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
                 ),

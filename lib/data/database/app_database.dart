@@ -9,13 +9,14 @@ import 'package:sqflite/sqflite.dart';
 /// * 3 - local key/value preferences for appearance and Dashboard layout.
 /// * 4 - date-based journal notes and local expense tracking.
 /// * 5 - local video attachments for journal notes.
+/// * 6 - note categories/periods and independent subtask reminder timestamps.
 ///
 /// To change the schema, bump [version], add a step to [_migrations] that
 /// upgrades from the previous version, and keep [_createV1] untouched.
 class AppDatabase {
   AppDatabase._();
 
-  static const int version = 5;
+  static const int version = 6;
   static const String fileName = 'tickoff.db';
 
   /// Opens (creating if needed) the database. Pass [path] to use another file
@@ -35,6 +36,7 @@ class AppDatabase {
         if (newVersion >= 3) await _migrateV3(db);
         if (newVersion >= 4) await _migrateV4(db);
         if (newVersion >= 5) await _migrateV5(db);
+        if (newVersion >= 6) await _migrateV6(db);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         for (int v = oldVersion; v < newVersion; v++) {
@@ -52,9 +54,40 @@ class AppDatabase {
         2: _migrateV3,
         3: _migrateV4,
         4: _migrateV5,
+        5: _migrateV6,
       };
 
 
+
+
+  static Future<void> _migrateV6(Database db) async {
+    final List<Map<String, Object?>> noteTables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'notes'",
+    );
+    if (noteTables.isNotEmpty) {
+      final List<Map<String, Object?>> columns = await db.rawQuery('PRAGMA table_info(notes)');
+      if (!columns.any((column) => column['name'] == 'note_type')) {
+        await db.execute("ALTER TABLE notes ADD COLUMN note_type TEXT NOT NULL DEFAULT 'daily'");
+      }
+      if (!columns.any((column) => column['name'] == 'period_date')) {
+        await db.execute('ALTER TABLE notes ADD COLUMN period_date TEXT');
+      }
+      // Old standalone notes were Daily Log entries after migration v4;
+      // habit notes remain linked and are intentionally excluded from Library.
+      await db.execute("UPDATE notes SET note_type = CASE WHEN log_date IS NULL THEN 'general' ELSE 'daily' END WHERE habit_id IS NULL");
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_notes_type_period ON notes(note_type, period_date)');
+    }
+    final List<Map<String, Object?>> subtaskTables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'subtasks'",
+    );
+    if (subtaskTables.isNotEmpty) {
+      final List<Map<String, Object?>> columns = await db.rawQuery('PRAGMA table_info(subtasks)');
+      if (!columns.any((column) => column['name'] == 'reminder_at')) {
+        await db.execute('ALTER TABLE subtasks ADD COLUMN reminder_at TEXT');
+      }
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_subtasks_reminder ON subtasks(reminder_at)');
+    }
+  }
 
   static Future<void> _migrateV5(Database db) async {
     // Preserve all existing journal and habit notes while adding the optional
@@ -185,6 +218,7 @@ class AppDatabase {
         title TEXT NOT NULL,
         created_at TEXT NOT NULL,
         due_at TEXT,
+        reminder_at TEXT,
         is_completed INTEGER NOT NULL DEFAULT 0,
         completed_at TEXT,
         sort_order INTEGER NOT NULL DEFAULT 0

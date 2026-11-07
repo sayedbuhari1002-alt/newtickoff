@@ -86,7 +86,7 @@ class HabitCard extends ConsumerWidget {
                           habit.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
                             color: AppColors.textPrimary,
@@ -97,7 +97,7 @@ class HabitCard extends ConsumerWidget {
                           subtitle.join('  ·  '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             color: AppColors.textSecondary,
                           ),
@@ -109,7 +109,7 @@ class HabitCard extends ConsumerWidget {
                     tooltip: 'Add note',
                     onTap: () =>
                         context.push(AppRoutes.noteNew(habitId: habit.id)),
-                    child: const Icon(
+                    child: Icon(
                       Icons.note_add_outlined,
                       size: 22,
                       color: AppColors.textPrimary,
@@ -120,7 +120,7 @@ class HabitCard extends ConsumerWidget {
                     _SquareButton(
                       tooltip: "Reset this day's count",
                       onTap: () => resetCountDay(context, ref, habit, date),
-                      child: const Icon(
+                      child: Icon(
                         Icons.restart_alt_rounded,
                         size: 21,
                         color: AppColors.textSecondary,
@@ -130,7 +130,7 @@ class HabitCard extends ConsumerWidget {
                     _SquareButton(
                       tooltip: 'Decrease by ${formatNumber(habit.step)}',
                       onTap: () => decreaseCountDay(context, ref, habit, date),
-                      child: const Icon(
+                      child: Icon(
                         Icons.remove_rounded,
                         size: 22,
                         color: AppColors.textPrimary,

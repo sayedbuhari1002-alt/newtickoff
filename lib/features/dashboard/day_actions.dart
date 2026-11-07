@@ -85,7 +85,7 @@ Future<void> resetCountDay(
             ),
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text(
+              child: Text(
                 'Reset',
                 style: TextStyle(color: AppColors.danger),
               ),
@@ -193,7 +193,7 @@ class _CountEditorDialogState extends State<_CountEditorDialog> {
         ),
         TextButton(
           onPressed: _save,
-          child: const Text(
+          child: Text(
             'Save',
             style: TextStyle(
               color: AppColors.gold,
@@ -237,7 +237,7 @@ Future<void> showChecklistSheet(
                       ? 'Tick the items you slipped on.'
                       : 'The day is done when every item is ticked.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
                   ),

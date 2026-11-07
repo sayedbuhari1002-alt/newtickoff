@@ -97,7 +97,7 @@ class _NotificationSettingsScreenState
                     const SizedBox(height: 12),
                     Text(
                       status.schedulingIssue!,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.danger,
                         fontSize: 12,
                         height: 1.4,
@@ -124,7 +124,7 @@ class _NotificationSettingsScreenState
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(

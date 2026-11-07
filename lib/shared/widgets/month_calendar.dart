@@ -23,7 +23,7 @@ class MonthCalendar extends StatefulWidget {
     required this.decorate,
     this.onDayTap,
     this.firstMonth,
-    this.accent = AppColors.gold,
+    this.accent,
   });
 
   final DateTime today;
@@ -36,7 +36,7 @@ class MonthCalendar extends StatefulWidget {
 
   /// Earliest month the user may navigate to (null = unlimited).
   final DateTime? firstMonth;
-  final Color accent;
+  final Color? accent;
 
   @override
   State<MonthCalendar> createState() => _MonthCalendarState();
@@ -68,7 +68,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
               tooltip: 'Previous month',
               icon: Icon(
                 Icons.chevron_left_rounded,
-                color: _canGoBack ? widget.accent : AppColors.textHint,
+                color: _canGoBack ? (widget.accent ?? AppColors.gold) : AppColors.textHint,
               ),
               onPressed: _canGoBack ? () => _shift(-1) : null,
             ),
@@ -76,7 +76,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
               child: Text(
                 monthYear(_month),
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary,
@@ -87,7 +87,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
               tooltip: 'Next month',
               icon: Icon(
                 Icons.chevron_right_rounded,
-                color: _canGoForward ? widget.accent : AppColors.textHint,
+                color: _canGoForward ? (widget.accent ?? AppColors.gold) : AppColors.textHint,
               ),
               onPressed: _canGoForward ? () => _shift(1) : null,
             ),
@@ -100,7 +100,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
                   child: Center(
                     child: Text(
                       d,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
                       ),
@@ -146,7 +146,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
       decoration: BoxDecoration(
         color: deco.fill,
         shape: BoxShape.circle,
-        border: isToday ? Border.all(color: widget.accent, width: 2) : null,
+        border: isToday ? Border.all(color: widget.accent ?? AppColors.gold, width: 2) : null,
       ),
       child: Text(
         '${day.day}',

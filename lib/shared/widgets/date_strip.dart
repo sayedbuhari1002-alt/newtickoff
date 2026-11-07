@@ -73,7 +73,7 @@ class _DayItem extends StatelessWidget {
           children: <Widget>[
             Text(
               weekdayShort(day),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
               ),

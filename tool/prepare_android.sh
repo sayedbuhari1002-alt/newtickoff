@@ -31,6 +31,45 @@ else
   exit 1
 fi
 
+# Apply the approved Tazkiyane launcher icon to the generated Android scaffold.
+# The Android project is generated in CI, so the source artwork and density
+# variants live in the repository and are copied in on every fresh build.
+ICON_SOURCE="assets/branding/android"
+if [ ! -f "assets/branding/tazkiyane_icon.png" ]; then
+  echo "ERROR: Approved Tazkiyane app icon asset is missing." >&2
+  exit 1
+fi
+for density in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+  SOURCE_DIR="$ICON_SOURCE/$density"
+  TARGET_DIR="android/app/src/main/res/$density"
+  if [ ! -f "$SOURCE_DIR/ic_launcher.png" ] || [ ! -f "$SOURCE_DIR/ic_launcher_round.png" ]; then
+    echo "ERROR: Launcher icon resources are missing for $density." >&2
+    exit 1
+  fi
+  mkdir -p "$TARGET_DIR"
+  cp "$SOURCE_DIR/ic_launcher.png" "$TARGET_DIR/ic_launcher.png"
+  cp "$SOURCE_DIR/ic_launcher_round.png" "$TARGET_DIR/ic_launcher_round.png"
+done
+# Remove the generated Flutter adaptive XML resources so Android resolves the
+# approved, density-specific PNGs instead of the default Flutter logo layers.
+rm -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+rm -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+echo "Installed the approved Tazkiyane launcher icon in all Android densities."
+
+# Install the native Android home-screen widget resources. They are copied into
+# the freshly generated scaffold on every CI build.
+WIDGET_SOURCE="assets/branding/android_widget"
+mkdir -p android/app/src/main/res/layout android/app/src/main/res/xml android/app/src/main/res/drawable
+cp "$WIDGET_SOURCE/layout/tazkiyane_tasks_widget.xml" android/app/src/main/res/layout/
+cp "$WIDGET_SOURCE/xml/tazkiyane_tasks_widget_info.xml" android/app/src/main/res/xml/
+cp "$WIDGET_SOURCE/drawable/tazkiyane_widget_background.xml" android/app/src/main/res/drawable/
+KOTLIN_DIR="android/app/src/main/kotlin/dev/tickoffreplacement/tickoff_replacement"
+mkdir -p "$KOTLIN_DIR"
+cp "$WIDGET_SOURCE/kotlin/TazkiyaneTasksWidgetProvider.kt" "$KOTLIN_DIR/"
+if ! grep -q 'TazkiyaneTasksWidgetProvider' "$MANIFEST"; then
+  sed -i '/<\/application>/i\        <receiver android:name=".TazkiyaneTasksWidgetProvider" android:exported="true" android:label="Tazkiyane Tasks">\n            <intent-filter>\n                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />\n            </intent-filter>\n            <meta-data android:name="android.appwidget.provider" android:resource="@xml/tazkiyane_tasks_widget_info" />\n        </receiver>' "$MANIFEST"
+fi
+echo "Installed Tazkiyane Tasks Android home-screen widget."
 
 
 # Preserve Gson generic signatures used by flutter_local_notifications.

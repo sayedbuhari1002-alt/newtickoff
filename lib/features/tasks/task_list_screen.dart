@@ -198,7 +198,7 @@ class _SmallDropdown<T> extends StatelessWidget {
   const _SmallDropdown({required this.label, required this.value, required this.items, required this.onChanged});
   final String label; final T value; final List<DropdownMenuItem<T>> items; final ValueChanged<T?> onChanged;
   @override
-  Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 8), decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)), child: DropdownButton<T>(value: value, items: items, onChanged: onChanged, underline: const SizedBox.shrink(), isDense: true, borderRadius: BorderRadius.circular(12), style: const TextStyle(fontSize: 12, color: AppColors.textPrimary), icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 17)));
+  Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 8), decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)), child: DropdownButton<T>(value: value, items: items, onChanged: onChanged, underline: const SizedBox.shrink(), isDense: true, borderRadius: BorderRadius.circular(12), style: TextStyle(fontSize: 12, color: AppColors.textPrimary), icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 17)));
 }
 
 String _sortLabel(TaskSort sort) => switch (sort) { TaskSort.defaultOrder => 'Default order', TaskSort.priority => 'Priority order', TaskSort.deadline => 'Deadline', TaskSort.categoryAscending => 'Category A–Z', TaskSort.categoryDescending => 'Category Z–A' };

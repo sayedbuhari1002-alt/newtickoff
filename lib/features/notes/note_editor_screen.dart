@@ -24,11 +24,13 @@ import '../../state/app_state.dart';
 /// Note editor for daily journal and habit notes. Text is saved automatically;
 /// photo, audio and video attachments are copied into app-private storage.
 class NoteEditorScreen extends ConsumerStatefulWidget {
-  const NoteEditorScreen({super.key, this.noteId, this.habitId, this.logDate});
+  const NoteEditorScreen({super.key, this.noteId, this.habitId, this.logDate, this.noteType = NoteType.daily, this.periodDate});
 
   final String? noteId;
   final String? habitId;
   final DateTime? logDate;
+  final NoteType noteType;
+  final DateTime? periodDate;
 
   @override
   ConsumerState<NoteEditorScreen> createState() => _NoteEditorScreenState();
@@ -47,6 +49,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   List<String> _photoPaths = <String>[];
   List<String> _audioPaths = <String>[];
   List<String> _videoPaths = <String>[];
+  late NoteType _noteType = widget.noteType;
+  DateTime? _periodDate;
   late final String _id = widget.noteId ?? newId();
   late final DateTime _createdAt;
 
@@ -55,6 +59,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     super.initState();
     // Keep the note date aligned with the same local-day source used by the app.
     _createdAt = dateOnly(ref.read(todayProvider));
+    _periodDate = widget.periodDate ?? _createdAt;
   }
 
   @override
@@ -103,9 +108,29 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         _photoPaths = List<String>.of(note.photoPaths);
         _audioPaths = List<String>.of(note.audioPaths);
         _videoPaths = List<String>.of(note.videoPaths);
+        _noteType = note.noteType;
+        _periodDate = note.periodDate ?? note.logDate ?? note.createdAt;
         break;
       }
     }
+  }
+
+  Future<void> _pickPeriod() async {
+    final DateTime base = _periodDate ?? DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: base,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: _noteType == NoteType.monthly
+          ? 'Choose a date in the month'
+          : 'Choose a date in the year',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _periodDate = _noteType == NoteType.monthly
+        ? DateTime(picked.year, picked.month)
+        : DateTime(picked.year));
+    await _flush();
   }
 
   void _scheduleSave() {
@@ -117,12 +142,29 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   Future<void> _flush() async {
     _debounce?.cancel();
     if (_deleted || !mounted) return;
+
     final DateTime now = DateTime.now();
+    final String? effectiveHabitId = _existing?.habitId ?? widget.habitId;
+    final bool isHabitNote = effectiveHabitId != null;
+    final NoteType effectiveType = isHabitNote ? NoteType.daily : _noteType;
+    final DateTime dailyDate = widget.logDate ??
+        _existing?.logDate ??
+        _existing?.createdAt ??
+        _createdAt;
+    final DateTime? effectivePeriod =
+        effectiveType == NoteType.monthly || effectiveType == NoteType.yearly
+            ? _periodDate
+            : null;
+
     final Note note = (_existing ??
             Note(
               id: _id,
-              habitId: widget.habitId,
-              logDate: widget.habitId == null ? widget.logDate : null,
+              habitId: effectiveHabitId,
+              logDate: !isHabitNote && effectiveType == NoteType.daily
+                  ? dailyDate
+                  : null,
+              noteType: effectiveType,
+              periodDate: effectivePeriod,
               createdAt: _createdAt,
               updatedAt: now,
             ))
@@ -132,6 +174,11 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       photoPaths: List<String>.of(_photoPaths),
       audioPaths: List<String>.of(_audioPaths),
       videoPaths: List<String>.of(_videoPaths),
+      noteType: effectiveType,
+      logDate: !isHabitNote && effectiveType == NoteType.daily ? dailyDate : null,
+      clearLogDate: isHabitNote || effectiveType != NoteType.daily,
+      periodDate: effectivePeriod,
+      clearPeriodDate: isHabitNote || effectivePeriod == null,
       updatedAt: now,
     );
     if (note.isEmpty && _existing == null) return;
@@ -141,6 +188,31 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     } catch (error) {
       if (mounted) showMessage(context, 'Could not save note: $error');
     }
+  }
+
+  String _noteTypeLabel(NoteType type) => switch (type) {
+        NoteType.daily => 'Daily note',
+        NoteType.general => 'General note',
+        NoteType.monthly => 'Monthly note',
+        NoteType.yearly => 'Yearly note',
+      };
+
+  String _periodLabel(DateTime date) => _noteType == NoteType.monthly
+      ? '${monthShort(date)} ${date.year}'
+      : '${date.year}';
+
+  void _changeNoteType(NoteType type) {
+    if (_noteType == type) return;
+    setState(() {
+      _noteType = type;
+      if (type == NoteType.monthly || type == NoteType.yearly) {
+        final DateTime base = _periodDate ?? _existing?.createdAt ?? _createdAt;
+        _periodDate = type == NoteType.monthly
+            ? DateTime(base.year, base.month)
+            : DateTime(base.year);
+      }
+    });
+    unawaited(_flush());
   }
 
   Future<void> _close() async {
@@ -331,6 +403,28 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
   }
 
+  Future<void> _showPhoto(String path) async {
+    if (!await File(path).exists() || !mounted) {
+      if (mounted) showMessage(context, 'This photo file is no longer available.');
+      return;
+    }
+    await showDialog<void>(context: context, barrierColor: Colors.black, builder: (BuildContext dialogContext) => Dialog.fullscreen(
+      backgroundColor: Colors.black,
+      child: Stack(children: <Widget>[
+        Positioned.fill(child: InteractiveViewer(minScale: 0.8, maxScale: 5, child: Center(child: Image.file(File(path), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white, size: 48))))),
+        Positioned(top: 12, right: 12, child: SafeArea(child: IconButton.filledTonal(onPressed: () => Navigator.of(dialogContext).pop(), icon: const Icon(Icons.close_rounded), tooltip: 'Close photo'))),
+      ]),
+    ));
+  }
+
+  Future<void> _showVideo(String path) async {
+    if (!await File(path).exists() || !mounted) {
+      if (mounted) showMessage(context, 'This video file is no longer available.');
+      return;
+    }
+    await showDialog<void>(context: context, barrierColor: Colors.black, builder: (_) => _FullscreenNoteVideo(path: path));
+  }
+
   Future<void> _removeAttachment(String kind, String path) async {
     setState(() {
       if (kind == 'photo') {
@@ -356,10 +450,12 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     if (!_initialized) _initialize(data);
     final String? habitId = _existing?.habitId ?? widget.habitId;
     final Habit? habit = habitId == null ? null : data.habitById(habitId);
-    final DateTime shown = _existing?.logDate ??
-        widget.logDate ??
+    final bool isHabitNote = habitId != null;
+    final DateTime dailyDate = widget.logDate ??
+        _existing?.logDate ??
         _existing?.createdAt ??
         _createdAt;
+    final DateTime periodDate = _periodDate ?? dailyDate;
 
     return Scaffold(
       appBar: AppBar(
@@ -371,7 +467,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         actions: <Widget>[
           IconButton(
             tooltip: 'Delete note',
-            icon: const Icon(
+            icon: Icon(
               Icons.delete_outline_rounded,
               color: AppColors.danger,
             ),
@@ -382,14 +478,79 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppDimens.pagePadding),
         children: <Widget>[
-          Text(
-            '${monthShort(shown)} ${shown.day}, ${shown.year}'
-            '${habit == null ? '' : '  ·  ${habit.title}'}',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
+          if (isHabitNote)
+            Text(
+              '${monthShort(dailyDate)} ${dailyDate.day}, ${dailyDate.year}  ·  ${habit?.title ?? 'Habit note'}',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            )
+          else ...<Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentDim,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _noteTypeLabel(_noteType),
+                    style: TextStyle(
+                      color: AppColors.primaryAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                PopupMenuButton<NoteType>(
+                  tooltip: 'Change note type',
+                  icon: Icon(Icons.tune_rounded, color: AppColors.textSecondary),
+                  onSelected: _changeNoteType,
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<NoteType>>[
+                    for (final NoteType type in NoteType.values)
+                      PopupMenuItem<NoteType>(
+                        value: type,
+                        child: Row(
+                          children: <Widget>[
+                            if (type == _noteType)
+                              Icon(Icons.check_rounded, size: 18, color: AppColors.primaryAccent)
+                            else
+                              const SizedBox(width: 18),
+                            const SizedBox(width: 8),
+                            Text(_noteTypeLabel(type)),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
             ),
-          ),
+            if (_noteType == NoteType.daily)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${monthShort(dailyDate)} ${dailyDate.day}, ${dailyDate.year}',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              )
+            else if (_noteType == NoteType.general)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'No specific date',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: OutlinedButton.icon(
+                  onPressed: _pickPeriod,
+                  icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                  label: Text('Period: ${_periodLabel(periodDate)}'),
+                ),
+              ),
+          ],
           const SizedBox(height: AppDimens.gap),
           TextField(
             controller: _title,
@@ -397,7 +558,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             textInputAction: TextInputAction.next,
             cursorColor: AppColors.gold,
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Title',
               hintStyle: TextStyle(color: AppColors.textHint),
               border: InputBorder.none,
@@ -411,14 +572,14 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             maxLines: null,
             keyboardType: TextInputType.multiline,
             style: const TextStyle(fontSize: 16),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Note',
               hintStyle: TextStyle(color: AppColors.textHint),
               border: InputBorder.none,
             ),
           ),
           const SizedBox(height: AppDimens.gap),
-          const Divider(color: AppColors.divider),
+          Divider(color: AppColors.divider),
           const SizedBox(height: 8),
           const Text(
             'Attachments',
@@ -448,7 +609,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           ),
           if (_recording) ...<Widget>[
             const SizedBox(height: 8),
-            const Row(
+            Row(
               children: <Widget>[
                 Icon(Icons.fiber_manual_record, color: AppColors.danger, size: 14),
                 SizedBox(width: 8),
@@ -464,6 +625,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               _PhotoNoteAttachment(
                 path: path,
                 onRemove: () => _removeAttachment('photo', path),
+                onTap: () => _showPhoto(path),
               ),
             for (final String path in _audioPaths)
               _AudioNoteAttachment(
@@ -474,6 +636,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               _VideoNoteAttachment(
                 path: path,
                 onRemove: () => _removeAttachment('video', path),
+                onTap: () => _showVideo(path),
               ),
           ],
         ],
@@ -483,9 +646,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
 }
 
 class _PhotoNoteAttachment extends StatelessWidget {
-  const _PhotoNoteAttachment({required this.path, required this.onRemove});
+  const _PhotoNoteAttachment({required this.path, required this.onRemove, required this.onTap});
   final String path;
   final VoidCallback onRemove;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -494,7 +658,10 @@ class _PhotoNoteAttachment extends StatelessWidget {
           padding: const EdgeInsets.all(8),
           child: Row(
             children: <Widget>[
-              ClipRRect(
+              InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(8),
+                child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.file(
                   File(path),
@@ -509,8 +676,9 @@ class _PhotoNoteAttachment extends StatelessWidget {
                   ),
                 ),
               ),
+              ),
               const SizedBox(width: 12),
-              const Expanded(child: Text('Photo attachment')),
+              Expanded(child: Text(path_util.basename(path), maxLines: 1, overflow: TextOverflow.ellipsis)),
               IconButton(
                 tooltip: 'Remove photo',
                 onPressed: onRemove,
@@ -535,6 +703,8 @@ class _AudioNoteAttachmentState extends State<_AudioNoteAttachment> {
   late final AudioPlayer _player;
   late final StreamSubscription<void> _completionSubscription;
   bool _playing = false;
+  bool _completed = false;
+  bool _hasPlayed = false;
   bool _unavailable = false;
 
   @override
@@ -542,7 +712,12 @@ class _AudioNoteAttachmentState extends State<_AudioNoteAttachment> {
     super.initState();
     _player = AudioPlayer();
     _completionSubscription = _player.onPlayerComplete.listen((_) {
-      if (mounted) setState(() => _playing = false);
+      if (mounted) {
+        setState(() {
+          _playing = false;
+          _completed = true;
+        });
+      }
     });
   }
 
@@ -563,7 +738,13 @@ class _AudioNoteAttachmentState extends State<_AudioNoteAttachment> {
         await _player.pause();
         if (mounted) setState(() => _playing = false);
       } else {
-        await _player.play(DeviceFileSource(widget.path));
+        if (!_hasPlayed || _completed) {
+          await _player.play(DeviceFileSource(widget.path));
+          _hasPlayed = true;
+          _completed = false;
+        } else {
+          await _player.resume();
+        }
         if (mounted) setState(() => _playing = true);
       }
     } catch (_) {
@@ -609,9 +790,10 @@ class _AudioNoteAttachmentState extends State<_AudioNoteAttachment> {
 }
 
 class _VideoNoteAttachment extends StatefulWidget {
-  const _VideoNoteAttachment({required this.path, required this.onRemove});
+  const _VideoNoteAttachment({required this.path, required this.onRemove, required this.onTap});
   final String path;
   final VoidCallback onRemove;
+  final VoidCallback onTap;
 
   @override
   State<_VideoNoteAttachment> createState() => _VideoNoteAttachmentState();
@@ -650,15 +832,6 @@ class _VideoNoteAttachmentState extends State<_VideoNoteAttachment> {
     super.dispose();
   }
 
-  Future<void> _togglePlayback() async {
-    if (!_ready) return;
-    if (_controller.value.isPlaying) {
-      await _controller.pause();
-    } else {
-      await _controller.play();
-    }
-  }
-
   @override
   Widget build(BuildContext context) => Card(
         color: AppColors.surface,
@@ -666,7 +839,7 @@ class _VideoNoteAttachmentState extends State<_VideoNoteAttachment> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            AspectRatio(
+            InkWell(onTap: widget.onTap, child: AspectRatio(
               aspectRatio: _ready && _controller.value.aspectRatio > 0
                   ? _controller.value.aspectRatio
                   : 16 / 9,
@@ -690,17 +863,13 @@ class _VideoNoteAttachmentState extends State<_VideoNoteAttachment> {
                     Center(
                       child: IconButton.filledTonal(
                         tooltip: _controller.value.isPlaying ? 'Pause video' : 'Play video',
-                        onPressed: _togglePlayback,
-                        icon: Icon(
-                          _controller.value.isPlaying
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                        ),
+                        onPressed: widget.onTap,
+                        icon: const Icon(Icons.open_in_full_rounded),
                       ),
                     ),
                 ],
               ),
-            ),
+            )),
             ListTile(
               dense: true,
               leading: const Icon(Icons.videocam_outlined),
@@ -715,4 +884,47 @@ class _VideoNoteAttachmentState extends State<_VideoNoteAttachment> {
           ],
         ),
       );
+}
+
+
+class _FullscreenNoteVideo extends StatefulWidget {
+  const _FullscreenNoteVideo({required this.path});
+  final String path;
+  @override
+  State<_FullscreenNoteVideo> createState() => _FullscreenNoteVideoState();
+}
+
+class _FullscreenNoteVideoState extends State<_FullscreenNoteVideo> {
+  late final VideoPlayerController _controller;
+  bool _ready = false;
+  bool _failed = false;
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.file(File(widget.path));
+    _controller.addListener(_refresh);
+    _initialize();
+  }
+  Future<void> _initialize() async {
+    try { await _controller.initialize(); if (mounted) setState(() => _ready = true); }
+    catch (_) { if (mounted) setState(() => _failed = true); }
+  }
+  void _refresh() { if (mounted) setState(() {}); }
+  @override
+  void dispose() { _controller.removeListener(_refresh); unawaited(_controller.dispose()); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => Dialog.fullscreen(
+    backgroundColor: Colors.black,
+    child: Stack(children: <Widget>[
+      Positioned.fill(child: Center(child: _ready ? AspectRatio(
+        aspectRatio: _controller.value.aspectRatio > 0 ? _controller.value.aspectRatio : 16 / 9,
+        child: VideoPlayer(_controller),
+      ) : Icon(_failed ? Icons.videocam_off_outlined : Icons.hourglass_empty_rounded, color: Colors.white, size: 44))),
+      if (_ready) Positioned(bottom: 32, left: 24, right: 24, child: Row(children: <Widget>[
+        IconButton.filledTonal(onPressed: () async { if (_controller.value.isPlaying) { await _controller.pause(); } else { if (_controller.value.position >= _controller.value.duration) await _controller.seekTo(Duration.zero); await _controller.play(); } }, icon: Icon(_controller.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded), tooltip: 'Play or pause'),
+        Expanded(child: VideoProgressIndicator(_controller, allowScrubbing: true, padding: const EdgeInsets.symmetric(horizontal: 12))),
+      ])),
+      Positioned(top: 12, right: 12, child: SafeArea(child: IconButton.filledTonal(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded), tooltip: 'Close video'))),
+    ]),
+  );
 }

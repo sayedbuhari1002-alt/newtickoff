@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../state/app_settings.dart';
+import '../../data/services/home_screen_widget_service.dart';
 import '../../state/app_state.dart';
 
 /// Controls which overview cards appear on the in-app Dashboard.
@@ -31,7 +32,7 @@ class WidgetsSettingsScreen extends ConsumerWidget {
         children: <Widget>[
           const Text('Dashboard widgets', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Show or hide sections on the Dashboard. Your changes are saved on this device.',
             style: TextStyle(color: AppColors.textSecondary, height: 1.4),
           ),
@@ -46,7 +47,7 @@ class WidgetsSettingsScreen extends ConsumerWidget {
                     value: !hidden.contains(dashboardSectionIds[i]),
                     secondary: Icon(_icons[dashboardSectionIds[i]], color: AppColors.textSecondary),
                     title: Text(dashboardSectionLabels[dashboardSectionIds[i]]!),
-                    subtitle: Text('Display on the Dashboard', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    subtitle: Text('Display on the Dashboard', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                     activeColor: AppColors.gold,
                     onChanged: (bool visible) async {
                       final Set<String> updated = Set<String>.of(hidden);
@@ -72,9 +73,22 @@ class WidgetsSettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'These are in-app Dashboard sections, not Android home-screen launcher widgets.',
-            style: TextStyle(color: AppColors.textHint, fontSize: 12, height: 1.4),
+          const SizedBox(height: 18),
+          const Text('Android home-screen widget', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(
+            'Add the Tazkiyane Tasks widget from your phone launcher: long-press an empty area of the Home screen, open Widgets, find Tazkiyane, then drag “Today’s Tasks” onto the screen. It shows tasks scheduled for today, overdue tasks, and tasks completed today. Tap it to open the app.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.45),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final AppData data = await ref.read(appDataProvider.future);
+              await HomeScreenWidgetService.update(data);
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Home-screen widget data refreshed.')));
+            },
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Refresh widget data'),
           ),
         ],
       ),

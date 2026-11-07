@@ -91,7 +91,7 @@ class HabitTaskCard extends StatelessWidget {
                             color: AppColors.surfaceRaised,
                             borderRadius: BorderRadius.circular(7),
                           ),
-                          child: const Text(
+                          child: Text(
                             'HABIT',
                             style: TextStyle(
                               fontSize: 9,
@@ -107,7 +107,7 @@ class HabitTaskCard extends StatelessWidget {
                             trackingLabel,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               color: AppColors.textSecondary,
                             ),
@@ -119,7 +119,7 @@ class HabitTaskCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 5),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
+              Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
             ],
           ),
         ),

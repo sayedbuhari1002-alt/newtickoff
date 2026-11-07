@@ -19,6 +19,7 @@ class _SubtaskEditorScreenState extends State<SubtaskEditorScreen> {
   Future<void> _addOrEdit({Subtask? existing, int? index}) async {
     final TextEditingController title = TextEditingController(text: existing?.title ?? '');
     DateTime? dueAt = existing?.dueAt;
+    DateTime? reminderAt = existing?.reminderAt;
     final bool? save = await showDialog<bool>(context: context, builder: (BuildContext context) => StatefulBuilder(builder: (BuildContext context, StateSetter setDialogState) => AlertDialog(
       title: Text(existing == null ? 'Add subtask' : 'Edit subtask'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
@@ -35,6 +36,16 @@ class _SubtaskEditorScreenState extends State<SubtaskEditorScreen> {
           setDialogState(() => dueAt = DateTime(day.year, day.month, day.day, time?.hour ?? 0, time?.minute ?? 0));
         }),
         if (dueAt != null) Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => setDialogState(() => dueAt = null), child: const Text('Clear deadline'))),
+        const SizedBox(height: 8),
+        ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.notifications_active_outlined), title: const Text('Optional reminder'), subtitle: Text(reminderAt == null ? 'No reminder' : '${reminderAt!.day}/${reminderAt!.month}/${reminderAt!.year} · ${TimeOfDay.fromDateTime(reminderAt!).format(context)}'), onTap: () async {
+          final DateTime now = DateTime.now();
+          final DateTime? day = await showDatePicker(context: context, initialDate: reminderAt ?? dueAt ?? now, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 15), helpText: 'Choose subtask reminder date');
+          if (day == null || !context.mounted) return;
+          final TimeOfDay? time = await showTimePicker(context: context, initialTime: reminderAt == null ? const TimeOfDay(hour: 9, minute: 0) : TimeOfDay.fromDateTime(reminderAt!));
+          if (time == null || !context.mounted) return;
+          setDialogState(() => reminderAt = DateTime(day.year, day.month, day.day, time.hour, time.minute));
+        }),
+        if (reminderAt != null) Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => setDialogState(() => reminderAt = null), child: const Text('Clear reminder'))),
       ])),
       actions: <Widget>[
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -44,7 +55,7 @@ class _SubtaskEditorScreenState extends State<SubtaskEditorScreen> {
     if (save == true && mounted) {
       final DateTime now = DateTime.now();
       setState(() {
-        final Subtask value = Subtask(id: existing?.id ?? newId(), title: title.text.trim(), createdAt: existing?.createdAt ?? now, dueAt: dueAt, isCompleted: existing?.isCompleted ?? false, completedAt: existing?.completedAt, sortOrder: index ?? _items.length);
+        final Subtask value = Subtask(id: existing?.id ?? newId(), title: title.text.trim(), createdAt: existing?.createdAt ?? now, dueAt: dueAt, reminderAt: reminderAt, isCompleted: existing?.isCompleted ?? false, completedAt: existing?.completedAt, sortOrder: index ?? _items.length);
         if (index == null) _items.add(value); else _items[index] = value;
         _renumber();
       });
@@ -59,7 +70,7 @@ class _SubtaskEditorScreenState extends State<SubtaskEditorScreen> {
     appBar: AppBar(title: const Text('Subtask Editor'), actions: <Widget>[TextButton(onPressed: () => context.pop(_items), child: const Text('Done'))]),
     body: SafeArea(child: Column(children: <Widget>[
       Padding(padding: const EdgeInsets.all(16), child: Row(children: <Widget>[
-        Expanded(child: Text('${_items.where((Subtask s) => s.isCompleted).length} of ${_items.length} complete', style: const TextStyle(color: AppColors.textSecondary))),
+        Expanded(child: Text('${_items.where((Subtask s) => s.isCompleted).length} of ${_items.length} complete', style: TextStyle(color: AppColors.textSecondary))),
         FilledButton.icon(onPressed: () => _addOrEdit(), icon: const Icon(Icons.add), label: const Text('Add')),
       ])),
       if (_items.isNotEmpty) LinearProgressIndicator(value: _items.isEmpty ? 0 : _items.where((Subtask s) => s.isCompleted).length / _items.length, minHeight: 3),

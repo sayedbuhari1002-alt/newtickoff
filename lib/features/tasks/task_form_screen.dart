@@ -332,7 +332,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
               ),
               const SizedBox(height: 24),
               const _SectionTitle('Subtasks'),
-              Text('${_subtasks.where((Subtask s) => s.isCompleted).length} of ${_subtasks.length} completed', style: const TextStyle(color: AppColors.textSecondary)),
+              Text('${_subtasks.where((Subtask s) => s.isCompleted).length} of ${_subtasks.length} completed', style: TextStyle(color: AppColors.textSecondary)),
               const SizedBox(height: 8),
               OutlinedButton.icon(onPressed: _editSubtasks, icon: const Icon(Icons.account_tree_outlined), label: const Text('Open Subtask Editor')),
               if (_subtasks.isNotEmpty) ...<Widget>[
@@ -348,7 +348,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                 OutlinedButton.icon(onPressed: _pickPhoto, icon: const Icon(Icons.add_photo_alternate_outlined), label: const Text('Add photo')),
                 OutlinedButton.icon(onPressed: _toggleRecording, icon: Icon(_recording ? Icons.stop_circle_outlined : Icons.mic_none_rounded), label: Text(_recording ? 'Stop recording' : 'Record audio')),
               ]),
-              if (_recording) const Padding(padding: EdgeInsets.only(top: 8), child: Text('Recording audio… tap Stop recording to attach it.', style: TextStyle(color: AppColors.danger))),
+              if (_recording) Padding(padding: EdgeInsets.only(top: 8), child: Text('Recording audio… tap Stop recording to attach it.', style: TextStyle(color: AppColors.danger))),
               if (_photoPaths.isNotEmpty || _audioPaths.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 10),
                 for (final String path in _photoPaths) ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: const Icon(Icons.image_outlined), title: Text(path_util.basename(path), maxLines: 1, overflow: TextOverflow.ellipsis), trailing: IconButton(tooltip: 'Remove photo', onPressed: () => _removeAttachment(path), icon: const Icon(Icons.close_rounded))),

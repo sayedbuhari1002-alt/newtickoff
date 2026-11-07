@@ -47,7 +47,7 @@ class DashboardScreen extends ConsumerWidget {
                           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 2),
-                        const Text('Your day, at a glance', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                        Text('Your day, at a glance', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                       ],
                     ),
                   ),
@@ -153,7 +153,7 @@ class _OverviewBody extends ConsumerWidget {
               },
             ),
         if (order.every(hidden.contains))
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 28, horizontal: 8),
             child: Column(
               children: <Widget>[
@@ -224,7 +224,7 @@ class _OverviewBody extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
-            child: const Column(
+            child: Column(
               children: <Widget>[
                 Icon(Icons.event_available_rounded, color: AppColors.textSecondary, size: 30),
                 SizedBox(height: 8),
@@ -286,7 +286,7 @@ class _OverviewBody extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
-            child: const Text('No habits are due on this day.', style: TextStyle(color: AppColors.textSecondary)),
+            child: Text('No habits are due on this day.', style: TextStyle(color: AppColors.textSecondary)),
           )
         else
           Container(
@@ -331,9 +331,9 @@ class _OverviewBody extends ConsumerWidget {
           decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
           child: Row(
             children: <Widget>[
-              const Icon(Icons.insights_rounded, color: AppColors.gold, size: 28),
+              Icon(Icons.insights_rounded, color: AppColors.gold, size: 28),
               const SizedBox(width: 12),
-              const Expanded(child: Text('Review completion history, overdue work and daily progress.', style: TextStyle(color: AppColors.textSecondary, height: 1.3))),
+              Expanded(child: Text('Review completion history, overdue work and daily progress.', style: TextStyle(color: AppColors.textSecondary, height: 1.3))),
               IconButton(onPressed: () => context.push(AppRoutes.analytics), icon: const Icon(Icons.arrow_forward_rounded)),
             ],
           ),
@@ -365,12 +365,12 @@ class _ReminderWarningBanner extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.notifications_off_outlined, color: AppColors.danger),
+          Icon(Icons.notifications_off_outlined, color: AppColors.danger),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+              style: TextStyle(fontSize: 12, color: AppColors.textPrimary),
             ),
           ),
           TextButton(
@@ -429,12 +429,12 @@ class _DashboardHabitRow extends StatelessWidget {
                 children: <Widget>[
                   Text(habit.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
                   if (countDetail.isNotEmpty)
-                    Text(countDetail.trimLeft().replaceFirst('· ', ''), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                    Text(countDetail.trimLeft().replaceFirst('· ', ''), style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                 ],
               ),
             ),
             if (countBased)
-              const Icon(Icons.chevron_right_rounded, color: AppColors.textHint)
+              Icon(Icons.chevron_right_rounded, color: AppColors.textHint)
             else
               IconButton(
                 tooltip: habit.type == HabitType.quit
@@ -484,7 +484,7 @@ class _ProgressCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 7),
-                Text(detail, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                Text(detail, style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               ],
             ),
           ),

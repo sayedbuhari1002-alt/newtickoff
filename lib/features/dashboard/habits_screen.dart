@@ -73,7 +73,7 @@ class _HabitsList extends ConsumerWidget {
         const SizedBox(width: 7),
         TickChip(label: 'Due (${due.length})', selected: filter == HabitListFilter.due, filledWhenSelected: true, onTap: () => ref.read(habitFilterProvider.notifier).select(HabitListFilter.due)),
         const Spacer(),
-        Text('${headerPrefix(selected, ref.watch(todayProvider))} · ${dayMonthLabel(selected)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        Text('${headerPrefix(selected, ref.watch(todayProvider))} · ${dayMonthLabel(selected)}', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
       ])),
       const SizedBox(height: 12),
       Expanded(child: data.activeHabits.isEmpty

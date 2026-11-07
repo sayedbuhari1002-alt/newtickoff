@@ -228,7 +228,7 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
         actions: <Widget>[
           TextButton(
             onPressed: _saving ? null : () => _save(data),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Text(
@@ -322,7 +322,7 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               subtitle: category == null ? null : Text(category.name),
-              trailing: const Icon(
+              trailing: Icon(
                 Icons.chevron_right_rounded,
                 color: AppColors.textSecondary,
               ),
@@ -627,7 +627,7 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
         ListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          leading: const Icon(
+          leading: Icon(
             Icons.check_box_outline_blank_rounded,
             color: AppColors.textSecondary,
           ),
@@ -652,8 +652,8 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
             final ChecklistItem? item = await showChecklistDialog(context);
             if (item != null) setState(() => _checklist.add(item));
           },
-          icon: const Icon(Icons.add, color: AppColors.textPrimary),
-          label: const Text(
+          icon: Icon(Icons.add, color: AppColors.textPrimary),
+          label: Text(
             'Add Checklist',
             style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
           ),
@@ -847,7 +847,7 @@ class _Caption extends StatelessWidget {
     return Text(
       text,
       textAlign: TextAlign.center,
-      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
     );
   }
 }
@@ -863,7 +863,7 @@ class _FieldLabel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           letterSpacing: 0.6,
           color: AppColors.textSecondary,

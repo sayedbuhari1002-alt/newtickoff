@@ -43,5 +43,23 @@ void main() {
       expect(theme.colorScheme.secondary, AppColors.secondaryAccent);
       expect(theme.colorScheme.surface, AppColors.surface);
     });
+
+    test('Midnight Ocean + Cyan switches the complete palette', () {
+      final theme = AppTheme.forId(AppColors.ocean);
+      expect(theme.brightness, Brightness.dark);
+      expect(AppColors.background, const Color(0xFF101923));
+      expect(AppColors.primaryAccent, const Color(0xFF64D8E5));
+      expect(theme.colorScheme.primary, AppColors.primaryAccent);
+      AppTheme.forId(AppColors.obsidian);
+    });
+
+    test('Porcelain Sand + Sage switches to a light palette', () {
+      final theme = AppTheme.forId(AppColors.porcelain);
+      expect(theme.brightness, Brightness.light);
+      expect(AppColors.background, const Color(0xFFF2F0E8));
+      expect(AppColors.primaryAccent, const Color(0xFF64856B));
+      expect(theme.colorScheme.primary, AppColors.primaryAccent);
+      AppTheme.forId(AppColors.obsidian);
+    });
   });
 }

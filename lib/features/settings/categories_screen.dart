@@ -71,7 +71,7 @@ class CategoriesScreen extends ConsumerWidget {
                             title: Text(c.name),
                             subtitle: Text(
                               '${data.habits.where((Habit h) => h.categoryId == c.id).length} habits',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppColors.textSecondary,
                               ),
                             ),
@@ -92,7 +92,7 @@ class CategoriesScreen extends ConsumerWidget {
                             },
                             trailing: IconButton(
                               tooltip: 'Delete category',
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.delete_outline_rounded,
                                 color: AppColors.danger,
                               ),

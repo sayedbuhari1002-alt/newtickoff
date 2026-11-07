@@ -82,7 +82,7 @@ class _TaskAnalyticsScreenState extends ConsumerState<TaskAnalyticsScreen> {
           final DateTime? day = await showDatePicker(context: context, initialDate: _selectedDay, firstDate: DateTime(2000), lastDate: DateTime(DateTime.now().year + 1));
           if (day != null && mounted) setState(() => _selectedDay = day);
         }),
-        if (_range == _Range.custom) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text('${_dateLabel(range.start)} – ${_dateLabel(range.end)}', style: const TextStyle(color: AppColors.textSecondary))),
+        if (_range == _Range.custom) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text('${_dateLabel(range.start)} – ${_dateLabel(range.end)}', style: TextStyle(color: AppColors.textSecondary))),
         GridView.count(crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), childAspectRatio: 1.7, children: <Widget>[
           _MetricCard(label: 'Total tasks', value: '${summary.totalTasks}', icon: Icons.checklist_rounded),
           _MetricCard(label: 'Completed', value: '${summary.completedTasks}', icon: Icons.task_alt_rounded),
@@ -96,7 +96,7 @@ class _TaskAnalyticsScreenState extends ConsumerState<TaskAnalyticsScreen> {
         const SizedBox(height: 24),
         const Text('Daily completions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 5),
-        const Text('Completed tasks and subtasks are attributed to the date they were completed. Automatically completed parents are excluded when child completions already represent the work.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.35)),
+        Text('Completed tasks and subtasks are attributed to the date they were completed. Automatically completed parents are excluded when child completions already represent the work.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.35)),
         const SizedBox(height: 16),
         Container(height: 165, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)), child: _CompletionBars(days: summary.days, onSelectDay: (DateTime day) => setState(() { _selectedDay = day; _range = _Range.day; }))),
         const SizedBox(height: 24),
@@ -133,10 +133,10 @@ class _TaskAnalyticsScreenState extends ConsumerState<TaskAnalyticsScreen> {
           Card(color: AppColors.surface, child: ListTile(
             title: Text(_dateLabel(day.day)),
             subtitle: Text('${day.taskCompletions} task(s) · ${day.subtaskCompletions} subtask(s) · ${day.lateCompletions} late completion(s)'),
-            trailing: Text(day.weightedScore.toStringAsFixed(0), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold)),
+            trailing: Text(day.weightedScore.toStringAsFixed(0), style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold)),
             onTap: () => setState(() { _selectedDay = day.day; _range = _Range.day; }),
           )),
-        if (summary.days.every((TaskDayAnalytics d) => d.workUnits == 0)) const Padding(padding: EdgeInsets.only(top: 8), child: Text('No completion activity was recorded in this range.', style: TextStyle(color: AppColors.textSecondary))),
+        if (summary.days.every((TaskDayAnalytics d) => d.workUnits == 0)) Padding(padding: EdgeInsets.only(top: 8), child: Text('No completion activity was recorded in this range.', style: TextStyle(color: AppColors.textSecondary))),
       ]),
     );
   }
@@ -149,10 +149,10 @@ class _RangeChip extends StatelessWidget {
 }
 
 class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.label, required this.value, required this.icon, this.accent = AppColors.gold}); final String label; final String value; final IconData icon; final Color accent;
+  _MetricCard({required this.label, required this.value, required this.icon, this.accent}); final String label; final String value; final IconData icon; final Color? accent;
   @override
   Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: <Widget>[
-    Icon(icon, size: 20, color: accent), Text(value, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)), Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+    Icon(icon, size: 20, color: accent ?? AppColors.gold), Text(value, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)), Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
   ]));
 }
 
@@ -165,7 +165,7 @@ class _CompletionBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (days.isEmpty || days.every((TaskDayAnalytics day) => day.workUnits == 0)) {
-      return const Center(
+      return Center(
         child: Text('No chart data for this range', style: TextStyle(color: AppColors.textSecondary)),
       );
     }
@@ -204,7 +204,7 @@ class _CompletionBars extends StatelessWidget {
                       const SizedBox(height: 5),
                       Text(
                         (i == 0 || i == shown.length - 1 || (shown.length <= 14 && i % 2 == 0)) ? '${shown[i].day.day}' : '',
-                        style: const TextStyle(fontSize: 8, color: AppColors.textSecondary),
+                        style: TextStyle(fontSize: 8, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -234,7 +234,7 @@ class _HistorySection extends StatelessWidget {
               Text('$title (${items.length})', style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
               if (items.isEmpty)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(bottom: 8),
                   child: Text('None', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                 )
@@ -249,7 +249,7 @@ class _HistorySection extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(child: Text(item.title, style: const TextStyle(fontSize: 13))),
                         if (item.dueAt != null)
-                          Text('${item.dueAt!.day}/${item.dueAt!.month}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                          Text('${item.dueAt!.day}/${item.dueAt!.month}', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                       ],
                     ),
                   ),
@@ -306,7 +306,7 @@ class _TrendLineChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (values.isEmpty || values.every((double value) => value == 0)) {
-      return const Center(child: Text('No trend data for this range', style: TextStyle(color: AppColors.textSecondary)));
+      return Center(child: Text('No trend data for this range', style: TextStyle(color: AppColors.textSecondary)));
     }
     final List<double> shown = values.length > 31 ? values.sublist(values.length - 31) : values;
     return CustomPaint(

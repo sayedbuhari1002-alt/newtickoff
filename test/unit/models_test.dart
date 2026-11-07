@@ -226,6 +226,21 @@ void main() {
     });
   });
 
+  test('subtask reminder timestamp survives JSON and can be cleared', () {
+    final DateTime reminder = DateTime(2026, 11, 8, 18, 30);
+    final Subtask item = Subtask(
+      id: 'step-reminder',
+      title: 'Prepare slides',
+      createdAt: DateTime(2026, 11, 7),
+      reminderAt: reminder,
+    );
+    final Subtask decoded = Subtask.fromJson(
+      jsonDecode(jsonEncode(item.toJson())) as Map<String, dynamic>,
+    );
+    expect(decoded.reminderAt, reminder);
+    expect(decoded.copyWith(clearReminderAt: true).reminderAt, isNull);
+  });
+
   group('Note and HabitCategory', () {
     test('note emptiness and round trip', () {
       final DateTime t = DateTime(2026, 10, 27);
@@ -242,4 +257,13 @@ void main() {
       expect(HabitCategory.fromJson(c.toJson()), c);
     });
   });
+
+  test('note types and selected periods round-trip through JSON', () {
+    final DateTime now = DateTime(2026, 11, 7, 10);
+    final Note monthly = Note(id: 'monthly-note', title: 'Review', noteType: NoteType.monthly, periodDate: DateTime(2026, 11), createdAt: now, updatedAt: now);
+    expect(Note.fromJson(monthly.toJson()), monthly);
+    final Note legacy = Note.fromJson(<String, dynamic>{'id': 'legacy', 'createdAt': now.toIso8601String(), 'updatedAt': now.toIso8601String()});
+    expect(legacy.noteType, NoteType.general);
+  });
+
 }

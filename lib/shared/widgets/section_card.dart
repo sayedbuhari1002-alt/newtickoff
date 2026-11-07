@@ -33,7 +33,7 @@ class SectionCard extends StatelessWidget {
               if (title != null) ...<Widget>[
                 Text(
                   title!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,

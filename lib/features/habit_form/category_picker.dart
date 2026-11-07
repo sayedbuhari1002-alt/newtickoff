@@ -75,7 +75,7 @@ Widget _tile(
     ),
     title: Text(label),
     trailing: selected
-        ? const Icon(Icons.check_rounded, color: AppColors.cyan)
+        ? Icon(Icons.check_rounded, color: AppColors.cyan)
         : null,
     onTap: onTap,
   );

@@ -162,7 +162,7 @@ class HabitDetailScreen extends ConsumerWidget {
                         Text(
                           'Current count: ${countLabel(habit, record?.count ?? 0)}',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -569,7 +569,7 @@ class _InfoChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const Icon(
+            Icon(
               Icons.info_outline_rounded,
               size: 16,
               color: AppColors.textSecondary,
@@ -584,7 +584,7 @@ class _InfoChip extends StatelessWidget {
                 style: const TextStyle(fontSize: 13),
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
               size: 18,
               color: AppColors.textSecondary,
@@ -785,7 +785,7 @@ class _Timeline extends StatelessWidget {
                         ),
                         Text(
                           '${e.date.day} ${monthShort(e.date)}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: AppColors.textSecondary,
                           ),

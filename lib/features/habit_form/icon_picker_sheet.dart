@@ -46,9 +46,9 @@ class _IconPickerBodyState extends State<_IconPickerBody> {
             cursorColor: AppColors.cyan,
             decoration: InputDecoration(
               hintText: 'Search icons',
-              hintStyle: const TextStyle(color: AppColors.textHint),
+              hintStyle: TextStyle(color: AppColors.textHint),
               prefixIcon:
-                  const Icon(Icons.search, color: AppColors.textSecondary),
+                  Icon(Icons.search, color: AppColors.textSecondary),
               filled: true,
               fillColor: AppColors.surface,
               contentPadding: const EdgeInsets.symmetric(vertical: 12),

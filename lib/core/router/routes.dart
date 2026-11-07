@@ -1,4 +1,5 @@
 import '../utils/date_utils.dart';
+import '../../domain/models/note.dart';
 
 /// Every route path in one place.
 class AppRoutes {
@@ -40,11 +41,19 @@ class AppRoutes {
   static const String subtaskEditor = '/subtask-editor';
 
   // Notes
+  static const String noteLibrary = '/notes/library';
   static const String noteNewPath = '/note/new';
-  static String noteNew({String? habitId, DateTime? date}) {
+  static String noteNew({
+    String? habitId,
+    DateTime? date,
+    NoteType noteType = NoteType.daily,
+    DateTime? periodDate,
+  }) {
     final Map<String, String> query = <String, String>{};
     if (habitId != null) query['habit'] = habitId;
     if (date != null) query['date'] = dateKey(date);
+    if (noteType != NoteType.daily) query['type'] = noteType.name;
+    if (periodDate != null) query['period'] = dateKey(periodDate);
     return query.isEmpty
         ? noteNewPath
         : Uri(path: noteNewPath, queryParameters: query).toString();

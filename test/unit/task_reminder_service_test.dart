@@ -32,4 +32,10 @@ void main() {
       expect(reminders.taskDeadlineAlertTime(task(null)), isNull);
     });
   });
+
+  test('subtask reminder IDs are stable and task payload resolves parent ID', () {
+    expect(TaskReminderService.taskIdFromPayload('task-subtask|task-7|step-2'), 'task-7');
+    expect(TaskReminderService.taskIdFromPayload('task-deadline|task-9'), 'task-9');
+  });
+
 }
