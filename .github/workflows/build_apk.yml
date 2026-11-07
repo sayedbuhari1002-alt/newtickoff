@@ -18,7 +18,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          
 
       - name: Set up Flutter stable
         uses: subosito/flutter-action@v2
@@ -37,7 +36,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
         continue-on-error: true
 
-      - name: Prepare Android scaffold if absent
+      - name: Prepare Android scaffold and permanent signing configuration
         id: android_scaffold
         run: bash tool/prepare_android.sh
         continue-on-error: true
@@ -67,16 +66,88 @@ jobs:
         run: flutter test test/data
         continue-on-error: true
 
+      - name: Configure permanent Android release signing
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for secret_name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "::error::Missing GitHub Actions secret: ${secret_name}"
+              exit 1
+            fi
+          done
+
+          KEYSTORE_PATH="$RUNNER_TEMP/tazkiyane-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+
+          # Validate that the decoded keystore opens and contains the configured alias.
+          keytool -list -keystore "$KEYSTORE_PATH" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null
+
+          # Only the public certificate fingerprint is printed; no private key material is logged.
+          FINGERPRINT="$(keytool -exportcert \
+            -keystore "$KEYSTORE_PATH" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" | sha256sum | awk '{print toupper($1)}')"
+          echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "::notice title=Tazkiyane release certificate::SHA-256 $FINGERPRINT"
+        continue-on-error: true
+
       - name: Build release APK
         id: apk
         run: flutter build apk --release
         continue-on-error: true
 
+      - name: Verify APK uses the permanent Tazkiyane signing certificate
+        id: verify_signature
+        if: steps.apk.outcome == 'success' && steps.signing.outcome == 'success'
+        run: |
+          set -euo pipefail
+          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [[ -z "$SDK_ROOT" ]]; then
+            echo "::error::Android SDK path is unavailable; cannot verify APK signature."
+            exit 1
+          fi
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "$APKSIGNER" ]]; then
+            echo "::error::apksigner was not found in Android SDK build-tools."
+            exit 1
+          fi
+
+          EXPECTED="$(keytool -exportcert \
+            -keystore "$ANDROID_KEYSTORE_PATH" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" | sha256sum | awk '{print tolower($1)}')"
+          ACTUAL="$("$APKSIGNER" verify --print-certs "$APK_PATH" \
+            | sed -nE 's/.*Signer #1 certificate SHA-256 digest: ([0-9a-fA-F:]+).*/\1/p' \
+            | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+
+          if [[ -z "$ACTUAL" || "$EXPECTED" != "$ACTUAL" ]]; then
+            echo "::error::APK signing certificate does not match the permanent Tazkiyane keystore."
+            echo "Expected: $EXPECTED"
+            echo "Actual:   ${ACTUAL:-not found}"
+            exit 1
+          fi
+          echo "APK signature verified: $ACTUAL"
+        continue-on-error: true
+
       - name: Upload release APK artifact
-        if: steps.apk.outcome == 'success' && steps.android_scaffold.outcome == 'success' && steps.sqlite.outcome == 'success' && steps.pub_get.outcome == 'success' && steps.format.outcome == 'success' && steps.analyze.outcome == 'success' && steps.app_tests.outcome == 'success' && steps.db_tests.outcome == 'success'
+        if: steps.apk.outcome == 'success' && steps.android_scaffold.outcome == 'success' && steps.sqlite.outcome == 'success' && steps.pub_get.outcome == 'success' && steps.format.outcome == 'success' && steps.analyze.outcome == 'success' && steps.app_tests.outcome == 'success' && steps.db_tests.outcome == 'success' && steps.signing.outcome == 'success' && steps.verify_signature.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: tazkiyane-next-version-release-apk
+          name: tazkiyane-stable-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
@@ -91,15 +162,17 @@ jobs:
           ANALYZE: ${{ steps.analyze.outcome }}
           APP_TESTS: ${{ steps.app_tests.outcome }}
           DB_TESTS: ${{ steps.db_tests.outcome }}
+          SIGNING: ${{ steps.signing.outcome }}
           APK: ${{ steps.apk.outcome }}
+          VERIFY_SIGNATURE: ${{ steps.verify_signature.outcome }}
         run: |
           failed=0
-          for check in SQLITE ANDROID_SCAFFOLD PUB_GET FORMAT ANALYZE APP_TESTS DB_TESTS APK; do
+          for check in SQLITE ANDROID_SCAFFOLD PUB_GET FORMAT ANALYZE APP_TESTS DB_TESTS SIGNING APK VERIFY_SIGNATURE; do
             value="${!check}"
             echo "$check: $value"
             if [ "$value" != "success" ]; then failed=1; fi
           done
           if [ "$failed" -ne 0 ]; then
-            echo "One or more required checks failed. Review the earlier step logs; an APK artifact is uploaded only if every required check succeeds."
+            echo "One or more required checks failed. The release APK is uploaded only after all checks and signing verification succeed."
             exit 1
           fi

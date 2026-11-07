@@ -110,6 +110,10 @@ grep -q 'android.enableR8.fullMode=false' "$GRADLE_PROPERTIES"
 grep -q 'proguard-rules.pro' "$APP_GRADLE"
 echo "Applied Gson TypeToken keep rules and R8 compatibility-mode workaround."
 
+# Require one stable release-signing identity. The actual private keystore and
+# credentials are supplied only by GitHub Actions secrets at build time.
+python3 tool/configure_release_signing.py "$APP_GRADLE"
+
 # Runtime permissions and receivers required by exact local reminders and recording.
 for permission in POST_NOTIFICATIONS RECEIVE_BOOT_COMPLETED RECORD_AUDIO SCHEDULE_EXACT_ALARM; do
   if ! grep -q "android.permission.${permission}" "$MANIFEST"; then

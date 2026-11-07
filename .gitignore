@@ -22,3 +22,6 @@ key.properties
 .vscode/
 *.iml
 .DS_Store
+# Tazkiyane permanent Android signing material (never commit these files)
+tazkiyane-release.jks
+tazkiyane-release-keystore.base64.txt
