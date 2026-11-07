@@ -130,14 +130,32 @@ jobs:
             -keystore "$ANDROID_KEYSTORE_PATH" \
             -storepass "$ANDROID_KEYSTORE_PASSWORD" \
             -alias "$ANDROID_KEY_ALIAS" | sha256sum | awk '{print tolower($1)}')"
-          ACTUAL="$("$APKSIGNER" verify --print-certs "$APK_PATH" \
-            | sed -nE 's/.*Signer #1 certificate SHA-256 digest: ([0-9a-fA-F:]+).*/\1/p' \
-            | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          # Newer Android Build Tools can label signers by SDK range, for example:
+          # "Signer (minSdkVersion=24, maxSdkVersion=...) certificate SHA-256 digest: ..."
+          # Older versions use "Signer #1 certificate SHA-256 digest: ...".
+          # Accept both formats and capture stderr too, so diagnostic output is retained.
+          CERT_OUTPUT="$("$APKSIGNER" verify --print-certs "$APK_PATH" 2>&1)"
+          printf '%s\n' "$CERT_OUTPUT"
+          ACTUAL="$(printf '%s\n' "$CERT_OUTPUT" \
+            | sed -nE 's/.*Signer .* certificate SHA-256 digest: ([0-9a-fA-F:]+).*/\1/p' \
+            | tr -d ':' | tr '[:upper:]' '[:lower:]' | sort -u)"
 
-          if [[ -z "$ACTUAL" || "$EXPECTED" != "$ACTUAL" ]]; then
+
+          if [[ -z "$ACTUAL" ]]; then
+            echo "::error::Could not extract a SHA-256 signer certificate from apksigner output."
+            echo "Expected: $EXPECTED"
+            exit 1
+          fi
+          if [[ "$ACTUAL" == *$'\n'* ]]; then
+            echo "::error::APK reports more than one distinct signing certificate; refusing an ambiguous release."
+            echo "Expected: $EXPECTED"
+            echo "Actual certificates: $ACTUAL"
+            exit 1
+          fi
+          if [[ "$EXPECTED" != "$ACTUAL" ]]; then
             echo "::error::APK signing certificate does not match the permanent Tazkiyane keystore."
             echo "Expected: $EXPECTED"
-            echo "Actual:   ${ACTUAL:-not found}"
+            echo "Actual:   $ACTUAL"
             exit 1
           fi
           echo "APK signature verified: $ACTUAL"
