@@ -59,10 +59,11 @@ echo "Installed the approved Tazkiyane launcher icon in all Android densities."
 # Install the native Android home-screen widget resources. They are copied into
 # the freshly generated scaffold on every CI build.
 WIDGET_SOURCE="assets/branding/android_widget"
-mkdir -p android/app/src/main/res/layout android/app/src/main/res/xml android/app/src/main/res/drawable
+mkdir -p android/app/src/main/res/layout android/app/src/main/res/xml android/app/src/main/res/drawable android/app/src/main/res/values
 cp "$WIDGET_SOURCE/layout/tazkiyane_tasks_widget.xml" android/app/src/main/res/layout/
 cp "$WIDGET_SOURCE/xml/tazkiyane_tasks_widget_info.xml" android/app/src/main/res/xml/
 cp "$WIDGET_SOURCE/drawable/tazkiyane_widget_background.xml" android/app/src/main/res/drawable/
+cp "$WIDGET_SOURCE/values/tazkiyane_widget_strings.xml" android/app/src/main/res/values/
 KOTLIN_DIR="android/app/src/main/kotlin/dev/tickoffreplacement/tickoff_replacement"
 mkdir -p "$KOTLIN_DIR"
 cp "$WIDGET_SOURCE/kotlin/TazkiyaneTasksWidgetProvider.kt" "$KOTLIN_DIR/"
