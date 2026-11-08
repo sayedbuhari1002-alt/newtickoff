@@ -569,6 +569,10 @@ void main() {
       count: 4.5,
       checkedItemIds: const <String>{'c1', 'c2'},
       slipped: true,
+      // The SQLite schema persists the documented defaults for legacy or
+      // caller-created records that do not carry scoring snapshots.
+      productivityPoints: 1.0,
+      quitPenalty: 2.0,
     );
     await repo.upsertCompletion(r);
     expect((await repo.loadCompletions()).single, r);

@@ -320,7 +320,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
     padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.border)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-      Row(children: <Widget>[const Expanded(child: Text('Daily productivity score', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15))), Text('${score.netScore.toStringAsFixed(1)} / ${score.target.toStringAsFixed(1)}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19, color: AppColors.gold))]),
+      Row(children: <Widget>[const Expanded(child: Text('Daily productivity score', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15))), Text('${score.netScore.toStringAsFixed(1)} / ${score.target.toStringAsFixed(1)}', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19, color: AppColors.gold))]),
       const SizedBox(height: 12),
       ClipRRect(borderRadius: BorderRadius.circular(8), child: LinearProgressIndicator(value: score.targetProgress, minHeight: 10, backgroundColor: AppColors.border, color: AppColors.gold)),
       const SizedBox(height: 14),
@@ -331,7 +331,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
       ]),
       const SizedBox(height: 8),
       Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => _editTarget(data), icon: const Icon(Icons.tune_rounded, size: 17), label: Text(data.productivityTargetOverrides.containsKey(_dateKey(_selectedDate)) ? 'Edit date target' : 'Change target'))),
-      if (data.productivityTargetOverrides.containsKey(_dateKey(_selectedDate))) const Text('This date has a custom target override.', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+      if (data.productivityTargetOverrides.containsKey(_dateKey(_selectedDate))) Text('This date has a custom target override.', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
     ]),
   );
 
@@ -349,7 +349,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
             return Padding(padding: const EdgeInsets.only(right: 7), child: InkWell(onTap: () => setState(() => _selectedDate = day), borderRadius: BorderRadius.circular(12), child: Container(width: 62, padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 5), decoration: BoxDecoration(color: selected ? AppColors.surfaceRaised : AppColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: selected ? AppColors.gold : AppColors.border)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: <Widget>[
               Text('${day.day}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               Text(_month(day.month), style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-              Text(value.netScore.toStringAsFixed(1), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.gold)),
+              Text(value.netScore.toStringAsFixed(1), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.gold)),
             ]))));
           }),
       ])),
@@ -387,7 +387,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
           contentPadding: EdgeInsets.zero,
           title: Text(item.task.title, style: const TextStyle(fontWeight: FontWeight.w600)),
           subtitle: Text(item.reason, style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-          trailing: IconButton(tooltip: 'Schedule for ${_dateLabel(_selectedDate)}', onPressed: () async { await _guard(() => ref.read(appDataProvider.notifier).scheduleTaskForDate(item.task.id, _selectedDate)); _message('Added to ${_dateLabel(_selectedDate)} schedule.'); }, icon: const Icon(Icons.add_task_rounded, color: AppColors.gold)),
+          trailing: IconButton(tooltip: 'Schedule for ${_dateLabel(_selectedDate)}', onPressed: () async { await _guard(() => ref.read(appDataProvider.notifier).scheduleTaskForDate(item.task.id, _selectedDate)); _message('Added to ${_dateLabel(_selectedDate)} schedule.'); }, icon: Icon(Icons.add_task_rounded, color: AppColors.gold)),
         ),
     ]),
   );
