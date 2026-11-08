@@ -58,6 +58,8 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         await repo.loadAchievements();
     final List<Task> tasks = await repo.loadTasks();
     final List<TaskActivity> taskActivities = await repo.loadTaskActivities();
+    final List<TaskProgressEvent> taskProgressEvents = await repo.loadTaskProgressEvents();
+    final List<TaskTemplate> taskTemplates = await repo.loadTaskTemplates();
     final Map<String, String> settings = await repo.loadSettings();
 
     final Map<String, Map<String, CompletionRecord>> index =
@@ -76,6 +78,8 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       expenseCategories: expenseCategories,
       tasks: tasks,
       taskActivities: taskActivities,
+      taskProgressEvents: taskProgressEvents,
+      taskTemplates: taskTemplates,
       settings: settings,
     );
     // Refresh local notifications after every launch. A notification failure
@@ -370,6 +374,14 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         'isPaused': task.isPaused,
         'subtaskCount': task.subtasks.length,
         'hasSubtasks': task.subtasks.isNotEmpty,
+        'parentTaskId': task.parentTaskId,
+        'isGroup': task.isGroup,
+        'taskType': task.taskType.name,
+        'progressMode': task.progressMode.name,
+        'progressValue': task.progressValue,
+        'progressTarget': task.progressTarget,
+        'progressUnit': task.progressUnit,
+        'difficultyScore': task.difficultyScore,
         // Snapshot the child set for historical day breakdowns after children
         // are edited, removed, or the parent task is deleted.
         'subtasks': task.subtasks.map((Subtask s) => <String, dynamic>{
@@ -421,9 +433,11 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     final AppData data = _current;
     final Task? old = data.taskById(task.id);
     final DateTime now = DateTime.now();
-    final bool shouldBeCompleted = task.subtasks.isNotEmpty
-        ? task.subtasks.every((Subtask subtask) => subtask.isCompleted)
-        : task.isCompleted;
+    final bool shouldBeCompleted = task.taskType == TaskType.progressive
+        ? task.progressPercent >= 100
+        : task.subtasks.isNotEmpty
+            ? task.subtasks.every((Subtask subtask) => subtask.isCompleted)
+            : task.isCompleted;
     final Task saved = task.copyWith(
       isCompleted: shouldBeCompleted,
       completedAt: shouldBeCompleted ? (task.completedAt ?? now) : null,
@@ -480,6 +494,9 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         await _recordTaskActivity(saved, 'subtask_deleted', entityId: previous.id, entityType: 'subtask', subtask: previous, occurredAt: now);
       }
     }
+    if (saved.parentTaskId != null) {
+      await _refreshGroupCompletion(saved.parentTaskId!);
+    }
   }
 
   Future<void> setTaskCompleted(String taskId, bool completed) async {
@@ -487,8 +504,9 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     final Task? current = data.taskById(taskId);
     if (current == null) return;
     if (current.isPaused && completed) return;
-    if (completed && current.subtasks.any((Subtask s) => !s.isCompleted)) {
-      throw ArgumentError('Complete all subtasks before completing this task.');
+    final List<Task> childTasks = data.childrenForTask(taskId);
+    if (completed && (current.subtasks.any((Subtask s) => !s.isCompleted) || childTasks.any((Task t) => !t.isCompleted))) {
+      throw ArgumentError('Complete all child tasks and checklist items before completing this task.');
     }
     if (current.isCompleted == completed) return;
     final DateTime now = DateTime.now();
@@ -496,14 +514,33 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       isCompleted: completed,
       completedAt: completed ? now : null,
       clearCompletedAt: !completed,
+      progressValue: current.taskType == TaskType.progressive
+          ? (completed ? (current.progressMode == TaskProgressMode.percentage ? 100 : current.progressTarget) : 0)
+          : current.progressValue,
       updatedAt: now,
     );
     await _repo.upsertTask(updated);
     await TaskReminderService.instance.scheduleTask(updated);
+    TaskProgressEvent? progressEvent;
+    if (current.taskType == TaskType.progressive && current.progressValue != updated.progressValue) {
+      progressEvent = TaskProgressEvent(
+        id: newId(), taskId: taskId,
+        previousValue: current.progressValue, newValue: updated.progressValue,
+        previousPercent: current.progressPercent, newPercent: updated.progressPercent,
+        progressDelta: updated.progressPercent - current.progressPercent,
+        occurredAt: now, note: completed ? 'Marked complete' : 'Reopened',
+        difficultyScore: current.difficultyScore,
+      );
+      await _repo.addTaskProgressEvent(progressEvent);
+    }
     final List<Task> tasks = List<Task>.of(data.tasks);
     tasks[tasks.indexWhere((Task t) => t.id == taskId)] = updated;
-    state = AsyncData<AppData>(data.copyWith(tasks: tasks));
+    state = AsyncData<AppData>(data.copyWith(
+      tasks: tasks,
+      taskProgressEvents: progressEvent == null ? data.taskProgressEvents : <TaskProgressEvent>[...data.taskProgressEvents, progressEvent],
+    ));
     await _recordTaskActivity(updated, completed ? 'task_completed' : 'task_reopened', occurredAt: now);
+    if (updated.parentTaskId != null) await _refreshGroupCompletion(updated.parentTaskId!);
     if (completed) await _createNextRepeat(updated);
   }
 
@@ -535,13 +572,22 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       priority: completed.priority, category: completed.category, iconKey: completed.iconKey,
       colorValue: completed.colorValue, repeat: completed.repeat, notes: completed.notes,
       photoPaths: completed.photoPaths, audioPaths: completed.audioPaths,
-      subtasks: children, createdAt: now, updatedAt: now,
+      subtasks: children,
+      parentTaskId: completed.parentTaskId,
+      taskType: completed.taskType,
+      progressMode: completed.progressMode,
+      progressValue: 0,
+      progressTarget: completed.progressTarget,
+      progressUnit: completed.progressUnit,
+      difficultyScore: completed.difficultyScore,
+      createdAt: now, updatedAt: now,
     );
     await _repo.upsertTask(next);
     await TaskReminderService.instance.scheduleTask(next);
     final AppData data = _current;
     state = AsyncData<AppData>(data.copyWith(tasks: <Task>[...data.tasks, next]));
     await _recordTaskActivity(next, 'task_created', occurredAt: now);
+    if (next.parentTaskId != null) await _refreshGroupCompletion(next.parentTaskId!);
     for (final Subtask child in children) {
       await _recordTaskActivity(next, 'subtask_created', entityId: child.id, entityType: 'subtask', subtask: child, occurredAt: now);
     }
@@ -561,54 +607,263 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
   }
 
   Future<void> postponeTask(String taskId, {required int days}) async {
-    final Task? task = _current.taskById(taskId);
-    if (task == null || task.dueAt == null || days <= 0) return;
-    final Task updated = task.copyWith(
-      dueAt: task.dueAt!.add(Duration(days: days)),
-      reminderAt: task.reminderAt?.add(Duration(days: days)),
-      updatedAt: DateTime.now(),
-    );
-    await _repo.upsertTask(updated);
-    await TaskReminderService.instance.scheduleTask(updated);
+    if (days <= 0) return;
     final AppData data = _current;
-    final List<Task> tasks = List<Task>.of(data.tasks);
-    tasks[tasks.indexWhere((Task t) => t.id == taskId)] = updated;
-    state = AsyncData<AppData>(data.copyWith(tasks: tasks));
-    await _recordTaskActivity(updated, 'task_postponed');
+    final Task? root = data.taskById(taskId);
+    if (root == null) return;
+    final List<Task> affected = <Task>[root, ...data.childrenForTask(taskId)];
+    for (final Task task in affected) {
+      final Task updated = task.copyWith(
+        dueAt: task.dueAt?.add(Duration(days: days)),
+        reminderAt: task.reminderAt?.add(Duration(days: days)),
+        subtasks: task.subtasks.map((Subtask subtask) => subtask.copyWith(
+          dueAt: subtask.dueAt?.add(Duration(days: days)),
+          reminderAt: subtask.reminderAt?.add(Duration(days: days)),
+        )).toList(),
+        updatedAt: DateTime.now(),
+      );
+      await _repo.upsertTask(updated);
+      await TaskReminderService.instance.scheduleTask(updated);
+      final AppData latest = _current;
+      final List<Task> tasks = List<Task>.of(latest.tasks);
+      final int index = tasks.indexWhere((Task item) => item.id == updated.id);
+      if (index >= 0) tasks[index] = updated;
+      state = AsyncData<AppData>(latest.copyWith(tasks: tasks));
+      await _recordTaskActivity(updated, 'task_postponed');
+    }
   }
 
   Future<Task?> duplicateTask(String taskId) async {
-    final Task? original = _current.taskById(taskId);
+    final AppData data = _current;
+    final Task? original = data.taskById(taskId);
     if (original == null) return null;
     final DateTime now = DateTime.now();
-    final Task copy = Task(
-      id: newId(), title: original.title, description: original.description,
-      dueAt: original.dueAt, reminderAt: original.reminderAt,
-      priority: original.priority, category: original.category, iconKey: original.iconKey,
-      colorValue: original.colorValue, repeat: original.repeat, notes: original.notes,
-      photoPaths: original.photoPaths, audioPaths: original.audioPaths,
-      subtasks: original.subtasks.map((Subtask s) => Subtask(
-        id: newId(), title: s.title, createdAt: now, dueAt: s.dueAt, reminderAt: s.reminderAt, sortOrder: s.sortOrder,
+    Task freshCopy(Task source, {String? parentId, bool group = false}) => Task(
+      id: newId(), title: source.title, description: source.description,
+      dueAt: source.dueAt, reminderAt: source.reminderAt,
+      priority: source.priority, category: source.category, iconKey: source.iconKey,
+      colorValue: source.colorValue, isPaused: false,
+      repeat: source.repeat, notes: source.notes,
+      photoPaths: source.photoPaths, audioPaths: source.audioPaths,
+      parentTaskId: parentId ?? source.parentTaskId,
+      isGroup: group,
+      taskType: source.taskType,
+      progressMode: source.progressMode,
+      progressValue: 0,
+      progressTarget: source.progressTarget,
+      progressUnit: source.progressUnit,
+      difficultyScore: source.difficultyScore,
+      sortOrder: source.sortOrder,
+      subtasks: source.subtasks.map((Subtask s) => Subtask(
+        id: newId(), title: s.title, createdAt: now, dueAt: s.dueAt,
+        reminderAt: s.reminderAt, sortOrder: s.sortOrder,
       )).toList(),
       createdAt: now, updatedAt: now,
     );
+
+    final bool originalIsGroup = data.isGroupTask(original);
+    final Task copy = freshCopy(original, group: originalIsGroup);
     await _repo.upsertTask(copy);
     await TaskReminderService.instance.scheduleTask(copy);
-    final AppData data = _current;
-    state = AsyncData<AppData>(data.copyWith(tasks: <Task>[...data.tasks, copy]));
+    AppData latest = _current;
+    state = AsyncData<AppData>(latest.copyWith(tasks: <Task>[...latest.tasks, copy]));
     await _recordTaskActivity(copy, 'task_duplicated', occurredAt: now);
+
+    if (!originalIsGroup && copy.parentTaskId != null) {
+      await _refreshGroupCompletion(copy.parentTaskId!);
+    }
+    if (originalIsGroup) {
+      for (final Task child in data.childrenForTask(original.id)) {
+        final Task childCopy = freshCopy(child, parentId: copy.id);
+        await _repo.upsertTask(childCopy);
+        await TaskReminderService.instance.scheduleTask(childCopy);
+        latest = _current;
+        state = AsyncData<AppData>(latest.copyWith(tasks: <Task>[...latest.tasks, childCopy]));
+        await _recordTaskActivity(childCopy, 'task_duplicated', occurredAt: now);
+      }
+    }
     return copy;
   }
 
-  Future<void> deleteTask(String taskId) async {
-    final Task? task = _current.taskById(taskId);
+  Future<void> deleteTask(String taskId, {bool deleteChildren = false}) async {
+    final AppData data = _current;
+    final Task? task = data.taskById(taskId);
     if (task == null) return;
+    final String? previousParentId = task.parentTaskId;
+    final List<Task> children = data.childrenForTask(taskId);
+    if (!deleteChildren) {
+      for (final Task child in children) {
+        final Task detached = child.copyWith(clearParentTaskId: true, updatedAt: DateTime.now());
+        await _repo.upsertTask(detached);
+        final AppData latest = _current;
+        final List<Task> tasks = List<Task>.of(latest.tasks);
+        final int index = tasks.indexWhere((Task item) => item.id == detached.id);
+        if (index >= 0) tasks[index] = detached;
+        state = AsyncData<AppData>(latest.copyWith(tasks: tasks));
+        await _recordTaskActivity(detached, 'task_removed_from_group');
+      }
+    } else {
+      for (final Task child in children) {
+        await _recordTaskActivity(child, 'task_deleted');
+        await _repo.deleteTask(child.id);
+        await TaskReminderService.instance.cancelTask(child.id);
+      }
+    }
     await _recordTaskActivity(task, 'task_deleted');
     await _repo.deleteTask(taskId);
     await TaskReminderService.instance.cancelTask(taskId);
+    final AppData latest = _current;
+    state = AsyncData<AppData>(latest.copyWith(tasks: latest.tasks.where((Task t) => t.id != taskId && (!deleteChildren || !children.any((Task c) => c.id == t.id))).toList()));
+    await _cleanupOrphanedAttachments(<String>{...task.photoPaths, ...task.audioPaths, ...children.expand((Task c) => <String>[...c.photoPaths, ...c.audioPaths])});
+    if (previousParentId != null && _current.taskById(previousParentId) != null) {
+      await _refreshGroupCompletion(previousParentId);
+    }
+  }
+
+
+  Future<void> updateTaskProgress(String taskId, double newValue, {String note = ''}) async {
     final AppData data = _current;
-    state = AsyncData<AppData>(data.copyWith(tasks: data.tasks.where((Task t) => t.id != taskId).toList()));
-    await _cleanupOrphanedAttachments(<String>{...task.photoPaths, ...task.audioPaths});
+    final Task? current = data.taskById(taskId);
+    if (current == null || current.taskType != TaskType.progressive || current.isPaused) return;
+    final double bounded = newValue.clamp(0, current.progressTarget).toDouble();
+    if ((bounded - current.progressValue).abs() < 0.000001) return;
+    final double previousPercent = current.progressPercent;
+    final double nextPercent = current.progressMode == TaskProgressMode.count
+        ? (bounded / current.progressTarget * 100).clamp(0, 100).toDouble()
+        : bounded.clamp(0, 100).toDouble();
+    final DateTime now = DateTime.now();
+    final bool completed = nextPercent >= 100;
+    final Task updated = current.copyWith(
+      progressValue: bounded,
+      isCompleted: completed,
+      completedAt: completed ? (current.completedAt ?? now) : null,
+      clearCompletedAt: !completed,
+      updatedAt: now,
+    );
+    await _repo.upsertTask(updated);
+    await TaskReminderService.instance.scheduleTask(updated);
+    final TaskProgressEvent event = TaskProgressEvent(
+      id: newId(), taskId: taskId,
+      previousValue: current.progressValue, newValue: bounded,
+      previousPercent: previousPercent, newPercent: nextPercent,
+      progressDelta: nextPercent - previousPercent,
+      occurredAt: now, note: note,
+      difficultyScore: current.difficultyScore,
+    );
+    await _repo.addTaskProgressEvent(event);
+    final AppData latest = _current;
+    final List<Task> tasks = List<Task>.of(latest.tasks);
+    final int index = tasks.indexWhere((Task item) => item.id == taskId);
+    if (index >= 0) tasks[index] = updated;
+    state = AsyncData<AppData>(latest.copyWith(
+      tasks: tasks,
+      taskProgressEvents: <TaskProgressEvent>[...latest.taskProgressEvents, event],
+    ));
+    await _recordTaskActivity(updated, 'task_progress_updated', occurredAt: now);
+    if (current.isCompleted != updated.isCompleted) {
+      await _recordTaskActivity(updated, updated.isCompleted ? 'task_completed' : 'task_reopened', occurredAt: now);
+    }
+    if (current.isCompleted != updated.isCompleted && updated.parentTaskId != null) {
+      await _refreshGroupCompletion(updated.parentTaskId!);
+    }
+    if (completed && !current.isCompleted) await _createNextRepeat(updated);
+  }
+
+  Future<void> _refreshGroupCompletion(String parentId) async {
+    final AppData data = _current;
+    final Task? parent = data.taskById(parentId);
+    if (parent == null || !data.isGroupTask(parent)) return;
+    final List<Task> children = data.childrenForTask(parentId);
+    final bool allDone = children.isNotEmpty && children.every((Task child) => child.isCompleted);
+    if (parent.isCompleted == allDone) return;
+    final DateTime now = DateTime.now();
+    final Task updated = parent.copyWith(
+      isCompleted: allDone,
+      completedAt: allDone ? now : null,
+      clearCompletedAt: !allDone,
+      updatedAt: now,
+    );
+    await _repo.upsertTask(updated);
+    await TaskReminderService.instance.scheduleTask(updated);
+    final AppData latest = _current;
+    final List<Task> tasks = List<Task>.of(latest.tasks);
+    final int index = tasks.indexWhere((Task item) => item.id == parentId);
+    if (index >= 0) tasks[index] = updated;
+    state = AsyncData<AppData>(latest.copyWith(tasks: tasks));
+    await _recordTaskActivity(updated, allDone ? 'task_group_completed_automatic' : 'task_group_reopened_automatic', occurredAt: now);
+  }
+
+  Future<Task?> createTaskGroup(String title, List<String> taskIds) async {
+    final String trimmed = title.trim();
+    if (trimmed.isEmpty) throw ArgumentError('Enter a parent task name.');
+    final DateTime now = DateTime.now();
+    final Task parent = Task(
+      id: newId(), title: trimmed, createdAt: now, updatedAt: now,
+      isGroup: true, difficultyScore: 1.0,
+    );
+    await saveTask(parent);
+    await moveTasksToGroup(taskIds, parent.id);
+    return _current.taskById(parent.id);
+  }
+
+  Future<void> moveTasksToGroup(List<String> taskIds, String parentId) async {
+    final AppData data = _current;
+    final Task? parent = data.taskById(parentId);
+    if (parent == null || parent.parentTaskId != null) throw ArgumentError('Choose a top-level parent task.');
+    final List<Task> selected = <Task>[];
+    for (final String id in taskIds.toSet()) {
+      final Task? task = data.taskById(id);
+      if (task == null || task.id == parentId) continue;
+      if (data.childrenForTask(task.id).isNotEmpty || task.isGroup) {
+        throw ArgumentError('Move individual tasks, not an existing parent group.');
+      }
+      if (task.parentTaskId != parentId) selected.add(task);
+    }
+    if (selected.isEmpty) return;
+    final List<Task> updatedTasks = List<Task>.of(data.tasks);
+    int nextOrder = data.childrenForTask(parentId).length;
+    final Set<String> previousParents = selected.map((Task task) => task.parentTaskId).whereType<String>().where((String id) => id != parentId).toSet();
+    for (final Task task in selected) {
+      final Task updated = task.copyWith(parentTaskId: parentId, sortOrder: nextOrder++, updatedAt: DateTime.now());
+      await _repo.upsertTask(updated);
+      final int index = updatedTasks.indexWhere((Task item) => item.id == task.id);
+      if (index >= 0) updatedTasks[index] = updated;
+      await _recordTaskActivity(updated, 'task_moved_to_group');
+    }
+    await _repo.upsertTask(parent.copyWith(isGroup: true, updatedAt: DateTime.now()));
+    final AppData latest = _current;
+    final Task groupedParent = parent.copyWith(isGroup: true, updatedAt: DateTime.now());
+    final int parentIndex = updatedTasks.indexWhere((Task item) => item.id == parentId);
+    if (parentIndex >= 0) updatedTasks[parentIndex] = groupedParent;
+    state = AsyncData<AppData>(latest.copyWith(tasks: updatedTasks));
+    await _recordTaskActivity(groupedParent, 'task_group_updated');
+    for (final String previousParent in previousParents) {
+      if (_current.taskById(previousParent) != null) await _refreshGroupCompletion(previousParent);
+    }
+    await _refreshGroupCompletion(parentId);
+  }
+
+  Future<void> saveTaskTemplate(TaskTemplate template) async {
+    if (template.name.trim().isEmpty) throw ArgumentError('Enter a template name.');
+    if (template.difficultyScore < 1 || template.difficultyScore > 5) throw ArgumentError('Template difficulty must be between 1 and 5.');
+    if (template.taskType == TaskType.progressive && template.progressTarget <= 0) throw ArgumentError('Progress target must be greater than zero.');
+    final bool duplicateName = _current.taskTemplates.any((TaskTemplate existing) =>
+      existing.id != template.id && existing.name.trim().toLowerCase() == template.name.trim().toLowerCase());
+    if (duplicateName) throw ArgumentError('A template with this name already exists.');
+    final TaskTemplate saved = template.copyWith(name: template.name.trim(), updatedAt: DateTime.now());
+    await _repo.upsertTaskTemplate(saved);
+    final AppData data = _current;
+    final List<TaskTemplate> templates = List<TaskTemplate>.of(data.taskTemplates);
+    final int index = templates.indexWhere((TaskTemplate item) => item.id == saved.id);
+    if (index >= 0) templates[index] = saved; else templates.add(saved);
+    templates.sort((TaskTemplate a, TaskTemplate b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    state = AsyncData<AppData>(data.copyWith(taskTemplates: templates));
+  }
+
+  Future<void> deleteTaskTemplate(String templateId) async {
+    await _repo.deleteTaskTemplate(templateId);
+    final AppData data = _current;
+    state = AsyncData<AppData>(data.copyWith(taskTemplates: data.taskTemplates.where((TaskTemplate item) => item.id != templateId).toList()));
   }
 
   Future<void> toggleSubtask(String taskId, String subtaskId) async {
@@ -644,6 +899,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     if (task.isCompleted != updated.isCompleted) {
       await _recordTaskActivity(updated, allDone ? 'task_completed_automatic' : 'task_reopened_automatic', occurredAt: now);
       if (allDone) await _createNextRepeat(updated);
+      if (updated.parentTaskId != null) await _refreshGroupCompletion(updated.parentTaskId!);
     }
   }
 

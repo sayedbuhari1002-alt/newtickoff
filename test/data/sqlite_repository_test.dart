@@ -72,6 +72,14 @@ Task makeStoredTask({String id = 'task-1'}) => Task(
       iconKey: 'study',
       colorValue: 0xFF26C6DA,
       repeat: TaskRepeat.weekly,
+      parentTaskId: 'parent-group',
+      taskType: TaskType.progressive,
+      progressMode: TaskProgressMode.count,
+      progressValue: 5,
+      progressTarget: 10,
+      progressUnit: 'chapters',
+      difficultyScore: 3.5,
+      sortOrder: 2,
       notes: 'Use the lab results',
       photoPaths: const <String>['/app/attachments/photo.jpg'],
       audioPaths: const <String>['/app/attachments/audio.m4a'],
@@ -109,6 +117,14 @@ void main() {
     expect(loaded.reminderAt, task.reminderAt);
     expect(loaded.priority, TaskPriority.high);
     expect(loaded.repeat, TaskRepeat.weekly);
+    expect(loaded.parentTaskId, 'parent-group');
+    expect(loaded.taskType, TaskType.progressive);
+    expect(loaded.progressMode, TaskProgressMode.count);
+    expect(loaded.progressValue, 5);
+    expect(loaded.progressTarget, 10);
+    expect(loaded.progressUnit, 'chapters');
+    expect(loaded.difficultyScore, 3.5);
+    expect(loaded.sortOrder, 2);
     expect(loaded.notes, task.notes);
     expect(loaded.photoPaths, task.photoPaths);
     expect(loaded.audioPaths, task.audioPaths);
@@ -119,6 +135,37 @@ void main() {
     await repo.upsertTask(loaded.copyWith(title: 'Final report'));
     expect(await countRows(db, 'tasks'), 1);
     expect((await repo.loadTasks()).single.title, 'Final report');
+  });
+
+  test('progress events and reusable task templates round-trip in SQLite', () async {
+    final DateTime created = DateTime(2026, 11, 8, 9);
+    final TaskProgressEvent event = TaskProgressEvent(
+      id: 'progress-1', taskId: 'task-progress',
+      previousValue: 50, newValue: 70,
+      previousPercent: 50, newPercent: 70, progressDelta: 20,
+      occurredAt: created, difficultyScore: 3.5,
+    );
+    await repo.addTaskProgressEvent(event);
+    expect((await repo.loadTaskProgressEvents()).single.progressDelta, 20);
+    expect((await repo.loadTaskProgressEvents()).single.difficultyScore, 3.5);
+
+    final TaskTemplate template = TaskTemplate(
+      id: 'template-1', name: 'Academic Revision',
+      taskType: TaskType.progressive, progressMode: TaskProgressMode.count,
+      progressTarget: 12, progressUnit: 'chapters', difficultyScore: 3.5,
+      priority: TaskPriority.high, category: 'Study', iconKey: 'study',
+      repeat: TaskRepeat.weekly, createdAt: created, updatedAt: created,
+    );
+    await repo.upsertTaskTemplate(template);
+    final TaskTemplate loaded = (await repo.loadTaskTemplates()).single;
+    expect(loaded.name, template.name);
+    expect(loaded.taskType, TaskType.progressive);
+    expect(loaded.progressMode, TaskProgressMode.count);
+    expect(loaded.progressTarget, 12);
+    expect(loaded.difficultyScore, 3.5);
+    expect(loaded.priority, TaskPriority.high);
+    await repo.deleteTaskTemplate(template.id);
+    expect(await repo.loadTaskTemplates(), isEmpty);
   });
 
   test('daily notes preserve photo, audio and video attachment paths', () async {
@@ -171,6 +218,8 @@ void main() {
     expect(await db.getVersion(), AppDatabase.version);
     final List<Map<String, Object?>> subtaskColumns = await db.rawQuery('PRAGMA table_info(subtasks)');
     expect(subtaskColumns.map((Map<String, Object?> column) => column['name']), contains('reminder_at'));
+    final List<Map<String, Object?>> taskColumns = await db.rawQuery('PRAGMA table_info(tasks)');
+    expect(taskColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['parent_task_id', 'task_type', 'progress_value', 'difficulty_score']));
     final List<Map<String, Object?>> noteColumns = await db.rawQuery('PRAGMA table_info(notes)');
     expect(noteColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['video_json', 'note_type', 'period_date']));
     final List<Map<String, Object?>> tables = await db.rawQuery(
@@ -192,6 +241,8 @@ void main() {
         'app_settings',
         'expense_categories',
         'expenses',
+        'task_templates',
+        'task_progress_events',
       ]),
     );
   });

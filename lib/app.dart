@@ -52,10 +52,12 @@ class _TickOffAppState extends ConsumerState<TickOffApp>
                 // path. The final subtask completion automatically completes
                 // the parent, records history, and creates a repeating task
                 // instance when the task uses a repeat rule.
-                for (final Subtask item in task.subtasks.where(
-                  (Subtask item) => !item.isCompleted,
-                )) {
+                for (final Subtask item in task.subtasks.where((Subtask item) => !item.isCompleted)) {
                   await notifier.toggleSubtask(taskId, item.id);
+                }
+                final AppData? latestData = ref.read(appDataProvider).valueOrNull;
+                for (final Task child in (latestData?.childrenForTask(taskId) ?? <Task>[]).where((Task item) => !item.isCompleted)) {
+                  await notifier.setTaskCompleted(child.id, true);
                 }
                 final Task? latest = ref.read(appDataProvider).valueOrNull?.taskById(taskId);
                 if (latest != null && !latest.isCompleted && !latest.isPaused) {

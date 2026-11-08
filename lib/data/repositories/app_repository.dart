@@ -52,4 +52,9 @@ abstract class AppRepository {
   Future<void> deleteTask(String taskId);
   Future<List<TaskActivity>> loadTaskActivities();
   Future<void> addTaskActivity(TaskActivity activity);
+  Future<List<TaskProgressEvent>> loadTaskProgressEvents();
+  Future<void> addTaskProgressEvent(TaskProgressEvent event);
+  Future<List<TaskTemplate>> loadTaskTemplates();
+  Future<void> upsertTaskTemplate(TaskTemplate template);
+  Future<void> deleteTaskTemplate(String templateId);
 }

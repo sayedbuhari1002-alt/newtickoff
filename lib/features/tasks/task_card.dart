@@ -13,6 +13,10 @@ class TaskCard extends StatelessWidget {
     required this.onToggle,
     this.showOverdue = true,
     this.titleFontSize = 14,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onSelect,
+    this.onLongPress,
   });
   final Task task;
   final DateTime selectedDate;
@@ -20,6 +24,10 @@ class TaskCard extends StatelessWidget {
   final ValueChanged<bool> onToggle;
   final bool showOverdue;
   final double titleFontSize;
+  final bool selectionMode;
+  final bool selected;
+  final VoidCallback? onSelect;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -31,11 +39,20 @@ class TaskCard extends StatelessWidget {
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16), onTap: onOpen,
-        child: Padding(
+        borderRadius: BorderRadius.circular(16),
+        onTap: selectionMode ? onSelect : onOpen,
+        onLongPress: onLongPress,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: selected ? Border.all(color: AppColors.gold, width: 1.6) : null,
+          ),
           padding: const EdgeInsets.all(14),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-            Tooltip(message: blocked ? 'Complete all subtasks first' : task.isCompleted ? 'Reopen task' : 'Complete task', child: Checkbox(value: task.isCompleted, onChanged: task.isPaused || blocked ? null : (bool? value) { if (value != null) onToggle(value); }, activeColor: accent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)))),
+            if (selectionMode)
+              Checkbox(value: selected, onChanged: (_) => onSelect?.call(), activeColor: AppColors.gold, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)))
+            else
+              Tooltip(message: blocked ? 'Complete all checklist items first' : task.isCompleted ? 'Reopen task' : 'Complete task', child: Checkbox(value: task.isCompleted, onChanged: task.isPaused || blocked || task.taskType == TaskType.progressive ? null : (bool? value) { if (value != null) onToggle(value); }, activeColor: accent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)))),
             const SizedBox(width: 6),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
               Row(children: <Widget>[
@@ -51,9 +68,14 @@ class TaskCard extends StatelessWidget {
               Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: <Widget>[
                 if (dueLabel != null) _MetaPill(icon: Icons.event_outlined, label: dueLabel, color: overdue ? AppColors.danger : AppColors.textSecondary),
                 if (task.category.trim().isNotEmpty) _MetaPill(icon: Icons.label_outline_rounded, label: task.category, color: AppColors.textSecondary),
+                _MetaPill(icon: task.taskType == TaskType.progressive ? Icons.trending_up_rounded : Icons.check_circle_outline_rounded, label: task.taskType == TaskType.progressive ? task.progressDisplay : 'Standard', color: AppColors.textSecondary),
                 if (task.isPaused) _MetaPill(icon: Icons.pause_circle_outline_rounded, label: 'Paused', color: AppColors.textSecondary),
                 if (overdue) _MetaPill(icon: Icons.warning_amber_rounded, label: 'Overdue', color: AppColors.danger),
               ]),
+              if (task.taskType == TaskType.progressive) ...<Widget>[
+                const SizedBox(height: 10),
+                ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: task.progressPercent / 100, minHeight: 5, backgroundColor: AppColors.border, color: accent)),
+              ],
               if (task.subtasks.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 10),
                 Row(children: <Widget>[
@@ -64,7 +86,7 @@ class TaskCard extends StatelessWidget {
               ],
             ])),
             const SizedBox(width: 4),
-            Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
+            Icon(selectionMode ? (selected ? Icons.check_circle_rounded : Icons.circle_outlined) : Icons.chevron_right_rounded, color: selected ? AppColors.gold : AppColors.textHint),
           ]),
         ),
       ),

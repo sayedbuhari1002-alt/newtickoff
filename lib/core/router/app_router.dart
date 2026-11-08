@@ -27,6 +27,7 @@ import '../../features/tasks/task_analytics_screen.dart';
 import '../../features/tasks/task_detail_screen.dart';
 import '../../features/tasks/task_form_screen.dart';
 import '../../features/tasks/task_list_screen.dart';
+import '../../features/tasks/task_templates_screen.dart';
 import '../../shared/widgets/widgets.dart';
 import 'routes.dart';
 
@@ -62,7 +63,8 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
           ]),
         ],
       ),
-      GoRoute(path: AppRoutes.taskNew, builder: (BuildContext c, GoRouterState s) => const TaskFormScreen()),
+      GoRoute(path: AppRoutes.taskNew, builder: (BuildContext c, GoRouterState s) => TaskFormScreen(initialTemplate: s.extra is TaskTemplate ? s.extra as TaskTemplate : null)),
+      GoRoute(path: AppRoutes.taskTemplates, builder: (BuildContext c, GoRouterState s) => const TaskTemplatesScreen()),
       GoRoute(path: AppRoutes.subtaskEditor, builder: (BuildContext c, GoRouterState s) => SubtaskEditorScreen(
         initial: s.extra is List<Subtask> ? List<Subtask>.from(s.extra! as List<Subtask>) : const <Subtask>[],
       )),

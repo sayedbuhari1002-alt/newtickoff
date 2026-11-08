@@ -407,6 +407,15 @@ class SqliteAppRepository implements AppRepository {
           photoPaths: (jsonDecode(row['photo_paths_json'] as String? ?? '[]') as List).whereType<String>().toList(),
           audioPaths: (jsonDecode(row['audio_paths_json'] as String? ?? '[]') as List).whereType<String>().toList(),
           subtasks: byTask[row['id']] ?? const <Subtask>[],
+          parentTaskId: row['parent_task_id'] as String?,
+          isGroup: (row['is_group'] as int? ?? 0) != 0,
+          taskType: TaskType.values.firstWhere((TaskType v) => v.name == row['task_type'], orElse: () => TaskType.standard),
+          progressMode: TaskProgressMode.values.firstWhere((TaskProgressMode v) => v.name == row['progress_mode'], orElse: () => TaskProgressMode.percentage),
+          progressValue: (row['progress_value'] as num?)?.toDouble() ?? 0,
+          progressTarget: (row['progress_target'] as num?)?.toDouble() ?? 100,
+          progressUnit: row['progress_unit'] as String? ?? '',
+          difficultyScore: (row['difficulty_score'] as num?)?.toDouble() ?? 1.0,
+          sortOrder: (row['sort_order'] as int?) ?? 0,
           createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
           updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
         );
@@ -438,6 +447,15 @@ class SqliteAppRepository implements AppRepository {
         'notes': task.notes,
         'photo_paths_json': jsonEncode(task.photoPaths),
         'audio_paths_json': jsonEncode(task.audioPaths),
+        'parent_task_id': task.parentTaskId,
+        'is_group': task.isGroup ? 1 : 0,
+        'task_type': task.taskType.name,
+        'progress_mode': task.progressMode.name,
+        'progress_value': task.progressValue,
+        'progress_target': task.progressTarget,
+        'progress_unit': task.progressUnit,
+        'difficulty_score': task.difficultyScore,
+        'sort_order': task.sortOrder,
         'created_at': task.createdAt.toIso8601String(),
         'updated_at': task.updatedAt.toIso8601String(),
       };
@@ -486,6 +504,67 @@ class SqliteAppRepository implements AppRepository {
   @override
   Future<void> addTaskActivity(TaskActivity activity) async {
     await _db.insert('task_activities', activity.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  @override
+  Future<List<TaskProgressEvent>> loadTaskProgressEvents() async {
+    final List<Map<String, Object?>> rows = await _db.query(
+      'task_progress_events', orderBy: 'occurred_at ASC, id ASC',
+    );
+    return rows.map(TaskProgressEvent.fromMap).toList();
+  }
+
+  @override
+  Future<void> addTaskProgressEvent(TaskProgressEvent event) async {
+    await _db.insert('task_progress_events', event.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  @override
+  Future<List<TaskTemplate>> loadTaskTemplates() async {
+    final List<Map<String, Object?>> rows = await _db.query('task_templates', orderBy: 'name COLLATE NOCASE ASC');
+    return rows.map((Map<String, Object?> row) => TaskTemplate(
+      id: row['id'] as String,
+      name: row['name'] as String,
+      taskType: TaskType.values.firstWhere((TaskType v) => v.name == row['task_type'], orElse: () => TaskType.standard),
+      progressMode: TaskProgressMode.values.firstWhere((TaskProgressMode v) => v.name == row['progress_mode'], orElse: () => TaskProgressMode.percentage),
+      progressTarget: (row['progress_target'] as num?)?.toDouble() ?? 100,
+      progressUnit: row['progress_unit'] as String? ?? '',
+      difficultyScore: (row['difficulty_score'] as num?)?.toDouble() ?? 1.0,
+      priority: TaskPriority.values.firstWhere((TaskPriority v) => v.name == row['priority'], orElse: () => TaskPriority.medium),
+      category: row['category'] as String? ?? '',
+      iconKey: row['icon_key'] as String? ?? 'task',
+      colorValue: row['color_value'] as int? ?? 0xFFA78BFA,
+      repeat: TaskRepeat.values.firstWhere((TaskRepeat v) => v.name == row['repeat_rule'], orElse: () => TaskRepeat.none),
+      createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+      updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+    )).toList();
+  }
+
+  @override
+  Future<void> upsertTaskTemplate(TaskTemplate template) async {
+    final Map<String, Object?> row = <String, Object?>{
+      'id': template.id,
+      'name': template.name.trim(),
+      'task_type': template.taskType.name,
+      'progress_mode': template.progressMode.name,
+      'progress_target': template.progressTarget,
+      'progress_unit': template.progressUnit,
+      'difficulty_score': template.difficultyScore,
+      'priority': template.priority.name,
+      'category': template.category,
+      'icon_key': template.iconKey,
+      'color_value': template.colorValue,
+      'repeat_rule': template.repeat.name,
+      'created_at': template.createdAt.toIso8601String(),
+      'updated_at': template.updatedAt.toIso8601String(),
+    };
+    final int changed = await _db.update('task_templates', row, where: 'id = ?', whereArgs: <Object?>[template.id]);
+    if (changed == 0) await _db.insert('task_templates', row);
+  }
+
+  @override
+  Future<void> deleteTaskTemplate(String templateId) async {
+    await _db.delete('task_templates', where: 'id = ?', whereArgs: <Object?>[templateId]);
   }
 
   // ------------------------------------------------------------ achievements

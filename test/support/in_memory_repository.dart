@@ -16,6 +16,8 @@ class InMemoryAppRepository implements AppRepository {
       <String, Map<int, String>>{};
   final Map<String, Task> tasks = <String, Task>{};
   final Map<String, TaskActivity> taskActivities = <String, TaskActivity>{};
+  final Map<String, TaskProgressEvent> taskProgressEvents = <String, TaskProgressEvent>{};
+  final Map<String, TaskTemplate> taskTemplates = <String, TaskTemplate>{};
   final Map<String, String> settings = <String, String>{};
 
   @override
@@ -126,6 +128,23 @@ class InMemoryAppRepository implements AppRepository {
 
   @override
   Future<void> addTaskActivity(TaskActivity activity) async => taskActivities[activity.id] = activity;
+
+  @override
+  Future<List<TaskProgressEvent>> loadTaskProgressEvents() async => taskProgressEvents.values.toList()
+    ..sort((TaskProgressEvent a, TaskProgressEvent b) => a.occurredAt.compareTo(b.occurredAt));
+
+  @override
+  Future<void> addTaskProgressEvent(TaskProgressEvent event) async => taskProgressEvents[event.id] = event;
+
+  @override
+  Future<List<TaskTemplate>> loadTaskTemplates() async => taskTemplates.values.toList()
+    ..sort((TaskTemplate a, TaskTemplate b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+  @override
+  Future<void> upsertTaskTemplate(TaskTemplate template) async => taskTemplates[template.id] = template;
+
+  @override
+  Future<void> deleteTaskTemplate(String templateId) async => taskTemplates.remove(templateId);
 
   @override
   Future<void> saveAchievement(

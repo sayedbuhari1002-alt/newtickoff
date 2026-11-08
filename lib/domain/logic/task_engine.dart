@@ -222,6 +222,7 @@ class TaskAnalyticsEngine {
       if (latest?.eventType == 'task_deleted') continue;
       final Map<String, dynamic> data = latest?.snapshot ?? <String, dynamic>{};
       if (data.isEmpty && current == null) continue;
+      if (data['isGroup'] == true) continue;
       final String title = (data['title'] as String?) ?? current?.title ?? 'Deleted task';
       final DateTime? due = DateTime.tryParse('${data['dueAt'] ?? ''}') ?? current?.dueAt;
       final DateTime? reminder = DateTime.tryParse('${data['reminderAt'] ?? ''}') ?? current?.reminderAt;
@@ -348,6 +349,7 @@ class TaskAnalyticsEngine {
       // New tasks always have a creation snapshot. For old/corrupt data, use
       // the current model only if a snapshot is unavailable.
       if (snapshot.isEmpty && current == null) continue;
+      if (snapshot['isGroup'] == true) continue;
       final DateTime? due = DateTime.tryParse('${snapshot['dueAt'] ?? ''}') ?? current?.dueAt;
       final bool isCompleted = snapshot['isCompleted'] is bool
           ? snapshot['isCompleted'] as bool

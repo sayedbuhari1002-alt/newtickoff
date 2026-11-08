@@ -18,6 +18,7 @@ class HomeScreenWidgetService {
   static Future<void> update(AppData data) async {
     try {
       final List<Map<String, Object>> entries = data.tasks
+          .where((Task task) => task.parentTaskId != null || !data.isGroupTask(task))
           .map((Task task) => <String, Object>{
                 'id': task.id,
                 'title': task.title,

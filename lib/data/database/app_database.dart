@@ -10,13 +10,14 @@ import 'package:sqflite/sqflite.dart';
 /// * 4 - date-based journal notes and local expense tracking.
 /// * 5 - local video attachments for journal notes.
 /// * 6 - note categories/periods and independent subtask reminder timestamps.
+/// * 7 - first-class task groups, progressive task fields, templates and progress history.
 ///
 /// To change the schema, bump [version], add a step to [_migrations] that
 /// upgrades from the previous version, and keep [_createV1] untouched.
 class AppDatabase {
   AppDatabase._();
 
-  static const int version = 6;
+  static const int version = 7;
   static const String fileName = 'tickoff.db';
 
   /// Opens (creating if needed) the database. Pass [path] to use another file
@@ -37,6 +38,7 @@ class AppDatabase {
         if (newVersion >= 4) await _migrateV4(db);
         if (newVersion >= 5) await _migrateV5(db);
         if (newVersion >= 6) await _migrateV6(db);
+        if (newVersion >= 7) await _migrateV7(db);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         for (int v = oldVersion; v < newVersion; v++) {
@@ -55,10 +57,76 @@ class AppDatabase {
         3: _migrateV4,
         4: _migrateV5,
         5: _migrateV6,
+        6: _migrateV7,
       };
 
 
 
+
+
+
+  static Future<void> _migrateV7(Database db) async {
+    final List<Map<String, Object?>> taskTables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tasks'",
+    );
+    if (taskTables.isNotEmpty) {
+      final List<Map<String, Object?>> columns = await db.rawQuery('PRAGMA table_info(tasks)');
+      final Set<String> existing = columns.map((Map<String, Object?> c) => c['name'] as String).toSet();
+      final List<String> additions = <String>[
+        if (!existing.contains('parent_task_id')) 'ALTER TABLE tasks ADD COLUMN parent_task_id TEXT',
+        if (!existing.contains('is_group')) 'ALTER TABLE tasks ADD COLUMN is_group INTEGER NOT NULL DEFAULT 0',
+        if (!existing.contains('task_type')) "ALTER TABLE tasks ADD COLUMN task_type TEXT NOT NULL DEFAULT 'standard'",
+        if (!existing.contains('progress_mode')) "ALTER TABLE tasks ADD COLUMN progress_mode TEXT NOT NULL DEFAULT 'percentage'",
+        if (!existing.contains('progress_value')) 'ALTER TABLE tasks ADD COLUMN progress_value REAL NOT NULL DEFAULT 0',
+        if (!existing.contains('progress_target')) 'ALTER TABLE tasks ADD COLUMN progress_target REAL NOT NULL DEFAULT 100',
+        if (!existing.contains('progress_unit')) "ALTER TABLE tasks ADD COLUMN progress_unit TEXT NOT NULL DEFAULT ''",
+        if (!existing.contains('difficulty_score')) 'ALTER TABLE tasks ADD COLUMN difficulty_score REAL NOT NULL DEFAULT 1.0',
+        if (!existing.contains('sort_order')) 'ALTER TABLE tasks ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0',
+      ];
+      for (final String sql in additions) {
+        await db.execute(sql);
+      }
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id, sort_order)');
+    }
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS task_progress_events (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        previous_value REAL NOT NULL DEFAULT 0,
+        new_value REAL NOT NULL DEFAULT 0,
+        previous_percent REAL NOT NULL DEFAULT 0,
+        new_percent REAL NOT NULL DEFAULT 0,
+        progress_delta REAL NOT NULL DEFAULT 0,
+        difficulty_score REAL NOT NULL DEFAULT 1.0,
+        occurred_at TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT ''
+      )''');
+    final List<Map<String, Object?>> progressColumns = await db.rawQuery('PRAGMA table_info(task_progress_events)');
+    if (!progressColumns.any((Map<String, Object?> column) => column['name'] == 'difficulty_score')) {
+      await db.execute('ALTER TABLE task_progress_events ADD COLUMN difficulty_score REAL NOT NULL DEFAULT 1.0');
+    }
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_task_progress_task_time ON task_progress_events(task_id, occurred_at)');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS task_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        task_type TEXT NOT NULL DEFAULT 'standard',
+        progress_mode TEXT NOT NULL DEFAULT 'percentage',
+        progress_target REAL NOT NULL DEFAULT 100,
+        progress_unit TEXT NOT NULL DEFAULT '',
+        difficulty_score REAL NOT NULL DEFAULT 1.0,
+        priority TEXT NOT NULL DEFAULT 'medium',
+        category TEXT NOT NULL DEFAULT '',
+        icon_key TEXT NOT NULL DEFAULT 'task',
+        color_value INTEGER NOT NULL DEFAULT 4289170426,
+        repeat_rule TEXT NOT NULL DEFAULT 'none',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_task_templates_name ON task_templates(name COLLATE NOCASE)');
+  }
 
   static Future<void> _migrateV6(Database db) async {
     final List<Map<String, Object?>> noteTables = await db.rawQuery(

@@ -13,6 +13,8 @@ class AppData {
     this.expenseCategories = const <ExpenseCategory>[],
     this.tasks = const <Task>[],
     this.taskActivities = const <TaskActivity>[],
+    this.taskProgressEvents = const <TaskProgressEvent>[],
+    this.taskTemplates = const <TaskTemplate>[],
     this.settings = const <String, String>{},
   });
 
@@ -30,6 +32,8 @@ class AppData {
   final List<ExpenseCategory> expenseCategories;
   final List<Task> tasks;
   final List<TaskActivity> taskActivities;
+  final List<TaskProgressEvent> taskProgressEvents;
+  final List<TaskTemplate> taskTemplates;
 
   /// On-device preferences stored in the SQLite app_settings table.
   final Map<String, String> settings;
@@ -144,6 +148,28 @@ class AppData {
     return null;
   }
 
+  List<Task> childrenForTask(String id) => tasks
+      .where((Task task) => task.parentTaskId == id)
+      .toList()
+    ..sort((Task a, Task b) {
+      final int order = a.sortOrder.compareTo(b.sortOrder);
+      return order != 0 ? order : a.createdAt.compareTo(b.createdAt);
+    });
+
+  bool isGroupTask(Task task) => task.isGroup || childrenForTask(task.id).isNotEmpty;
+
+  /// Returns progress as a fraction from 0.0 to 1.0 for group indicators.
+  double progressForTask(Task task) {
+    final List<Task> children = childrenForTask(task.id);
+    if (children.isEmpty) return task.isGroup ? 0 : task.progressPercent / 100;
+    return children.fold<double>(0, (double sum, Task child) => sum + child.progressPercent / 100) / children.length;
+  }
+
+  List<TaskProgressEvent> progressHistoryForTask(String id) => taskProgressEvents
+      .where((TaskProgressEvent event) => event.taskId == id)
+      .toList()
+    ..sort((TaskProgressEvent a, TaskProgressEvent b) => a.occurredAt.compareTo(b.occurredAt));
+
   List<TaskActivity> activitiesForTask(String id) => taskActivities
       .where((TaskActivity a) => a.taskId == id)
       .toList()
@@ -189,6 +215,8 @@ class AppData {
     List<ExpenseCategory>? expenseCategories,
     List<Task>? tasks,
     List<TaskActivity>? taskActivities,
+    List<TaskProgressEvent>? taskProgressEvents,
+    List<TaskTemplate>? taskTemplates,
     Map<String, String>? settings,
   }) {
     return AppData(
@@ -201,6 +229,8 @@ class AppData {
       expenseCategories: expenseCategories ?? this.expenseCategories,
       tasks: tasks ?? this.tasks,
       taskActivities: taskActivities ?? this.taskActivities,
+      taskProgressEvents: taskProgressEvents ?? this.taskProgressEvents,
+      taskTemplates: taskTemplates ?? this.taskTemplates,
       settings: settings ?? this.settings,
     );
   }

@@ -35,6 +35,7 @@ class AppRoutes {
 
   // Tasks (full-screen)
   static const String taskNew = '/task/new';
+  static const String taskTemplates = '/task-templates';
   static String taskDetail(String id) => '/task/$id';
   static String taskEdit(String id) => '/task/$id/edit';
   static String taskProgress(String id) => '/task/$id/analytics';

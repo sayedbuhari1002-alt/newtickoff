@@ -5,6 +5,9 @@ import 'package:flutter/foundation.dart';
 enum TaskPriority { low, medium, high }
 enum TaskRepeat { none, daily, weekly, monthly }
 
+enum TaskType { standard, progressive }
+enum TaskProgressMode { percentage, count }
+
 @immutable
 class Subtask {
   const Subtask({
@@ -97,6 +100,15 @@ class Task {
     this.photoPaths = const <String>[],
     this.audioPaths = const <String>[],
     this.subtasks = const <Subtask>[],
+    this.parentTaskId,
+    this.isGroup = false,
+    this.taskType = TaskType.standard,
+    this.progressMode = TaskProgressMode.percentage,
+    this.progressValue = 0,
+    this.progressTarget = 100,
+    this.progressUnit = '',
+    this.difficultyScore = 1.0,
+    this.sortOrder = 0,
   });
 
   final String id;
@@ -115,13 +127,47 @@ class Task {
   final String notes;
   final List<String> photoPaths;
   final List<String> audioPaths;
+
+  /// Legacy inline checklist items are retained for existing installations.
+  /// New task grouping uses independent [Task] records and [parentTaskId].
   final List<Subtask> subtasks;
+
+  /// Parent relationship for a first-class task group. A group has no parent;
+  /// its children are ordinary Task records with this ID.
+  final String? parentTaskId;
+  final bool isGroup;
+
+  final TaskType taskType;
+  final TaskProgressMode progressMode;
+  /// Percentage (0..100) or completed count, depending on [progressMode].
+  final double progressValue;
+  /// 100 for percentage mode; configured total for count mode.
+  final double progressTarget;
+  final String progressUnit;
+  /// Reusable weight for future Productivity scoring (supports decimals).
+  final double difficultyScore;
+  final int sortOrder;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
   int get completedSubtasks => subtasks.where((Subtask s) => s.isCompleted).length;
   double get subtaskProgress => subtasks.isEmpty ? (isCompleted ? 1 : 0) : completedSubtasks / subtasks.length;
   bool get hasSubtasks => subtasks.isNotEmpty;
+
+  double get progressPercent {
+    if (taskType == TaskType.standard) return isCompleted ? 100 : 0;
+    if (progressMode == TaskProgressMode.count) {
+      if (progressTarget <= 0) return 0;
+      return ((progressValue / progressTarget) * 100).clamp(0, 100).toDouble();
+    }
+    return progressValue.clamp(0, 100).toDouble();
+  }
+
+  String get progressDisplay => progressMode == TaskProgressMode.count
+      ? '${progressValue.toStringAsFixed(progressValue == progressValue.roundToDouble() ? 0 : 1)} / ${progressTarget.toStringAsFixed(progressTarget == progressTarget.roundToDouble() ? 0 : 1)}${progressUnit.isEmpty ? '' : ' $progressUnit'}'
+      : '${progressPercent.toStringAsFixed(progressPercent == progressPercent.roundToDouble() ? 0 : 1)}%';
+
   /// A task is overdue only after its deadline calendar day has ended.
   /// A time-of-day deadline never makes a task overdue on the same date.
   bool get isOverdue {
@@ -141,6 +187,15 @@ class Task {
       if (reminderDay.isAfter(deadlineDay)) {
         return 'The reminder date cannot be after the deadline date.';
       }
+    }
+    if (difficultyScore < 1 || difficultyScore > 5) {
+      return 'Difficulty score must be between 1 and 5.';
+    }
+    if (taskType == TaskType.progressive && progressTarget <= 0) {
+      return 'Progress target must be greater than zero.';
+    }
+    if (progressValue < 0 || progressValue > progressTarget) {
+      return 'Progress must be between zero and the configured target.';
     }
     return null;
   }
@@ -165,6 +220,16 @@ class Task {
     List<String>? photoPaths,
     List<String>? audioPaths,
     List<Subtask>? subtasks,
+    String? parentTaskId,
+    bool clearParentTaskId = false,
+    bool? isGroup,
+    TaskType? taskType,
+    TaskProgressMode? progressMode,
+    double? progressValue,
+    double? progressTarget,
+    String? progressUnit,
+    double? difficultyScore,
+    int? sortOrder,
     DateTime? updatedAt,
   }) => Task(
         id: id,
@@ -184,6 +249,15 @@ class Task {
         photoPaths: photoPaths ?? this.photoPaths,
         audioPaths: audioPaths ?? this.audioPaths,
         subtasks: subtasks ?? this.subtasks,
+        parentTaskId: clearParentTaskId ? null : (parentTaskId ?? this.parentTaskId),
+        isGroup: isGroup ?? this.isGroup,
+        taskType: taskType ?? this.taskType,
+        progressMode: progressMode ?? this.progressMode,
+        progressValue: progressValue ?? this.progressValue,
+        progressTarget: progressTarget ?? this.progressTarget,
+        progressUnit: progressUnit ?? this.progressUnit,
+        difficultyScore: difficultyScore ?? this.difficultyScore,
+        sortOrder: sortOrder ?? this.sortOrder,
         createdAt: createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );
@@ -206,6 +280,15 @@ class Task {
         'photoPaths': photoPaths,
         'audioPaths': audioPaths,
         'subtasks': subtasks.map((Subtask s) => s.toJson()).toList(),
+        'parentTaskId': parentTaskId,
+        'isGroup': isGroup,
+        'taskType': taskType.name,
+        'progressMode': progressMode.name,
+        'progressValue': progressValue,
+        'progressTarget': progressTarget,
+        'progressUnit': progressUnit,
+        'difficultyScore': difficultyScore,
+        'sortOrder': sortOrder,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
       };
@@ -221,6 +304,8 @@ class Task {
         : <Subtask>[];
     TaskPriority parsePriority(Object? raw) => TaskPriority.values.where((TaskPriority p) => p.name == raw).firstOrNull ?? TaskPriority.medium;
     TaskRepeat parseRepeat(Object? raw) => TaskRepeat.values.where((TaskRepeat r) => r.name == raw).firstOrNull ?? TaskRepeat.none;
+    TaskType parseType(Object? raw) => TaskType.values.where((TaskType t) => t.name == raw).firstOrNull ?? TaskType.standard;
+    TaskProgressMode parseMode(Object? raw) => TaskProgressMode.values.where((TaskProgressMode m) => m.name == raw).firstOrNull ?? TaskProgressMode.percentage;
     return Task(
       id: json['id'] as String,
       title: (json['title'] as String? ?? '').trim(),
@@ -239,6 +324,15 @@ class Task {
       photoPaths: strings(json['photoPaths']),
       audioPaths: strings(json['audioPaths']),
       subtasks: subtasks,
+      parentTaskId: json['parentTaskId'] as String?,
+      isGroup: json['isGroup'] == true,
+      taskType: parseType(json['taskType']),
+      progressMode: parseMode(json['progressMode']),
+      progressValue: (json['progressValue'] as num?)?.toDouble() ?? 0,
+      progressTarget: (json['progressTarget'] as num?)?.toDouble() ?? 100,
+      progressUnit: (json['progressUnit'] as String?) ?? '',
+      difficultyScore: (json['difficultyScore'] as num?)?.toDouble() ?? 1.0,
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.tryParse('${json['createdAt'] ?? ''}') ?? now,
       updatedAt: DateTime.tryParse('${json['updatedAt'] ?? ''}') ?? now,
     );

@@ -18,8 +18,9 @@ import '../../state/app_data.dart';
 import '../../state/app_state.dart';
 
 class TaskFormScreen extends ConsumerStatefulWidget {
-  const TaskFormScreen({super.key, this.taskId});
+  const TaskFormScreen({super.key, this.taskId, this.initialTemplate});
   final String? taskId;
+  final TaskTemplate? initialTemplate;
 
   @override
   ConsumerState<TaskFormScreen> createState() => _TaskFormScreenState();
@@ -35,6 +36,11 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
   DateTime? _reminderAt;
   TaskPriority _priority = TaskPriority.medium;
   TaskRepeat _repeat = TaskRepeat.none;
+  TaskType _taskType = TaskType.standard;
+  TaskProgressMode _progressMode = TaskProgressMode.percentage;
+  final TextEditingController _progressTarget = TextEditingController(text: '100');
+  final TextEditingController _progressUnit = TextEditingController();
+  final TextEditingController _difficulty = TextEditingController(text: '1.0');
   int _colorValue = 0xFFA78BFA;
   String _iconKey = 'task';
   List<Subtask> _subtasks = <Subtask>[];
@@ -53,6 +59,9 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     _description.dispose();
     _category.dispose();
     _notes.dispose();
+    _progressTarget.dispose();
+    _progressUnit.dispose();
+    _difficulty.dispose();
     unawaited(_finishRecorderAndCleanup());
     super.dispose();
   }
@@ -81,11 +90,32 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     _reminderAt = task.reminderAt;
     _priority = task.priority;
     _repeat = task.repeat;
+    _taskType = task.taskType;
+    _progressMode = task.progressMode;
+    _progressTarget.text = task.progressTarget.toString();
+    _progressUnit.text = task.progressUnit;
+    _difficulty.text = task.difficultyScore.toString();
     _colorValue = task.colorValue;
     _iconKey = task.iconKey;
     _subtasks = List<Subtask>.of(task.subtasks);
     _photoPaths = List<String>.of(task.photoPaths);
     _audioPaths = List<String>.of(task.audioPaths);
+    _initialised = true;
+  }
+
+  void _fillTemplate(TaskTemplate template) {
+    _taskType = template.taskType;
+    _progressMode = template.progressMode;
+    _progressTarget.text = template.progressTarget.toString();
+    _progressUnit.text = template.progressUnit;
+    _difficulty.text = template.difficultyScore.toString();
+    _priority = template.priority;
+    _category.text = template.category;
+    _iconKey = template.iconKey;
+    _colorValue = template.colorValue;
+    _repeat = template.repeat;
+    // Deliberately do not populate title, due date, reminder, completion,
+    // current progress, notes or attachments from a template.
     _initialised = true;
   }
 
@@ -128,14 +158,6 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     final TimeOfDay? time = await showTimePicker(context: context, initialTime: initial);
     if (time == null || !mounted) return;
     setState(() => _reminderAt = DateTime(day.year, day.month, day.day, time.hour, time.minute));
-  }
-
-  Future<void> _editSubtasks() async {
-    final List<Subtask>? result = await context.push<List<Subtask>>(
-      AppRoutes.subtaskEditor,
-      extra: List<Subtask>.of(_subtasks),
-    );
-    if (result != null && mounted) setState(() => _subtasks = result);
   }
 
   Future<Directory> _attachmentDirectory() async {
@@ -202,6 +224,91 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     // Existing saved files are cleaned by the repository state layer after a successful save.
   }
 
+  Future<void> _applyTemplate() async {
+    final AppData? data = ref.read(appDataProvider).valueOrNull;
+    final List<TaskTemplate> templates = data?.taskTemplates ?? <TaskTemplate>[];
+    if (templates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No task templates yet. Save your current task settings as a template first.')));
+      return;
+    }
+    final TaskTemplate? selected = await showModalBottomSheet<TaskTemplate>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            const Padding(padding: EdgeInsets.fromLTRB(20, 4, 20, 12), child: Text('Choose a task template', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+            for (final TaskTemplate template in templates)
+              ListTile(
+                title: Text(template.name),
+                subtitle: Text('${template.taskType.name == 'standard' ? 'Standard' : 'Progressive'} · ${template.priority.name} priority · Difficulty ${template.difficultyScore}'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.pop(sheetContext, template),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _taskType = selected.taskType;
+      _progressMode = selected.progressMode;
+      _progressTarget.text = selected.progressTarget.toString();
+      _progressUnit.text = selected.progressUnit;
+      _difficulty.text = selected.difficultyScore.toString();
+      _priority = selected.priority;
+      _category.text = selected.category;
+      _iconKey = selected.iconKey;
+      _colorValue = selected.colorValue;
+      _repeat = selected.repeat;
+    });
+  }
+
+  Future<void> _saveAsTemplate() async {
+    final TextEditingController name = TextEditingController();
+    final bool? save = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Save task template'),
+        content: TextField(controller: name, autofocus: true, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Template name', hintText: 'Academic Revision')),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, name.text.trim().isNotEmpty), child: const Text('Save Template')),
+        ],
+      ),
+    );
+    if (save != true || !mounted) { name.dispose(); return; }
+    final double? difficulty = double.tryParse(_difficulty.text.trim());
+    final double? target = double.tryParse(_progressTarget.text.trim());
+    if (difficulty == null || difficulty < 1 || difficulty > 5 || (_taskType == TaskType.progressive && target != null && target <= 0) || (_taskType == TaskType.progressive && target == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Check the difficulty and progress target values.')));
+      name.dispose();
+      return;
+    }
+    try {
+      final DateTime now = DateTime.now();
+      final AppData? data = ref.read(appDataProvider).valueOrNull;
+      final List<TaskTemplate> matches = (data?.taskTemplates ?? <TaskTemplate>[]).where((TaskTemplate item) => item.name.toLowerCase() == name.text.trim().toLowerCase()).toList();
+      final TaskTemplate? existing = matches.isEmpty ? null : matches.first;
+      final TaskTemplate template = TaskTemplate(
+        id: existing?.id ?? newId(), name: name.text.trim(), createdAt: existing?.createdAt ?? now, updatedAt: now,
+        taskType: _taskType, progressMode: _progressMode,
+        progressTarget: double.tryParse(_progressTarget.text.trim()) ?? 100,
+        progressUnit: _progressUnit.text.trim(),
+        difficultyScore: double.tryParse(_difficulty.text.trim()) ?? 1.0,
+        priority: _priority, category: _category.text.trim(), iconKey: _iconKey,
+        colorValue: _colorValue, repeat: _repeat,
+      );
+      await ref.read(appDataProvider.notifier).saveTaskTemplate(template);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Template "${template.name}" saved.')));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+    } finally {
+      name.dispose();
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -222,6 +329,15 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
       completedAt: old?.completedAt,
       isPaused: old?.isPaused ?? false,
       repeat: _repeat,
+      taskType: _taskType,
+      progressMode: _progressMode,
+      progressValue: _taskType == TaskType.progressive && old?.taskType == TaskType.progressive && old?.progressMode == _progressMode ? (old?.progressValue ?? 0) : 0,
+      progressTarget: _taskType == TaskType.progressive && _progressMode == TaskProgressMode.count ? (double.tryParse(_progressTarget.text.trim()) ?? 100) : 100,
+      progressUnit: _progressUnit.text.trim(),
+      difficultyScore: double.tryParse(_difficulty.text.trim()) ?? 1.0,
+      parentTaskId: old?.parentTaskId,
+      isGroup: old?.isGroup ?? false,
+      sortOrder: old?.sortOrder ?? 0,
       notes: _notes.text.trim(),
       photoPaths: List<String>.of(_photoPaths),
       audioPaths: List<String>.of(_audioPaths),
@@ -259,12 +375,21 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
   Widget build(BuildContext context) {
     final AppData? data = ref.watch(appDataProvider).valueOrNull;
     final Task? existing = widget.taskId == null ? null : data?.taskById(widget.taskId!);
-    if (!_initialised && existing != null) _fill(existing);
+    if (!_initialised) {
+      if (existing != null) {
+        _fill(existing);
+      } else if (widget.initialTemplate != null) {
+        _fillTemplate(widget.initialTemplate!);
+      } else if (widget.taskId == null) {
+        _initialised = true;
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.taskId == null ? 'Add Task' : 'Edit Task'),
         actions: <Widget>[
+          IconButton(tooltip: 'Use template', onPressed: _saving ? null : _applyTemplate, icon: const Icon(Icons.playlist_add_rounded)),
           TextButton(onPressed: _saving ? null : _save, child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save')),
           const SizedBox(width: 8),
         ],
@@ -330,16 +455,50 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                 ],
                 onChanged: (TaskRepeat? value) => setState(() => _repeat = value ?? TaskRepeat.none),
               ),
-              const SizedBox(height: 24),
-              const _SectionTitle('Subtasks'),
-              Text('${_subtasks.where((Subtask s) => s.isCompleted).length} of ${_subtasks.length} completed', style: TextStyle(color: AppColors.textSecondary)),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(onPressed: _editSubtasks, icon: const Icon(Icons.account_tree_outlined), label: const Text('Open Subtask Editor')),
-              if (_subtasks.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 6),
-                for (final Subtask subtask in _subtasks)
-                  ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: Icon(subtask.isCompleted ? Icons.check_circle_rounded : Icons.circle_outlined, color: subtask.isCompleted ? AppColors.gold : AppColors.textSecondary), title: Text(subtask.title), subtitle: subtask.dueAt == null ? null : Text('Due ${_formatDateTime(subtask.dueAt!, includeTime: subtask.dueAt!.hour != 0 || subtask.dueAt!.minute != 0)}')),
+              const SizedBox(height: 18),
+              const _SectionTitle('Task Type and Progress'),
+              DropdownButtonFormField<TaskType>(
+                value: _taskType,
+                decoration: const InputDecoration(labelText: 'Task type'),
+                items: const <DropdownMenuItem<TaskType>>[
+                  DropdownMenuItem(value: TaskType.standard, child: Text('Standard task · Complete / Incomplete')),
+                  DropdownMenuItem(value: TaskType.progressive, child: Text('Progressive task · Track progress')),
+                ],
+                onChanged: (TaskType? value) => setState(() { _taskType = value ?? TaskType.standard; }),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _difficulty,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Difficulty score (1.0–5.0)', hintText: 'For future productivity scoring'),
+                validator: (String? value) {
+                  final double? parsed = double.tryParse(value?.trim() ?? '');
+                  return parsed == null || parsed < 1 || parsed > 5 ? 'Enter a score between 1 and 5.' : null;
+                },
+              ),
+              if (_taskType == TaskType.progressive) ...<Widget>[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<TaskProgressMode>(
+                  value: _progressMode,
+                  decoration: const InputDecoration(labelText: 'Progress tracking method'),
+                  items: const <DropdownMenuItem<TaskProgressMode>>[
+                    DropdownMenuItem(value: TaskProgressMode.percentage, child: Text('Percentage (0–100%)')),
+                    DropdownMenuItem(value: TaskProgressMode.count, child: Text('Count / target')),
+                  ],
+                  onChanged: (TaskProgressMode? value) => setState(() { _progressMode = value ?? TaskProgressMode.percentage; _progressTarget.text = _progressMode == TaskProgressMode.percentage ? '100' : _progressTarget.text; }),
+                ),
+                if (_progressMode == TaskProgressMode.count) ...<Widget>[
+                  const SizedBox(height: 12),
+                  TextFormField(controller: _progressTarget, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Total count / target'), validator: (String? value) { final double? parsed = double.tryParse(value?.trim() ?? ''); return parsed == null || parsed <= 0 ? 'Enter a target greater than zero.' : null; }),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: _progressUnit, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Unit (optional)', hintText: 'Chapters, pages, questions…')),
+                ] else
+                  const Padding(padding: EdgeInsets.only(top: 8), child: Text('You can update the percentage as you work over multiple sessions.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))),
               ],
+              const SizedBox(height: 16),
+              OutlinedButton.icon(onPressed: _saveAsTemplate, icon: const Icon(Icons.bookmark_add_outlined), label: const Text('Save these settings as a template')),
+              const SizedBox(height: 8),
+              Text('To organise related tasks, create them individually and group them from the Tasks screen using long-press selection.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
               const SizedBox(height: 24),
               const _SectionTitle('Notes'),
               TextFormField(controller: _notes, maxLines: 4, decoration: const InputDecoration(hintText: 'Add context or notes for this task…', alignLabelWithHint: true)),

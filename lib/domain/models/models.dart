@@ -10,3 +10,5 @@ export 'reminder.dart';
 export 'schedule.dart';
 export 'task.dart';
 export 'task_activity.dart';
+export 'task_template.dart';
+export 'task_progress_event.dart';

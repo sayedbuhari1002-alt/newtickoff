@@ -101,12 +101,22 @@ class _OverviewBody extends ConsumerWidget {
     final HabitEngine habits = ref.watch(habitEngineProvider);
     final List<Habit> dueHabits = data.activeHabits
         .where((Habit h) => habits.isDueOn(h, selected, data.recordsFor(h.id)))
-        .toList();
+        .toList()
+      ..sort((Habit a, Habit b) {
+        // Keep habits needing attention at the top of the Home section.
+        // Successful Build habits and clean Quit habits move below pending/slipped items.
+        final bool aSuccessful = habits.isSuccess(a, data.recordsFor(a.id)[dateKey(selected)]);
+        final bool bSuccessful = habits.isSuccess(b, data.recordsFor(b.id)[dateKey(selected)]);
+        if (aSuccessful != bSuccessful) return aSuccessful ? 1 : -1;
+        final int order = a.sortOrder.compareTo(b.sortOrder);
+        return order != 0 ? order : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
     final int doneHabits = dueHabits
         .where((Habit h) => habits.isSuccess(h, data.recordsFor(h.id)[dateKey(selected)]))
         .length;
+    final List<Task> dashboardTasks = data.tasks.where((Task task) => task.parentTaskId != null || !data.isGroupTask(task)).toList();
     final List<Task> dayTasks = filterAndSortTasks(
-      data.tasks,
+      dashboardTasks,
       filter: TaskListFilter.today,
       selectedDate: selected,
       includeCompleted: true,

@@ -293,7 +293,7 @@ void main() {
     expect(repo.taskActivities.values.map((TaskActivity a) => a.eventType), contains('task_reopened_automatic'));
   });
 
-  test('postponing a parent leaves independently configured subtask deadlines unchanged', () async {
+  test('postponing a parent also postpones its legacy checklist deadlines', () async {
     final InMemoryAppRepository repo = InMemoryAppRepository();
     final ProviderContainer c = containerFor(repo);
     final AppDataNotifier n = await load(c);
@@ -304,7 +304,96 @@ void main() {
     await n.postponeTask('t1', days: 1);
     final Task updated = dataOf(c).taskById('t1')!;
     expect(updated.dueAt, DateTime(2026, 11, 4, 17));
-    expect(updated.subtasks.single.dueAt, childDue);
+    expect(updated.subtasks.single.dueAt, childDue.add(const Duration(days: 1)));
+  });
+
+  test('progressive task changes retain dated percentage-point events', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    final AppDataNotifier n = await load(c);
+    final DateTime created = DateTime(2026, 10, 26);
+    final Task progressive = Task(
+      id: 'progressive-1', title: 'Unit 2 Revision',
+      taskType: TaskType.progressive, progressMode: TaskProgressMode.percentage,
+      progressValue: 0, progressTarget: 100, difficultyScore: 3.5,
+      createdAt: created, updatedAt: created,
+    );
+    await n.saveTask(progressive);
+    await n.updateTaskProgress(progressive.id, 50);
+    await n.updateTaskProgress(progressive.id, 70);
+    await n.updateTaskProgress(progressive.id, 100);
+    final List<TaskProgressEvent> history = dataOf(c).progressHistoryForTask(progressive.id);
+    expect(history.map((TaskProgressEvent event) => event.progressDelta), <double>[50, 20, 30]);
+    expect(history.map((TaskProgressEvent event) => event.newPercent), <double>[50, 70, 100]);
+    expect(history.map((TaskProgressEvent event) => event.occurredAt), orderedEquals(history.map((TaskProgressEvent event) => event.occurredAt).toList()..sort()));
+    expect(dataOf(c).taskById(progressive.id)!.isCompleted, isTrue);
+  });
+
+  test('independent tasks can be grouped and parent completion follows all children', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    final AppDataNotifier n = await load(c);
+    await n.saveTask(sampleTask(id: 'unit-1'));
+    await n.saveTask(sampleTask(id: 'unit-2'));
+    final Task? parent = await n.createTaskGroup('Mathematics Revision', <String>['unit-1', 'unit-2']);
+    expect(parent, isNotNull);
+    expect(dataOf(c).childrenForTask(parent!.id), hasLength(2));
+    await n.setTaskCompleted('unit-1', true);
+    expect(dataOf(c).taskById(parent.id)!.isCompleted, isFalse);
+    await n.setTaskCompleted('unit-2', true);
+    expect(dataOf(c).taskById(parent.id)!.isCompleted, isTrue);
+    expect(dataOf(c).progressForTask(parent), 1);
+  });
+
+  test('postponing a parent group shifts every child task schedule and reminder', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    final AppDataNotifier n = await load(c);
+    final DateTime due = DateTime(2026, 11, 3, 17);
+    final DateTime reminder = DateTime(2026, 11, 3, 9);
+    await n.saveTask(sampleTask(id: 'unit-a', dueAt: due, reminderAt: reminder));
+    await n.saveTask(sampleTask(id: 'unit-b', dueAt: due.add(const Duration(days: 1)), reminderAt: reminder.add(const Duration(days: 1))));
+    final Task? parent = await n.createTaskGroup('Revision', <String>['unit-a', 'unit-b']);
+    expect(parent, isNotNull);
+    await n.postponeTask(parent!.id, days: 2);
+    expect(dataOf(c).taskById('unit-a')!.dueAt, due.add(const Duration(days: 2)));
+    expect(dataOf(c).taskById('unit-a')!.reminderAt, reminder.add(const Duration(days: 2)));
+    expect(dataOf(c).taskById('unit-b')!.dueAt, due.add(const Duration(days: 3)));
+    expect(dataOf(c).taskById('unit-b')!.reminderAt, reminder.add(const Duration(days: 3)));
+  });
+
+  test('tasks can move from different groups into an existing parent group', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    final AppDataNotifier n = await load(c);
+    await n.saveTask(sampleTask(id: 'a'));
+    await n.saveTask(sampleTask(id: 'b'));
+    await n.saveTask(sampleTask(id: 'c'));
+    final Task? firstGroup = await n.createTaskGroup('Group A', <String>['a']);
+    final Task? secondGroup = await n.createTaskGroup('Group B', <String>['b']);
+    expect(firstGroup, isNotNull);
+    expect(secondGroup, isNotNull);
+    await n.moveTasksToGroup(<String>['a', 'b', 'c'], secondGroup!.id);
+    expect(dataOf(c).childrenForTask(firstGroup!.id), isEmpty);
+    expect(dataOf(c).childrenForTask(secondGroup.id).map((Task task) => task.id).toSet(), <String>{'a', 'b', 'c'});
+  });
+
+  test('task templates persist reusable fields without task title or schedule', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    final AppDataNotifier n = await load(c);
+    final DateTime now = DateTime(2026, 10, 27);
+    final TaskTemplate template = TaskTemplate(
+      id: 'template-1', name: 'Academic Revision', createdAt: now, updatedAt: now,
+      taskType: TaskType.progressive, progressMode: TaskProgressMode.count,
+      progressTarget: 10, progressUnit: 'chapters', difficultyScore: 2.5,
+      priority: TaskPriority.high, category: 'Study',
+    );
+    await n.saveTaskTemplate(template);
+    expect(dataOf(c).taskTemplates.single.name, 'Academic Revision');
+    expect(dataOf(c).taskTemplates.single.difficultyScore, 2.5);
+    await n.deleteTaskTemplate(template.id);
+    expect(dataOf(c).taskTemplates, isEmpty);
   });
 
   test('deleting a task removes the live record but keeps its history', () async {
