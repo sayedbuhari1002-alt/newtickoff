@@ -57,4 +57,23 @@ abstract class AppRepository {
   Future<List<TaskTemplate>> loadTaskTemplates();
   Future<void> upsertTaskTemplate(TaskTemplate template);
   Future<void> deleteTaskTemplate(String templateId);
+
+  // Productivity features (all local/offline).
+  Future<List<Assignment>> loadAssignments();
+  Future<void> upsertAssignment(Assignment assignment);
+  Future<void> deleteAssignment(String assignmentId);
+  Future<List<ProductivityTargetChange>> loadProductivityTargets();
+  Future<void> upsertProductivityTarget(ProductivityTargetChange change);
+  Future<Map<String, double>> loadProductivityTargetOverrides();
+  Future<void> upsertProductivityTargetOverride(String dateKey, double target);
+  Future<void> deleteProductivityTargetOverride(String dateKey);
+  Future<List<DistractionCategory>> loadDistractionCategories();
+  Future<void> upsertDistractionCategory(DistractionCategory category);
+  Future<void> deleteDistractionCategory(String categoryId);
+  Future<List<DistractionLog>> loadDistractionLogs();
+  Future<void> upsertDistractionLog(DistractionLog log);
+  Future<void> deleteDistractionLog(String logId);
+  Future<List<AppUsageRecord>> loadAppUsageRecords();
+  Future<void> upsertAppUsageRecord(AppUsageRecord record);
+  Future<void> deleteAppUsageRecordsForDate(String dateKey);
 }

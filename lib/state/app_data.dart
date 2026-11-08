@@ -15,6 +15,12 @@ class AppData {
     this.taskActivities = const <TaskActivity>[],
     this.taskProgressEvents = const <TaskProgressEvent>[],
     this.taskTemplates = const <TaskTemplate>[],
+    this.assignments = const <Assignment>[],
+    this.productivityTargets = const <ProductivityTargetChange>[],
+    this.productivityTargetOverrides = const <String, double>{},
+    this.distractionCategories = const <DistractionCategory>[],
+    this.distractionLogs = const <DistractionLog>[],
+    this.appUsageRecords = const <AppUsageRecord>[],
     this.settings = const <String, String>{},
   });
 
@@ -34,6 +40,12 @@ class AppData {
   final List<TaskActivity> taskActivities;
   final List<TaskProgressEvent> taskProgressEvents;
   final List<TaskTemplate> taskTemplates;
+  final List<Assignment> assignments;
+  final List<ProductivityTargetChange> productivityTargets;
+  final Map<String, double> productivityTargetOverrides;
+  final List<DistractionCategory> distractionCategories;
+  final List<DistractionLog> distractionLogs;
+  final List<AppUsageRecord> appUsageRecords;
 
   /// On-device preferences stored in the SQLite app_settings table.
   final Map<String, String> settings;
@@ -192,6 +204,20 @@ class AppData {
     return list;
   }
 
+  double targetForDate(DateTime date) {
+    final String key = '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final double? override = productivityTargetOverrides[key];
+    if (override != null) return override;
+    final List<ProductivityTargetChange> changes = List<ProductivityTargetChange>.of(productivityTargets)
+      ..sort((a, b) => a.effectiveDate.compareTo(b.effectiveDate));
+    double target = 15.0;
+    for (final ProductivityTargetChange change in changes) {
+      if (change.effectiveDate.compareTo(key) <= 0) target = change.target;
+      else break;
+    }
+    return target;
+  }
+
   int get nextSortOrder {
     int max = -1;
     for (final Habit h in habits) {
@@ -217,6 +243,12 @@ class AppData {
     List<TaskActivity>? taskActivities,
     List<TaskProgressEvent>? taskProgressEvents,
     List<TaskTemplate>? taskTemplates,
+    List<Assignment>? assignments,
+    List<ProductivityTargetChange>? productivityTargets,
+    Map<String, double>? productivityTargetOverrides,
+    List<DistractionCategory>? distractionCategories,
+    List<DistractionLog>? distractionLogs,
+    List<AppUsageRecord>? appUsageRecords,
     Map<String, String>? settings,
   }) {
     return AppData(
@@ -231,6 +263,12 @@ class AppData {
       taskActivities: taskActivities ?? this.taskActivities,
       taskProgressEvents: taskProgressEvents ?? this.taskProgressEvents,
       taskTemplates: taskTemplates ?? this.taskTemplates,
+      assignments: assignments ?? this.assignments,
+      productivityTargets: productivityTargets ?? this.productivityTargets,
+      productivityTargetOverrides: productivityTargetOverrides ?? this.productivityTargetOverrides,
+      distractionCategories: distractionCategories ?? this.distractionCategories,
+      distractionLogs: distractionLogs ?? this.distractionLogs,
+      appUsageRecords: appUsageRecords ?? this.appUsageRecords,
       settings: settings ?? this.settings,
     );
   }

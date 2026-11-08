@@ -21,6 +21,12 @@ class CompletionRecord {
     this.count = 0,
     this.checkedItemIds = const <String>{},
     this.slipped = false,
+    this.productivityPoints,
+    this.quitPenalty,
+    this.habitType,
+    this.trackingMethod,
+    this.dailyGoalSnapshot,
+    this.checklistItemIds,
   });
 
   final String habitId;
@@ -32,6 +38,14 @@ class CompletionRecord {
   final double count;
   final Set<String> checkedItemIds;
   final bool slipped;
+  /// Snapshot of the habit's scoring configuration when this date was first recorded.
+  final double? productivityPoints;
+  final double? quitPenalty;
+  /// Rule snapshots ensure later habit edits do not rewrite historical scores.
+  final String? habitType;
+  final String? trackingMethod;
+  final double? dailyGoalSnapshot;
+  final Set<String>? checklistItemIds;
 
   /// Unique identity of the record.
   String get key => '$habitId|$dateKey';
@@ -47,6 +61,12 @@ class CompletionRecord {
     double? count,
     Set<String>? checkedItemIds,
     bool? slipped,
+    double? productivityPoints,
+    double? quitPenalty,
+    String? habitType,
+    String? trackingMethod,
+    double? dailyGoalSnapshot,
+    Set<String>? checklistItemIds,
   }) {
     return CompletionRecord(
       habitId: habitId,
@@ -56,6 +76,12 @@ class CompletionRecord {
       count: count ?? this.count,
       checkedItemIds: checkedItemIds ?? this.checkedItemIds,
       slipped: slipped ?? this.slipped,
+      productivityPoints: productivityPoints ?? this.productivityPoints,
+      quitPenalty: quitPenalty ?? this.quitPenalty,
+      habitType: habitType ?? this.habitType,
+      trackingMethod: trackingMethod ?? this.trackingMethod,
+      dailyGoalSnapshot: dailyGoalSnapshot ?? this.dailyGoalSnapshot,
+      checklistItemIds: checklistItemIds ?? this.checklistItemIds,
     );
   }
 
@@ -67,6 +93,12 @@ class CompletionRecord {
         'count': count,
         'checkedItemIds': (checkedItemIds.toList()..sort()),
         'slipped': slipped,
+        'productivityPoints': productivityPoints,
+        'quitPenalty': quitPenalty,
+        'habitType': habitType,
+        'trackingMethod': trackingMethod,
+        'dailyGoalSnapshot': dailyGoalSnapshot,
+        'checklistItemIds': checklistItemIds == null ? null : (checklistItemIds!.toList()..sort()),
       };
 
   factory CompletionRecord.fromJson(Map<String, dynamic> json) {
@@ -82,6 +114,14 @@ class CompletionRecord {
           ? rawIds.whereType<String>().toSet()
           : const <String>{},
       slipped: json['slipped'] == true,
+      productivityPoints: (json['productivityPoints'] as num?)?.toDouble(),
+      quitPenalty: (json['quitPenalty'] as num?)?.toDouble(),
+      habitType: json['habitType'] as String?,
+      trackingMethod: json['trackingMethod'] as String?,
+      dailyGoalSnapshot: (json['dailyGoalSnapshot'] as num?)?.toDouble(),
+      checklistItemIds: json['checklistItemIds'] is List
+          ? (json['checklistItemIds'] as List).whereType<String>().toSet()
+          : null,
     );
   }
 
@@ -94,7 +134,13 @@ class CompletionRecord {
       other.done == done &&
       other.count == count &&
       setEquals(other.checkedItemIds, checkedItemIds) &&
-      other.slipped == slipped;
+      other.slipped == slipped &&
+      other.productivityPoints == productivityPoints &&
+      other.quitPenalty == quitPenalty &&
+      other.habitType == habitType &&
+      other.trackingMethod == trackingMethod &&
+      other.dailyGoalSnapshot == dailyGoalSnapshot &&
+      setEquals(other.checklistItemIds, checklistItemIds);
 
   @override
   int get hashCode => Object.hash(
@@ -105,5 +151,11 @@ class CompletionRecord {
         count,
         Object.hashAllUnordered(checkedItemIds),
         slipped,
+        productivityPoints,
+        quitPenalty,
+        habitType,
+        trackingMethod,
+        dailyGoalSnapshot,
+        checklistItemIds == null ? null : Object.hashAllUnordered(checklistItemIds!),
       );
 }

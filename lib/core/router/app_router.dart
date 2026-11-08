@@ -11,6 +11,7 @@ import '../../features/habit_detail/habit_detail_screen.dart';
 import '../../features/habit_form/habit_form_screen.dart';
 import '../../features/notes/note_editor_screen.dart';
 import '../../features/notes/notes_screen.dart';
+import '../../features/productivity/productivity_screen.dart';
 import '../../features/notes/note_library_screen.dart';
 import '../../features/expenses/expense_editor_screen.dart';
 import '../../features/settings/archive_screen.dart';
@@ -95,6 +96,7 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
           GoRoute(path: 'analytics', builder: (BuildContext c, GoRouterState s) => AnalyticsScreen(habitId: s.pathParameters['id'])),
         ],
       ),
+      GoRoute(path: AppRoutes.productivity, builder: (BuildContext c, GoRouterState s) => const ProductivityScreen()),
       GoRoute(path: AppRoutes.analytics, builder: (BuildContext c, GoRouterState s) => const AnalyticsScreen()),
       GoRoute(path: AppRoutes.noteLibrary, builder: (BuildContext c, GoRouterState s) => const NoteLibraryScreen()),
       GoRoute(path: AppRoutes.noteNewPath, builder: (BuildContext c, GoRouterState s) => NoteEditorScreen(habitId: s.uri.queryParameters['habit'], logDate: parseDateKey(s.uri.queryParameters['date'] ?? ''), noteType: NoteType.values.where((NoteType type) => type.name == s.uri.queryParameters['type']).firstOrNull ?? NoteType.daily, periodDate: parseDateKey(s.uri.queryParameters['period'] ?? ''))),

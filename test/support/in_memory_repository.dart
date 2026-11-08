@@ -19,6 +19,14 @@ class InMemoryAppRepository implements AppRepository {
   final Map<String, TaskProgressEvent> taskProgressEvents = <String, TaskProgressEvent>{};
   final Map<String, TaskTemplate> taskTemplates = <String, TaskTemplate>{};
   final Map<String, String> settings = <String, String>{};
+  final Map<String, Assignment> assignments = <String, Assignment>{};
+  final Map<String, ProductivityTargetChange> productivityTargets = <String, ProductivityTargetChange>{
+    '0001-01-01': const ProductivityTargetChange(effectiveDate: '0001-01-01', target: 15),
+  };
+  final Map<String, double> productivityTargetOverrides = <String, double>{};
+  final Map<String, DistractionCategory> distractionCategories = <String, DistractionCategory>{};
+  final Map<String, DistractionLog> distractionLogs = <String, DistractionLog>{};
+  final Map<String, AppUsageRecord> appUsageRecords = <String, AppUsageRecord>{};
 
   @override
   Future<Map<String, String>> loadSettings() async => Map<String, String>.of(settings);
@@ -157,4 +165,40 @@ class InMemoryAppRepository implements AppRepository {
           () => unlockedOn,
         );
   }
+
+  @override
+  Future<List<Assignment>> loadAssignments() async => assignments.values.toList();
+  @override
+  Future<void> upsertAssignment(Assignment value) async => assignments[value.id] = value;
+  @override
+  Future<void> deleteAssignment(String id) async => assignments.remove(id);
+  @override
+  Future<List<ProductivityTargetChange>> loadProductivityTargets() async => productivityTargets.values.toList()..sort((a, b) => a.effectiveDate.compareTo(b.effectiveDate));
+  @override
+  Future<void> upsertProductivityTarget(ProductivityTargetChange value) async => productivityTargets[value.effectiveDate] = value;
+  @override
+  Future<Map<String, double>> loadProductivityTargetOverrides() async => Map<String, double>.of(productivityTargetOverrides);
+  @override
+  Future<void> upsertProductivityTargetOverride(String key, double value) async => productivityTargetOverrides[key] = value;
+  @override
+  Future<void> deleteProductivityTargetOverride(String key) async => productivityTargetOverrides.remove(key);
+  @override
+  Future<List<DistractionCategory>> loadDistractionCategories() async => distractionCategories.values.toList();
+  @override
+  Future<void> upsertDistractionCategory(DistractionCategory value) async => distractionCategories[value.id] = value;
+  @override
+  Future<void> deleteDistractionCategory(String id) async { distractionCategories.remove(id); distractionLogs.removeWhere((_, value) => value.categoryId == id); appUsageRecords.removeWhere((_, value) => value.categoryId == id); }
+  @override
+  Future<List<DistractionLog>> loadDistractionLogs() async => distractionLogs.values.toList();
+  @override
+  Future<void> upsertDistractionLog(DistractionLog value) async => distractionLogs[value.id] = value;
+  @override
+  Future<void> deleteDistractionLog(String id) async => distractionLogs.remove(id);
+  @override
+  Future<List<AppUsageRecord>> loadAppUsageRecords() async => appUsageRecords.values.toList();
+  @override
+  Future<void> upsertAppUsageRecord(AppUsageRecord value) async => appUsageRecords[value.id] = value;
+  @override
+  Future<void> deleteAppUsageRecordsForDate(String key) async { final DateTime day = DateTime.parse(key); appUsageRecords.removeWhere((_, r) => r.startAt.isBefore(day.add(const Duration(days: 1))) && r.endAt.isAfter(day)); }
+
 }

@@ -7,10 +7,11 @@ DateTime dayOnly(DateTime value) => DateTime(value.year, value.month, value.day)
 /// those dates exists, the task is shown on that date only.
 bool isTaskScheduledOnDate(Task task, DateTime selectedDate) {
   if (task.isPaused) return false;
+  final DateTime selected = dayOnly(selectedDate);
+  if (task.scheduledDate != null && dayOnly(task.scheduledDate!).isAtSameMomentAs(selected)) return true;
   final DateTime? startValue = task.reminderAt ?? task.dueAt;
   if (startValue == null) return false;
   final DateTime start = dayOnly(startValue);
-  final DateTime selected = dayOnly(selectedDate);
   // A reminder-only task remains active from its reminder date until it is
   // completed or given a deadline. With a deadline, visibility ends that day.
   if (task.dueAt == null) return !selected.isBefore(start);

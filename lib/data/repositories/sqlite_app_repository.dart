@@ -105,6 +105,8 @@ class SqliteAppRepository implements AppRepository {
       'created_at': h.createdAt.toIso8601String(),
       'archived_at': h.archivedAt?.toIso8601String(),
       'sort_order': h.sortOrder,
+      'productivity_points': h.productivityPoints,
+      'quit_penalty': h.quitPenalty,
     };
   }
 
@@ -128,6 +130,8 @@ class SqliteAppRepository implements AppRepository {
       'createdAt': r['created_at'],
       'archivedAt': r['archived_at'],
       'sortOrder': r['sort_order'],
+      'productivityPoints': r['productivity_points'],
+      'quitPenalty': r['quit_penalty'],
     });
   }
 
@@ -185,6 +189,12 @@ class SqliteAppRepository implements AppRepository {
             'count': r['count_value'],
             'checkedItemIds': jsonDecode(r['checked_ids_json'] as String),
             'slipped': (r['slipped'] as int? ?? 0) != 0,
+            'productivityPoints': r['productivity_points'],
+            'quitPenalty': r['quit_penalty'],
+            'habitType': r['habit_type'],
+            'trackingMethod': r['tracking_method'],
+            'dailyGoalSnapshot': r['daily_goal_snapshot'],
+            'checklistItemIds': r['checklist_ids_snapshot_json'] == null ? null : jsonDecode(r['checklist_ids_snapshot_json'] as String),
             'updatedAt': r['updated_at'],
           }),
         );
@@ -208,6 +218,12 @@ class SqliteAppRepository implements AppRepository {
         'count_value': r.count,
         'checked_ids_json': jsonEncode(r.checkedItemIds.toList()..sort()),
         'slipped': r.slipped ? 1 : 0,
+        'productivity_points': r.productivityPoints ?? 1.0,
+        'quit_penalty': r.quitPenalty ?? 2.0,
+        'habit_type': r.habitType,
+        'tracking_method': r.trackingMethod,
+        'daily_goal_snapshot': r.dailyGoalSnapshot,
+        'checklist_ids_snapshot_json': r.checklistItemIds == null ? null : jsonEncode(r.checklistItemIds!.toList()..sort()),
         'updated_at': r.updatedAt.toIso8601String(),
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -374,6 +390,7 @@ class SqliteAppRepository implements AppRepository {
         createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
         dueAt: DateTime.tryParse(row['due_at'] as String? ?? ''),
         reminderAt: DateTime.tryParse(row['reminder_at'] as String? ?? ''),
+        difficultyScore: (row['difficulty_score'] as num?)?.toDouble() ?? 1.0,
         isCompleted: (row['is_completed'] as int? ?? 0) != 0,
         completedAt: DateTime.tryParse(row['completed_at'] as String? ?? ''),
         sortOrder: (row['sort_order'] as int?) ?? 0,
@@ -389,6 +406,7 @@ class SqliteAppRepository implements AppRepository {
           description: row['description'] as String? ?? '',
           dueAt: DateTime.tryParse(row['due_at'] as String? ?? ''),
           reminderAt: DateTime.tryParse(row['reminder_at'] as String? ?? ''),
+          scheduledDate: DateTime.tryParse(row['scheduled_date'] as String? ?? ''),
           priority: TaskPriority.values.firstWhere(
             (TaskPriority p) => p.name == row['priority'],
             orElse: () => TaskPriority.medium,
@@ -456,6 +474,7 @@ class SqliteAppRepository implements AppRepository {
         'progress_unit': task.progressUnit,
         'difficulty_score': task.difficultyScore,
         'sort_order': task.sortOrder,
+        'scheduled_date': task.scheduledDate?.toIso8601String(),
         'created_at': task.createdAt.toIso8601String(),
         'updated_at': task.updatedAt.toIso8601String(),
       };
@@ -480,6 +499,7 @@ class SqliteAppRepository implements AppRepository {
           'is_completed': subtask.isCompleted ? 1 : 0,
           'completed_at': subtask.completedAt?.toIso8601String(),
           'sort_order': subtask.sortOrder,
+          'difficulty_score': subtask.difficultyScore,
         };
         final int updated = await txn.update('subtasks', subRow, where: 'id = ?', whereArgs: <Object?>[subtask.id]);
         if (updated == 0) await txn.insert('subtasks', subRow);
@@ -597,4 +617,84 @@ class SqliteAppRepository implements AppRepository {
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
   }
+
+  // ----------------------------------------------------------- productivity
+
+  @override
+  Future<List<Assignment>> loadAssignments() async => (await _db.query('assignments', orderBy: 'due_at ASC, created_at DESC')).map(Assignment.fromMap).toList();
+
+  @override
+  Future<void> upsertAssignment(Assignment assignment) async => _upsert(_db, 'assignments', assignment.toMap());
+
+  @override
+  Future<void> deleteAssignment(String assignmentId) async {
+    await _db.delete('assignments', where: 'id = ?', whereArgs: <Object?>[assignmentId]);
+  }
+
+  @override
+  Future<List<ProductivityTargetChange>> loadProductivityTargets() async {
+    final rows = await _db.query('productivity_target_history', orderBy: 'effective_date ASC');
+    return rows.map((Map<String, Object?> row) => ProductivityTargetChange(
+      effectiveDate: row['effective_date'] as String,
+      target: (row['target'] as num).toDouble(),
+    )).toList();
+  }
+
+  @override
+  Future<void> upsertProductivityTarget(ProductivityTargetChange change) async {
+    await _db.insert('productivity_target_history', change.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  @override
+  Future<Map<String, double>> loadProductivityTargetOverrides() async {
+    final rows = await _db.query('productivity_target_overrides');
+    return <String, double>{for (final row in rows) row['date_key'] as String: (row['target'] as num).toDouble()};
+  }
+
+  @override
+  Future<void> upsertProductivityTargetOverride(String dateKey, double target) async {
+    await _db.insert('productivity_target_overrides', <String, Object?>{'date_key': dateKey, 'target': target}, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  @override
+  Future<void> deleteProductivityTargetOverride(String dateKey) async {
+    await _db.delete('productivity_target_overrides', where: 'date_key = ?', whereArgs: <Object?>[dateKey]);
+  }
+
+  @override
+  Future<List<DistractionCategory>> loadDistractionCategories() async => (await _db.query('distraction_categories', orderBy: 'name COLLATE NOCASE ASC')).map(DistractionCategory.fromMap).toList();
+
+  @override
+  Future<void> upsertDistractionCategory(DistractionCategory category) async => _upsert(_db, 'distraction_categories', category.toMap());
+
+  @override
+  Future<void> deleteDistractionCategory(String categoryId) async {
+    await _db.delete('distraction_categories', where: 'id = ?', whereArgs: <Object?>[categoryId]);
+  }
+
+  @override
+  Future<List<DistractionLog>> loadDistractionLogs() async => (await _db.query('distraction_logs', orderBy: 'start_at ASC')).map(DistractionLog.fromMap).toList();
+
+  @override
+  Future<void> upsertDistractionLog(DistractionLog log) async => _upsert(_db, 'distraction_logs', log.toMap());
+
+  @override
+  Future<void> deleteDistractionLog(String logId) async {
+    await _db.delete('distraction_logs', where: 'id = ?', whereArgs: <Object?>[logId]);
+  }
+
+  @override
+  Future<List<AppUsageRecord>> loadAppUsageRecords() async => (await _db.query('app_usage_records', orderBy: 'start_at ASC')).map(AppUsageRecord.fromMap).toList();
+
+  @override
+  Future<void> upsertAppUsageRecord(AppUsageRecord record) async => _upsert(_db, 'app_usage_records', record.toMap());
+
+  @override
+  Future<void> deleteAppUsageRecordsForDate(String dateKey) async {
+    final DateTime day = DateTime.tryParse(dateKey) ?? DateTime.now();
+    final DateTime start = DateTime(day.year, day.month, day.day);
+    final DateTime end = start.add(const Duration(days: 1));
+    await _db.delete('app_usage_records', where: 'start_at < ? AND end_at > ?', whereArgs: <Object?>[end.toIso8601String(), start.toIso8601String()]);
+  }
+
 }

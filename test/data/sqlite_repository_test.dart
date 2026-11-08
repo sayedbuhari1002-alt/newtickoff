@@ -41,6 +41,8 @@ Habit makeHabit({String id = 'h1', String? categoryId}) {
       ),
     ],
     sortOrder: 3,
+    productivityPoints: 2.75,
+    quitPenalty: 3.25,
   );
 }
 
@@ -79,12 +81,13 @@ Task makeStoredTask({String id = 'task-1'}) => Task(
       progressTarget: 10,
       progressUnit: 'chapters',
       difficultyScore: 3.5,
+      scheduledDate: DateTime(2026, 11, 1),
       sortOrder: 2,
       notes: 'Use the lab results',
       photoPaths: const <String>['/app/attachments/photo.jpg'],
       audioPaths: const <String>['/app/attachments/audio.m4a'],
       subtasks: <Subtask>[
-        Subtask(id: 'step-1', title: 'Gather notes', createdAt: DateTime(2026, 10, 27), dueAt: DateTime(2026, 11, 2, 11), reminderAt: DateTime(2026, 11, 1, 18), sortOrder: 0),
+        Subtask(id: 'step-1', title: 'Gather notes', createdAt: DateTime(2026, 10, 27), dueAt: DateTime(2026, 11, 2, 11), reminderAt: DateTime(2026, 11, 1, 18), sortOrder: 0, difficultyScore: 2.4),
       ],
       createdAt: DateTime(2026, 10, 27, 8),
       updatedAt: DateTime(2026, 10, 27, 8),
@@ -115,6 +118,7 @@ void main() {
     expect(loaded.description, task.description);
     expect(loaded.dueAt, task.dueAt);
     expect(loaded.reminderAt, task.reminderAt);
+    expect(loaded.scheduledDate, task.scheduledDate);
     expect(loaded.priority, TaskPriority.high);
     expect(loaded.repeat, TaskRepeat.weekly);
     expect(loaded.parentTaskId, 'parent-group');
@@ -131,6 +135,7 @@ void main() {
     expect(loaded.subtasks.single.id, 'step-1');
     expect(loaded.subtasks.single.dueAt, DateTime(2026, 11, 2, 11));
     expect(loaded.subtasks.single.reminderAt, DateTime(2026, 11, 1, 18));
+    expect(loaded.subtasks.single.difficultyScore, 2.4);
 
     await repo.upsertTask(loaded.copyWith(title: 'Final report'));
     expect(await countRows(db, 'tasks'), 1);
@@ -166,6 +171,64 @@ void main() {
     expect(loaded.priority, TaskPriority.high);
     await repo.deleteTaskTemplate(template.id);
     expect(await repo.loadTaskTemplates(), isEmpty);
+  });
+
+  test('Productivity settings, assignments and distraction records round-trip in SQLite', () async {
+    final DateTime created = DateTime(2026, 11, 8, 9);
+    await repo.upsertHabit(makeHabit().copyWith(productivityPoints: 2.75, quitPenalty: 3.25));
+    final Habit storedHabit = (await repo.loadHabits()).single;
+    expect(storedHabit.productivityPoints, 2.75);
+    expect(storedHabit.quitPenalty, 3.25);
+    final CompletionRecord scoredCompletion = CompletionRecord(
+      habitId: storedHabit.id, dateKey: '2026-11-08', updatedAt: created,
+      done: true, productivityPoints: 2.75, quitPenalty: 3.25,
+      habitType: 'build', trackingMethod: 'checklist', dailyGoalSnapshot: 2.5,
+      checklistItemIds: const <String>{'c1', 'c2'},
+    );
+    await repo.upsertCompletion(scoredCompletion);
+    expect((await repo.loadCompletions()).single.productivityPoints, 2.75);
+    expect((await repo.loadCompletions()).single.quitPenalty, 3.25);
+    expect((await repo.loadCompletions()).single.habitType, 'build');
+    expect((await repo.loadCompletions()).single.trackingMethod, 'checklist');
+    expect((await repo.loadCompletions()).single.dailyGoalSnapshot, 2.5);
+    expect((await repo.loadCompletions()).single.checklistItemIds, <String>{'c1', 'c2'});
+
+    final Assignment assignment = Assignment(
+      id: 'assignment-1', title: 'Submit assignment', description: 'Final PDF',
+      dueAt: DateTime(2026, 11, 10), priority: 'high', difficultyScore: 3.5,
+      createdAt: created, updatedAt: created, completedPoints: 3.0,
+    );
+    await repo.upsertAssignment(assignment);
+    expect((await repo.loadAssignments()).single.difficultyScore, 3.5);
+    expect((await repo.loadAssignments()).single.completedPoints, 3.0);
+
+    final DistractionCategory category = DistractionCategory(
+      id: 'category-1', name: 'Social Media', severityPointsPerHour: 2.5,
+      details: 'Manual and selected apps', autoTrack: true,
+      packageNames: const <String>['com.instagram.android', 'com.facebook.katana'],
+      createdAt: created,
+    );
+    await repo.upsertDistractionCategory(category);
+    final DistractionLog log = DistractionLog(
+      id: 'log-1', categoryId: category.id,
+      startAt: DateTime(2026, 11, 8, 12), endAt: DateTime(2026, 11, 8, 12, 20), severityPointsPerHour: 2.5,
+    );
+    await repo.upsertDistractionLog(log);
+    final AppUsageRecord usage = AppUsageRecord(
+      id: 'usage-1', categoryId: category.id, packageName: 'com.instagram.android',
+      startAt: DateTime(2026, 11, 8, 13), endAt: DateTime(2026, 11, 8, 13, 10), severityPointsPerHour: 2.5,
+    );
+    await repo.upsertAppUsageRecord(usage);
+    await repo.upsertProductivityTarget(const ProductivityTargetChange(effectiveDate: '2026-11-09', target: 18.5));
+    await repo.upsertProductivityTargetOverride('2026-11-10', 12.5);
+
+    expect((await repo.loadDistractionCategories()).single.packageNames, contains('com.instagram.android'));
+    expect((await repo.loadDistractionLogs()).single.durationMinutes, closeTo(20, 0.001));
+    expect((await repo.loadDistractionLogs()).single.severityPointsPerHour, 2.5);
+    expect((await repo.loadAppUsageRecords()).single.packageName, 'com.instagram.android');
+    expect((await repo.loadAppUsageRecords()).single.severityPointsPerHour, 2.5);
+    expect((await repo.loadProductivityTargets()).last.target, 18.5);
+    expect((await repo.loadProductivityTargetOverrides())['2026-11-10'], 12.5);
   });
 
   test('daily notes preserve photo, audio and video attachment paths', () async {
@@ -217,9 +280,13 @@ void main() {
   test('schema is created at the current version', () async {
     expect(await db.getVersion(), AppDatabase.version);
     final List<Map<String, Object?>> subtaskColumns = await db.rawQuery('PRAGMA table_info(subtasks)');
-    expect(subtaskColumns.map((Map<String, Object?> column) => column['name']), contains('reminder_at'));
+    expect(subtaskColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['reminder_at', 'difficulty_score']));
+    final List<Map<String, Object?>> completionColumns = await db.rawQuery('PRAGMA table_info(completions)');
+    expect(completionColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['productivity_points', 'quit_penalty', 'habit_type', 'tracking_method', 'daily_goal_snapshot', 'checklist_ids_snapshot_json']));
+    final List<Map<String, Object?>> habitColumns = await db.rawQuery('PRAGMA table_info(habits)');
+    expect(habitColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['productivity_points', 'quit_penalty']));
     final List<Map<String, Object?>> taskColumns = await db.rawQuery('PRAGMA table_info(tasks)');
-    expect(taskColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['parent_task_id', 'task_type', 'progress_value', 'difficulty_score']));
+    expect(taskColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['parent_task_id', 'task_type', 'progress_value', 'difficulty_score', 'scheduled_date']));
     final List<Map<String, Object?>> noteColumns = await db.rawQuery('PRAGMA table_info(notes)');
     expect(noteColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['video_json', 'note_type', 'period_date']));
     final List<Map<String, Object?>> tables = await db.rawQuery(
@@ -243,6 +310,12 @@ void main() {
         'expenses',
         'task_templates',
         'task_progress_events',
+        'assignments',
+        'productivity_target_history',
+        'productivity_target_overrides',
+        'distraction_categories',
+        'distraction_logs',
+        'app_usage_records',
       ]),
     );
   });
@@ -281,6 +354,56 @@ void main() {
       expect(retained.single['title'], 'Keep me');
       expect(await countRows(upgraded, 'tasks'), 0);
       expect(await countRows(upgraded, 'task_activities'), 0);
+    } finally {
+      await upgraded.close();
+      await databaseFactory.deleteDatabase(oldPath);
+    }
+  });
+
+  test('version-7 completion rows gain stable habit scoring snapshots', () async {
+    final String oldPath = p.join(await getDatabasesPath(), 'v7-productivity-migration-test.db');
+    await databaseFactory.deleteDatabase(oldPath);
+    final Database oldDb = await databaseFactory.openDatabase(
+      oldPath,
+      options: OpenDatabaseOptions(
+        version: 7,
+        onCreate: (Database database, int version) async {
+          await database.execute('''
+            CREATE TABLE habits (
+              id TEXT PRIMARY KEY, type TEXT NOT NULL, tracking TEXT NOT NULL,
+              daily_goal REAL, checklist_json TEXT NOT NULL DEFAULT '[]'
+            )
+          ''');
+          await database.execute('''
+            CREATE TABLE completions (
+              habit_id TEXT NOT NULL, date_key TEXT NOT NULL,
+              done INTEGER NOT NULL DEFAULT 0, count_value REAL NOT NULL DEFAULT 0,
+              checked_ids_json TEXT NOT NULL DEFAULT '[]', slipped INTEGER NOT NULL DEFAULT 0,
+              updated_at TEXT NOT NULL, PRIMARY KEY (habit_id, date_key)
+            )
+          ''');
+          await database.insert('habits', <String, Object?>{
+            'id': 'legacy-build', 'type': 'build', 'tracking': 'count',
+            'daily_goal': 4.0, 'checklist_json': '[]',
+          });
+          await database.insert('completions', <String, Object?>{
+            'habit_id': 'legacy-build', 'date_key': '2026-11-07',
+            'count_value': 2.0, 'updated_at': '2026-11-07T19:00:00.000',
+          });
+          await database.execute('CREATE TABLE tasks (id TEXT PRIMARY KEY)');
+          await database.execute('CREATE TABLE subtasks (id TEXT PRIMARY KEY, task_id TEXT)');
+        },
+      ),
+    );
+    await oldDb.close();
+    final Database upgraded = await AppDatabase.open(path: oldPath);
+    try {
+      final List<CompletionRecord> records = await SqliteAppRepository(upgraded).loadCompletions();
+      expect(records.single.habitType, 'build');
+      expect(records.single.trackingMethod, 'count');
+      expect(records.single.dailyGoalSnapshot, 4.0);
+      expect(records.single.productivityPoints, 1.0);
+      expect(await upgraded.getVersion(), AppDatabase.version);
     } finally {
       await upgraded.close();
       await databaseFactory.deleteDatabase(oldPath);

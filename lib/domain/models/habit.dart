@@ -31,6 +31,8 @@ class Habit {
     this.checklist = const <ChecklistItem>[],
     this.archivedAt,
     this.sortOrder = 0,
+    this.productivityPoints = 1.0,
+    this.quitPenalty = 2.0,
   });
 
   /// Icon shown by default in the form (resolved by the icon catalogue, Stage 2).
@@ -56,6 +58,8 @@ class Habit {
     double step = 1,
     List<ChecklistItem> checklist = const <ChecklistItem>[],
     int sortOrder = 0,
+    double productivityPoints = 1.0,
+    double quitPenalty = 2.0,
     DateTime? now,
   }) {
     return Habit(
@@ -75,6 +79,8 @@ class Habit {
       step: step,
       checklist: checklist,
       sortOrder: sortOrder,
+      productivityPoints: productivityPoints,
+      quitPenalty: quitPenalty,
       createdAt: now ?? DateTime.now(),
     );
   }
@@ -104,6 +110,10 @@ class Habit {
   final DateTime createdAt;
   final DateTime? archivedAt;
   final int sortOrder;
+  /// Points awarded when this Build Habit is fully completed (1.0–5.0).
+  final double productivityPoints;
+  /// Penalty applied only when a Quit Habit slip is explicitly recorded.
+  final double quitPenalty;
 
   bool get isArchived => archivedAt != null;
 
@@ -118,6 +128,8 @@ class Habit {
       }
       if (step <= 0) return 'Each tap must add more than zero.';
     }
+    if (!productivityPoints.isFinite || productivityPoints < 1 || productivityPoints > 5) return 'Habit points must be between 1 and 5.';
+    if (!quitPenalty.isFinite || quitPenalty < 0 || quitPenalty > 10) return 'Quit penalty must be between 0 and 10.';
     if (tracking == TrackingMethod.checklist) {
       if (checklist.isEmpty) return 'Add at least one checklist item.';
       if (checklist.any((ChecklistItem i) => i.title.trim().isEmpty)) {
@@ -147,6 +159,8 @@ class Habit {
     DateTime? archivedAt,
     bool clearArchived = false,
     int? sortOrder,
+    double? productivityPoints,
+    double? quitPenalty,
   }) {
     return Habit(
       id: id,
@@ -168,6 +182,8 @@ class Habit {
       createdAt: createdAt,
       archivedAt: clearArchived ? null : (archivedAt ?? this.archivedAt),
       sortOrder: sortOrder ?? this.sortOrder,
+      productivityPoints: productivityPoints ?? this.productivityPoints,
+      quitPenalty: quitPenalty ?? this.quitPenalty,
     );
   }
 
@@ -190,6 +206,8 @@ class Habit {
         'createdAt': createdAt.toIso8601String(),
         'archivedAt': archivedAt?.toIso8601String(),
         'sortOrder': sortOrder,
+        'productivityPoints': productivityPoints,
+        'quitPenalty': quitPenalty,
       };
 
   factory Habit.fromJson(Map<String, dynamic> json) {
@@ -227,6 +245,8 @@ class Habit {
           DateTime.fromMillisecondsSinceEpoch(0),
       archivedAt: rawArchived == null ? null : DateTime.tryParse(rawArchived),
       sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      productivityPoints: (json['productivityPoints'] as num?)?.toDouble() ?? 1.0,
+      quitPenalty: (json['quitPenalty'] as num?)?.toDouble() ?? 2.0,
     );
   }
 
@@ -250,7 +270,9 @@ class Habit {
       listEquals(other.checklist, checklist) &&
       other.createdAt == createdAt &&
       other.archivedAt == archivedAt &&
-      other.sortOrder == sortOrder;
+      other.sortOrder == sortOrder &&
+      other.productivityPoints == productivityPoints &&
+      other.quitPenalty == quitPenalty;
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
@@ -272,5 +294,7 @@ class Habit {
         createdAt,
         archivedAt,
         sortOrder,
+        productivityPoints,
+        quitPenalty,
       ]);
 }

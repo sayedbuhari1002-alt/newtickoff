@@ -21,6 +21,11 @@ class SettingsScreen extends StatelessWidget {
           _Group(
             children: <Widget>[
               _Tile(
+                icon: Icons.insights_rounded,
+                label: 'Productivity',
+                route: AppRoutes.productivity,
+              ),
+              _Tile(
                 icon: Icons.ios_share_rounded,
                 label: 'Share Progress',
                 route: AppRoutes.shareProgress,

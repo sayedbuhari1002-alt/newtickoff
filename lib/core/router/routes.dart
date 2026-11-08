@@ -30,6 +30,7 @@ class AppRoutes {
   static String habitAnalytics(String id) => '/habit/$id/analytics';
 
   // Analytics across habits and tasks
+  static const String productivity = '/productivity';
   static const String analytics = '/analytics';
   static const String taskAnalytics = '/task-analytics';
 

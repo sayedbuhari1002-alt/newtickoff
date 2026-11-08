@@ -32,6 +32,8 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
   final TextEditingController _goal = TextEditingController();
   final TextEditingController _unit = TextEditingController();
   final TextEditingController _step = TextEditingController(text: '1');
+  final TextEditingController _productivityPoints = TextEditingController(text: '1.0');
+  final TextEditingController _quitPenalty = TextEditingController(text: '2.0');
 
   bool _initialized = false;
   Habit? _editing;
@@ -60,6 +62,8 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
     _goal.dispose();
     _unit.dispose();
     _step.dispose();
+    _productivityPoints.dispose();
+    _quitPenalty.dispose();
     super.dispose();
   }
 
@@ -88,6 +92,8 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
     if (h.dailyGoal != null) _goal.text = formatNumber(h.dailyGoal!);
     _unit.text = h.unit;
     _step.text = formatNumber(h.step);
+    _productivityPoints.text = formatNumber(h.productivityPoints);
+    _quitPenalty.text = formatNumber(h.quitPenalty);
   }
 
   double? _parse(String text) =>
@@ -167,6 +173,8 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
       unit: _unit.text.trim(),
       step: step,
       checklist: _checklist,
+      productivityPoints: _parse(_productivityPoints.text) ?? 1.0,
+      quitPenalty: _parse(_quitPenalty.text) ?? 2.0,
     );
 
     final String? problem = habit.validate();
@@ -333,6 +341,34 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
                 );
                 if (choice != null) setState(() => _categoryId = choice.id);
               },
+            ),
+          ),
+          const SizedBox(height: AppDimens.gap),
+          SectionCard(
+            title: 'Productivity Score',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (!quit) ...<Widget>[
+                  const _FieldLabel('POINTS WHEN FULLY COMPLETED'),
+                  TickTextField(
+                    hintText: '1.0',
+                    controller: _productivityPoints,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  const SizedBox(height: 6),
+                  const _Caption('Partial checklist and count progress earn the same proportion of these points. Use a count unit such as minutes to track time.'),
+                ] else ...<Widget>[
+                  const _FieldLabel('PENALTY FOR AN EXPLICIT SLIP'),
+                  TickTextField(
+                    hintText: '2.0',
+                    controller: _quitPenalty,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  const SizedBox(height: 6),
+                  const _Caption('A slip-free day and an unrecorded day have no score or penalty.'),
+                ],
+              ],
             ),
           ),
           const SizedBox(height: AppDimens.gap),

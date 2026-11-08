@@ -18,12 +18,15 @@ class _SubtaskEditorScreenState extends State<SubtaskEditorScreen> {
 
   Future<void> _addOrEdit({Subtask? existing, int? index}) async {
     final TextEditingController title = TextEditingController(text: existing?.title ?? '');
+    final TextEditingController points = TextEditingController(text: (existing?.difficultyScore ?? 1.0).toString());
     DateTime? dueAt = existing?.dueAt;
     DateTime? reminderAt = existing?.reminderAt;
     final bool? save = await showDialog<bool>(context: context, builder: (BuildContext context) => StatefulBuilder(builder: (BuildContext context, StateSetter setDialogState) => AlertDialog(
       title: Text(existing == null ? 'Add subtask' : 'Edit subtask'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
         TextField(controller: title, autofocus: true, textCapitalization: TextCapitalization.sentences, decoration: const InputDecoration(labelText: 'Subtask name')),
+        const SizedBox(height: 10),
+        TextField(controller: points, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Productivity points (1.0–5.0)')),
         const SizedBox(height: 12),
         ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.event_outlined), title: const Text('Optional deadline'), subtitle: Text(dueAt == null ? 'No deadline' : '${dueAt!.day}/${dueAt!.month}/${dueAt!.year} ${dueAt!.hour == 0 && dueAt!.minute == 0 ? '' : TimeOfDay.fromDateTime(dueAt!).format(context)}'), onTap: () async {
           final DateTime now = DateTime.now();
@@ -49,18 +52,19 @@ class _SubtaskEditorScreenState extends State<SubtaskEditorScreen> {
       ])),
       actions: <Widget>[
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () { if (title.text.trim().isEmpty) return; Navigator.pop(context, true); }, child: const Text('Save')),
+        FilledButton(onPressed: () { final double? value = double.tryParse(points.text.trim().replaceAll(',', '.')); if (title.text.trim().isEmpty || value == null || value < 1 || value > 5) return; Navigator.pop(context, true); }, child: const Text('Save')),
       ],
     )));
     if (save == true && mounted) {
       final DateTime now = DateTime.now();
       setState(() {
-        final Subtask value = Subtask(id: existing?.id ?? newId(), title: title.text.trim(), createdAt: existing?.createdAt ?? now, dueAt: dueAt, reminderAt: reminderAt, isCompleted: existing?.isCompleted ?? false, completedAt: existing?.completedAt, sortOrder: index ?? _items.length);
+        final Subtask value = Subtask(id: existing?.id ?? newId(), title: title.text.trim(), createdAt: existing?.createdAt ?? now, dueAt: dueAt, reminderAt: reminderAt, isCompleted: existing?.isCompleted ?? false, completedAt: existing?.completedAt, sortOrder: index ?? _items.length, difficultyScore: double.tryParse(points.text.trim().replaceAll(',', '.')) ?? 1.0);
         if (index == null) _items.add(value); else _items[index] = value;
         _renumber();
       });
     }
     title.dispose();
+    points.dispose();
   }
 
   void _renumber() => _items = <Subtask>[for (int i = 0; i < _items.length; i++) _items[i].copyWith(sortOrder: i)];

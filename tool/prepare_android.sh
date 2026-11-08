@@ -67,10 +67,12 @@ cp "$WIDGET_SOURCE/values/tazkiyane_widget_strings.xml" android/app/src/main/res
 KOTLIN_DIR="android/app/src/main/kotlin/dev/tickoffreplacement/tickoff_replacement"
 mkdir -p "$KOTLIN_DIR"
 cp "$WIDGET_SOURCE/kotlin/TazkiyaneTasksWidgetProvider.kt" "$KOTLIN_DIR/"
+# Install the UsageStats MethodChannel bridge used by Productivity distraction tracking.
+cp "assets/branding/android_usage/MainActivity.kt" "$KOTLIN_DIR/MainActivity.kt"
 if ! grep -q 'TazkiyaneTasksWidgetProvider' "$MANIFEST"; then
   sed -i '/<\/application>/i\        <receiver android:name=".TazkiyaneTasksWidgetProvider" android:exported="true" android:label="Tazkiyane Tasks">\n            <intent-filter>\n                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />\n            </intent-filter>\n            <meta-data android:name="android.appwidget.provider" android:resource="@xml/tazkiyane_tasks_widget_info" />\n        </receiver>' "$MANIFEST"
 fi
-echo "Installed Tazkiyane Tasks Android home-screen widget."
+echo "Installed Tazkiyane Tasks Android home-screen widget and UsageStats bridge."
 
 
 # Preserve Gson generic signatures used by flutter_local_notifications.
@@ -155,7 +157,7 @@ echo "Applied Gson TypeToken keep rules and R8 compatibility-mode workaround."
 python3 tool/configure_release_signing.py "$APP_GRADLE"
 
 # Runtime permissions and receivers required by exact local reminders and recording.
-for permission in POST_NOTIFICATIONS RECEIVE_BOOT_COMPLETED RECORD_AUDIO SCHEDULE_EXACT_ALARM; do
+for permission in POST_NOTIFICATIONS RECEIVE_BOOT_COMPLETED RECORD_AUDIO SCHEDULE_EXACT_ALARM PACKAGE_USAGE_STATS; do
   if ! grep -q "android.permission.${permission}" "$MANIFEST"; then
     sed -i "/<application/i\    <uses-permission android:name=\"android.permission.${permission}\" />" "$MANIFEST"
   fi

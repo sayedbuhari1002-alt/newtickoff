@@ -11,13 +11,14 @@ import 'package:sqflite/sqflite.dart';
 /// * 5 - local video attachments for journal notes.
 /// * 6 - note categories/periods and independent subtask reminder timestamps.
 /// * 7 - first-class task groups, progressive task fields, templates and progress history.
+/// * 8 - Productivity targets, assignments, distractions and scoring metadata.
 ///
 /// To change the schema, bump [version], add a step to [_migrations] that
 /// upgrades from the previous version, and keep [_createV1] untouched.
 class AppDatabase {
   AppDatabase._();
 
-  static const int version = 7;
+  static const int version = 8;
   static const String fileName = 'tickoff.db';
 
   /// Opens (creating if needed) the database. Pass [path] to use another file
@@ -39,6 +40,7 @@ class AppDatabase {
         if (newVersion >= 5) await _migrateV5(db);
         if (newVersion >= 6) await _migrateV6(db);
         if (newVersion >= 7) await _migrateV7(db);
+        if (newVersion >= 8) await _migrateV8(db);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         for (int v = oldVersion; v < newVersion; v++) {
@@ -58,12 +60,103 @@ class AppDatabase {
         4: _migrateV5,
         5: _migrateV6,
         6: _migrateV7,
+        7: _migrateV8,
       };
 
 
 
 
 
+
+  static Future<void> _migrateV8(Database db) async {
+    // Additive migration only: all existing habits, tasks and history remain intact.
+    // Some historical test/import databases contain only a subset of the original
+    // tables. Guard each ALTER so those databases can still reach the latest schema.
+    final List<Map<String, Object?>> tableRows = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table'",
+    );
+    final Set<String> tables = tableRows.map((Map<String, Object?> row) => row['name'] as String).toSet();
+
+    if (tables.contains('habits')) {
+      final List<Map<String, Object?>> columns = await db.rawQuery('PRAGMA table_info(habits)');
+      final Set<String> names = columns.map((Map<String, Object?> c) => c['name'] as String).toSet();
+      if (!names.contains('productivity_points')) await db.execute('ALTER TABLE habits ADD COLUMN productivity_points REAL NOT NULL DEFAULT 1.0');
+      if (!names.contains('quit_penalty')) await db.execute('ALTER TABLE habits ADD COLUMN quit_penalty REAL NOT NULL DEFAULT 2.0');
+    }
+    if (tables.contains('completions')) {
+      final List<Map<String, Object?>> columns = await db.rawQuery('PRAGMA table_info(completions)');
+      final Set<String> names = columns.map((Map<String, Object?> c) => c['name'] as String).toSet();
+      if (!names.contains('productivity_points')) await db.execute('ALTER TABLE completions ADD COLUMN productivity_points REAL NOT NULL DEFAULT 1.0');
+      if (!names.contains('quit_penalty')) await db.execute('ALTER TABLE completions ADD COLUMN quit_penalty REAL NOT NULL DEFAULT 2.0');
+      if (!names.contains('habit_type')) await db.execute('ALTER TABLE completions ADD COLUMN habit_type TEXT');
+      if (!names.contains('tracking_method')) await db.execute('ALTER TABLE completions ADD COLUMN tracking_method TEXT');
+      if (!names.contains('daily_goal_snapshot')) await db.execute('ALTER TABLE completions ADD COLUMN daily_goal_snapshot REAL');
+      if (!names.contains('checklist_ids_snapshot_json')) await db.execute("ALTER TABLE completions ADD COLUMN checklist_ids_snapshot_json TEXT");
+      if (tables.contains('habits')) {
+        await db.execute('''
+          UPDATE completions SET
+            habit_type = COALESCE(habit_type, (SELECT type FROM habits WHERE habits.id = completions.habit_id)),
+            tracking_method = COALESCE(tracking_method, (SELECT tracking FROM habits WHERE habits.id = completions.habit_id)),
+            daily_goal_snapshot = COALESCE(daily_goal_snapshot, (SELECT daily_goal FROM habits WHERE habits.id = completions.habit_id)),
+            checklist_ids_snapshot_json = COALESCE(checklist_ids_snapshot_json, (SELECT checklist_json FROM habits WHERE habits.id = completions.habit_id))
+          WHERE habit_type IS NULL OR tracking_method IS NULL OR checklist_ids_snapshot_json IS NULL
+        ''');
+      }
+    }
+    if (tables.contains('tasks')) {
+      final List<Map<String, Object?>> columns = await db.rawQuery('PRAGMA table_info(tasks)');
+      final Set<String> names = columns.map((Map<String, Object?> c) => c['name'] as String).toSet();
+      if (!names.contains('scheduled_date')) await db.execute('ALTER TABLE tasks ADD COLUMN scheduled_date TEXT');
+    }
+    if (tables.contains('subtasks')) {
+      final List<Map<String, Object?>> columns = await db.rawQuery('PRAGMA table_info(subtasks)');
+      final Set<String> names = columns.map((Map<String, Object?> c) => c['name'] as String).toSet();
+      if (!names.contains('difficulty_score')) await db.execute('ALTER TABLE subtasks ADD COLUMN difficulty_score REAL NOT NULL DEFAULT 1.0');
+    }
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS assignments (
+        id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+        due_at TEXT, priority TEXT NOT NULL DEFAULT 'medium', difficulty_score REAL NOT NULL DEFAULT 1.0,
+        category TEXT NOT NULL DEFAULT '', is_completed INTEGER NOT NULL DEFAULT 0,
+        completed_at TEXT, completed_points REAL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      )''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_assignments_due ON assignments(due_at)');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS productivity_target_history (
+        effective_date TEXT PRIMARY KEY, target REAL NOT NULL CHECK(target > 0)
+      )''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS productivity_target_overrides (
+        date_key TEXT PRIMARY KEY, target REAL NOT NULL CHECK(target > 0)
+      )''');
+    await db.insert('productivity_target_history', <String, Object?>{
+      'effective_date': '0001-01-01', 'target': 15.0,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS distraction_categories (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        severity_points_per_hour REAL NOT NULL DEFAULT 1.0,
+        details TEXT NOT NULL DEFAULT '', auto_track INTEGER NOT NULL DEFAULT 0,
+        package_names_json TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL
+      )''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS distraction_logs (
+        id TEXT PRIMARY KEY,
+        category_id TEXT NOT NULL REFERENCES distraction_categories(id) ON DELETE CASCADE,
+        start_at TEXT NOT NULL, end_at TEXT NOT NULL, details TEXT NOT NULL DEFAULT '',
+        severity_points_per_hour REAL
+      )''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_distraction_logs_time ON distraction_logs(start_at, end_at)');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS app_usage_records (
+        id TEXT PRIMARY KEY,
+        category_id TEXT NOT NULL REFERENCES distraction_categories(id) ON DELETE CASCADE,
+        package_name TEXT NOT NULL, start_at TEXT NOT NULL, end_at TEXT NOT NULL,
+        severity_points_per_hour REAL
+      )''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_app_usage_time ON app_usage_records(start_at, end_at)');
+  }
 
   static Future<void> _migrateV7(Database db) async {
     final List<Map<String, Object?>> taskTables = await db.rawQuery(
@@ -348,6 +441,12 @@ class AppDatabase {
         count_value REAL NOT NULL DEFAULT 0,
         checked_ids_json TEXT NOT NULL DEFAULT '[]',
         slipped INTEGER NOT NULL DEFAULT 0,
+        productivity_points REAL NOT NULL DEFAULT 1.0,
+        quit_penalty REAL NOT NULL DEFAULT 2.0,
+        habit_type TEXT,
+        tracking_method TEXT,
+        daily_goal_snapshot REAL,
+        checklist_ids_snapshot_json TEXT,
         updated_at TEXT NOT NULL,
         PRIMARY KEY (habit_id, date_key)
       )''');

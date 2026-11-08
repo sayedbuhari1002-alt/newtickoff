@@ -19,6 +19,7 @@ class Subtask {
     this.isCompleted = false,
     this.completedAt,
     this.sortOrder = 0,
+    this.difficultyScore = 1.0,
   });
 
   final String id;
@@ -29,6 +30,7 @@ class Subtask {
   final bool isCompleted;
   final DateTime? completedAt;
   final int sortOrder;
+  final double difficultyScore;
 
   Subtask copyWith({
     String? title,
@@ -40,6 +42,7 @@ class Subtask {
     DateTime? completedAt,
     bool clearCompletedAt = false,
     int? sortOrder,
+    double? difficultyScore,
   }) => Subtask(
         id: id,
         title: title ?? this.title,
@@ -49,6 +52,7 @@ class Subtask {
         isCompleted: isCompleted ?? this.isCompleted,
         completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
         sortOrder: sortOrder ?? this.sortOrder,
+        difficultyScore: difficultyScore ?? this.difficultyScore,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -60,6 +64,7 @@ class Subtask {
         'isCompleted': isCompleted,
         'completedAt': completedAt?.toIso8601String(),
         'sortOrder': sortOrder,
+        'difficultyScore': difficultyScore,
       };
 
   factory Subtask.fromJson(Map<String, dynamic> json) {
@@ -74,6 +79,7 @@ class Subtask {
       isCompleted: json['isCompleted'] == true,
       completedAt: DateTime.tryParse('${json['completedAt'] ?? ''}'),
       sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      difficultyScore: (json['difficultyScore'] as num?)?.toDouble() ?? 1.0,
     );
   }
 }
@@ -109,6 +115,7 @@ class Task {
     this.progressUnit = '',
     this.difficultyScore = 1.0,
     this.sortOrder = 0,
+    this.scheduledDate,
   });
 
   final String id;
@@ -116,6 +123,8 @@ class Task {
   final String description;
   final DateTime? dueAt;
   final DateTime? reminderAt;
+  /// Calendar date the user has planned to work on this task, separate from its deadline.
+  final DateTime? scheduledDate;
   final TaskPriority priority;
   final String category;
   final String iconKey;
@@ -181,6 +190,9 @@ class Task {
   String? validate() {
     if (title.trim().isEmpty) return 'Please enter a task title.';
     if (subtasks.any((Subtask s) => s.title.trim().isEmpty)) return 'Subtask names cannot be empty.';
+    if (subtasks.any((Subtask s) => !s.difficultyScore.isFinite || s.difficultyScore < 1 || s.difficultyScore > 5)) {
+      return 'Subtask points must be between 1 and 5.';
+    }
     if (dueAt != null && reminderAt != null) {
       final DateTime deadlineDay = DateTime(dueAt!.year, dueAt!.month, dueAt!.day);
       final DateTime reminderDay = DateTime(reminderAt!.year, reminderAt!.month, reminderAt!.day);
@@ -207,6 +219,8 @@ class Task {
     bool clearDueAt = false,
     DateTime? reminderAt,
     bool clearReminderAt = false,
+    DateTime? scheduledDate,
+    bool clearScheduledDate = false,
     TaskPriority? priority,
     String? category,
     String? iconKey,
@@ -237,6 +251,7 @@ class Task {
         description: description ?? this.description,
         dueAt: clearDueAt ? null : (dueAt ?? this.dueAt),
         reminderAt: clearReminderAt ? null : (reminderAt ?? this.reminderAt),
+        scheduledDate: clearScheduledDate ? null : (scheduledDate ?? this.scheduledDate),
         priority: priority ?? this.priority,
         category: category ?? this.category,
         iconKey: iconKey ?? this.iconKey,
@@ -268,6 +283,7 @@ class Task {
         'description': description,
         'dueAt': dueAt?.toIso8601String(),
         'reminderAt': reminderAt?.toIso8601String(),
+        'scheduledDate': scheduledDate?.toIso8601String(),
         'priority': priority.name,
         'category': category,
         'iconKey': iconKey,
@@ -312,6 +328,7 @@ class Task {
       description: (json['description'] as String?) ?? '',
       dueAt: DateTime.tryParse('${json['dueAt'] ?? ''}'),
       reminderAt: DateTime.tryParse('${json['reminderAt'] ?? ''}'),
+      scheduledDate: DateTime.tryParse('${json['scheduledDate'] ?? ''}'),
       priority: parsePriority(json['priority']),
       category: (json['category'] as String?) ?? '',
       iconKey: (json['iconKey'] as String?) ?? 'task',

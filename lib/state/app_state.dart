@@ -60,6 +60,12 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     final List<TaskActivity> taskActivities = await repo.loadTaskActivities();
     final List<TaskProgressEvent> taskProgressEvents = await repo.loadTaskProgressEvents();
     final List<TaskTemplate> taskTemplates = await repo.loadTaskTemplates();
+    final List<Assignment> assignments = await repo.loadAssignments();
+    final List<ProductivityTargetChange> productivityTargets = await repo.loadProductivityTargets();
+    final Map<String, double> productivityTargetOverrides = await repo.loadProductivityTargetOverrides();
+    final List<DistractionCategory> distractionCategories = await repo.loadDistractionCategories();
+    final List<DistractionLog> distractionLogs = await repo.loadDistractionLogs();
+    final List<AppUsageRecord> appUsageRecords = await repo.loadAppUsageRecords();
     final Map<String, String> settings = await repo.loadSettings();
 
     final Map<String, Map<String, CompletionRecord>> index =
@@ -80,6 +86,12 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       taskActivities: taskActivities,
       taskProgressEvents: taskProgressEvents,
       taskTemplates: taskTemplates,
+      assignments: assignments,
+      productivityTargets: productivityTargets,
+      productivityTargetOverrides: productivityTargetOverrides,
+      distractionCategories: distractionCategories,
+      distractionLogs: distractionLogs,
+      appUsageRecords: appUsageRecords,
       settings: settings,
     );
     // Refresh local notifications after every launch. A notification failure
@@ -257,7 +269,15 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     final CompletionRecord base =
         data.recordsFor(habit.id)[key] ??
         CompletionRecord(habitId: habit.id, dateKey: key, updatedAt: now);
-    final CompletionRecord updated = change(base).copyWith(updatedAt: now);
+    final CompletionRecord updated = change(base).copyWith(
+      updatedAt: now,
+      productivityPoints: base.productivityPoints ?? habit.productivityPoints,
+      quitPenalty: base.quitPenalty ?? habit.quitPenalty,
+      habitType: base.habitType ?? habit.type.name,
+      trackingMethod: base.trackingMethod ?? habit.tracking.name,
+      dailyGoalSnapshot: base.dailyGoalSnapshot ?? habit.dailyGoal,
+      checklistItemIds: base.checklistItemIds ?? habit.checklist.map((ChecklistItem item) => item.id).toSet(),
+    );
 
     final Map<String, CompletionRecord> forHabit =
         Map<String, CompletionRecord>.of(data.recordsFor(habit.id));
@@ -391,6 +411,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
           'isCompleted': s.isCompleted,
           'completedAt': s.completedAt?.toIso8601String(),
           'sortOrder': s.sortOrder,
+          'difficultyScore': s.difficultyScore,
         }).toList(),
         if (subtask != null) ...<String, dynamic>{
           'subtaskId': subtask.id,
@@ -398,6 +419,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
           'subtaskDueAt': subtask.dueAt?.toIso8601String(),
           'subtaskCompleted': subtask.isCompleted,
           'subtaskCompletedAt': subtask.completedAt?.toIso8601String(),
+          'subtaskDifficultyScore': subtask.difficultyScore,
         },
       };
 
@@ -913,6 +935,157 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
   }
 
   Future<List<TaskActivity>> taskActivitiesFor(String taskId) async => _current.activitiesForTask(taskId);
+
+  // ------------------------------------------------------------ productivity
+
+  String _dateKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  Future<void> saveDefaultProductivityTarget(double target) async {
+    if (!target.isFinite || target <= 0 || target > 1000) throw ArgumentError('Daily target must be greater than zero and no more than 1000.');
+    final DateTime tomorrow = DateTime.now().add(const Duration(days: 1));
+    final String effective = _dateKey(DateTime(tomorrow.year, tomorrow.month, tomorrow.day));
+    final ProductivityTargetChange change = ProductivityTargetChange(effectiveDate: effective, target: target);
+    await _repo.upsertProductivityTarget(change);
+    final AppData data = _current;
+    final List<ProductivityTargetChange> changes = <ProductivityTargetChange>[...data.productivityTargets.where((ProductivityTargetChange v) => v.effectiveDate != effective), change]..sort((a, b) => a.effectiveDate.compareTo(b.effectiveDate));
+    state = AsyncData<AppData>(data.copyWith(productivityTargets: changes));
+  }
+
+  Future<void> setProductivityTargetForDate(DateTime date, double target) async {
+    if (!target.isFinite || target <= 0 || target > 1000) throw ArgumentError('Daily target must be greater than zero and no more than 1000.');
+    final String key = _dateKey(date);
+    await _repo.upsertProductivityTargetOverride(key, target);
+    final AppData data = _current;
+    state = AsyncData<AppData>(data.copyWith(productivityTargetOverrides: <String, double>{...data.productivityTargetOverrides, key: target}));
+  }
+
+  Future<void> clearProductivityTargetOverride(DateTime date) async {
+    final String key = _dateKey(date);
+    await _repo.deleteProductivityTargetOverride(key);
+    final AppData data = _current;
+    final Map<String, double> values = Map<String, double>.of(data.productivityTargetOverrides)..remove(key);
+    state = AsyncData<AppData>(data.copyWith(productivityTargetOverrides: values));
+  }
+
+  Future<void> saveAssignment(Assignment assignment) async {
+    final String? problem = assignment.validate();
+    if (problem != null) throw ArgumentError(problem);
+    final AppData data = _current;
+    final Assignment? old = data.assignments.where((Assignment value) => value.id == assignment.id).firstOrNull;
+    final DateTime now = DateTime.now();
+    final Assignment saved = assignment.copyWith(
+      completedAt: assignment.isCompleted ? (assignment.completedAt ?? (old?.completedAt) ?? now) : assignment.completedAt,
+      completedPoints: assignment.isCompleted ? (assignment.completedPoints ?? old?.completedPoints ?? assignment.difficultyScore) : assignment.completedPoints,
+      updatedAt: now,
+    );
+    await _repo.upsertAssignment(saved);
+    final List<Assignment> values = List<Assignment>.of(data.assignments);
+    final int index = values.indexWhere((Assignment value) => value.id == saved.id);
+    if (index < 0) values.add(saved); else values[index] = saved;
+    state = AsyncData<AppData>(data.copyWith(assignments: values));
+  }
+
+  Future<void> deleteAssignment(String id) async {
+    await _repo.deleteAssignment(id);
+    final AppData data = _current;
+    state = AsyncData<AppData>(data.copyWith(assignments: data.assignments.where((Assignment value) => value.id != id).toList()));
+  }
+
+  Future<void> saveDistractionCategory(DistractionCategory category) async {
+    final String name = category.name.trim();
+    if (name.isEmpty) throw ArgumentError('Enter a distraction category name.');
+    if (!category.severityPointsPerHour.isFinite || category.severityPointsPerHour < 0 || category.severityPointsPerHour > 100) throw ArgumentError('Severity must be between 0 and 100 points per hour.');
+    final Set<String> packages = category.packageNames.map((String value) => value.trim()).where((String value) => value.isNotEmpty).toSet();
+    if (category.autoTrack && packages.isEmpty) throw ArgumentError('Add at least one Android package name to enable automatic tracking.');
+    String normalise(String value) => value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+    final bool duplicate = _current.distractionCategories.any((DistractionCategory value) => value.id != category.id && normalise(value.name) == normalise(name));
+    if (duplicate) throw ArgumentError('A category with this name already exists.');
+    final Set<String> otherPackages = <String>{
+      for (final DistractionCategory value in _current.distractionCategories.where((DistractionCategory value) => value.id != category.id))
+        if (value.autoTrack) ...value.packageNames.map((String packageName) => packageName.trim()),
+    };
+    if (category.autoTrack && category.packageNames.any((String packageName) => otherPackages.contains(packageName.trim()))) {
+      throw ArgumentError('An app package can be assigned to only one automatic tracking category.');
+    }
+    await _repo.upsertDistractionCategory(category);
+    final AppData data = _current;
+    final List<DistractionCategory> values = List<DistractionCategory>.of(data.distractionCategories);
+    final int index = values.indexWhere((DistractionCategory value) => value.id == category.id);
+    if (index < 0) values.add(category); else values[index] = category;
+    values.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    state = AsyncData<AppData>(data.copyWith(distractionCategories: values));
+  }
+
+  Future<void> deleteDistractionCategory(String id) async {
+    await _repo.deleteDistractionCategory(id);
+    final AppData data = _current;
+    state = AsyncData<AppData>(data.copyWith(
+      distractionCategories: data.distractionCategories.where((DistractionCategory value) => value.id != id).toList(),
+      distractionLogs: data.distractionLogs.where((DistractionLog value) => value.categoryId != id).toList(),
+      appUsageRecords: data.appUsageRecords.where((AppUsageRecord value) => value.categoryId != id).toList(),
+    ));
+  }
+
+  Future<void> saveDistractionLog(DistractionLog log) async {
+    if (!log.endAt.isAfter(log.startAt)) throw ArgumentError('The distraction duration must be greater than zero.');
+    if (!_current.distractionCategories.any((DistractionCategory value) => value.id == log.categoryId)) throw ArgumentError('Choose an existing distraction category.');
+    final DistractionCategory category = _current.distractionCategories.firstWhere((DistractionCategory value) => value.id == log.categoryId);
+    final DistractionLog savedLog = DistractionLog(
+      id: log.id, categoryId: log.categoryId, startAt: log.startAt, endAt: log.endAt,
+      details: log.details, severityPointsPerHour: log.severityPointsPerHour ?? category.severityPointsPerHour,
+    );
+    await _repo.upsertDistractionLog(savedLog);
+    final AppData data = _current;
+    final List<DistractionLog> values = List<DistractionLog>.of(data.distractionLogs);
+    final int index = values.indexWhere((DistractionLog value) => value.id == savedLog.id);
+    if (index < 0) values.add(savedLog); else values[index] = savedLog;
+    state = AsyncData<AppData>(data.copyWith(distractionLogs: values));
+  }
+
+  Future<void> deleteDistractionLog(String id) async {
+    await _repo.deleteDistractionLog(id);
+    final AppData data = _current;
+    state = AsyncData<AppData>(data.copyWith(distractionLogs: data.distractionLogs.where((DistractionLog value) => value.id != id).toList()));
+  }
+
+  Future<void> replaceAutomaticUsageForDate(DateTime date, List<AppUsageRecord> records) async {
+    final String key = _dateKey(date);
+    await _repo.deleteAppUsageRecordsForDate(key);
+    final Map<String, DistractionCategory> categories = <String, DistractionCategory>{
+      for (final DistractionCategory value in _current.distractionCategories) value.id: value,
+    };
+    final List<AppUsageRecord> savedRecords = <AppUsageRecord>[];
+    for (final AppUsageRecord record in records) {
+      if (!record.endAt.isAfter(record.startAt)) continue;
+      final DistractionCategory? category = categories[record.categoryId];
+      final AppUsageRecord saved = AppUsageRecord(
+        id: record.id, categoryId: record.categoryId, packageName: record.packageName,
+        startAt: record.startAt, endAt: record.endAt,
+        severityPointsPerHour: record.severityPointsPerHour ?? category?.severityPointsPerHour,
+      );
+      await _repo.upsertAppUsageRecord(saved);
+      savedRecords.add(saved);
+    }
+    final AppData data = _current;
+    final DateTime start = DateTime(date.year, date.month, date.day);
+    final DateTime end = start.add(const Duration(days: 1));
+    final List<AppUsageRecord> keep = data.appUsageRecords.where((AppUsageRecord record) => !record.startAt.isBefore(end) || !record.endAt.isAfter(start)).toList();
+    state = AsyncData<AppData>(data.copyWith(appUsageRecords: <AppUsageRecord>[...keep, ...savedRecords]));
+  }
+
+  Future<void> scheduleTaskForDate(String taskId, DateTime date) async {
+    final Task? task = _current.taskById(taskId);
+    if (task == null || task.isCompleted || task.isPaused || _current.isGroupTask(task)) return;
+    final DateTime day = DateTime(date.year, date.month, date.day);
+    final Task updated = task.copyWith(scheduledDate: day, updatedAt: DateTime.now());
+    await _repo.upsertTask(updated);
+    final AppData data = _current;
+    final List<Task> tasks = List<Task>.of(data.tasks);
+    final int index = tasks.indexWhere((Task value) => value.id == taskId);
+    if (index >= 0) tasks[index] = updated;
+    state = AsyncData<AppData>(data.copyWith(tasks: tasks));
+    await _recordTaskActivity(updated, 'task_scheduled', occurredAt: DateTime.now());
+  }
 
   // -------------------------------------------------------------- categories
 
