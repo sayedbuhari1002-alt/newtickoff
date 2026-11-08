@@ -493,7 +493,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                   const SizedBox(height: 12),
                   TextFormField(controller: _progressUnit, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Unit (optional)', hintText: 'Chapters, pages, questions…')),
                 ] else
-                  const Padding(padding: EdgeInsets.only(top: 8), child: Text('You can update the percentage as you work over multiple sessions.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                  Padding(padding: const EdgeInsets.only(top: 8), child: Text('You can update the percentage as you work over multiple sessions.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))),
               ],
               const SizedBox(height: 16),
               OutlinedButton.icon(onPressed: _saveAsTemplate, icon: const Icon(Icons.bookmark_add_outlined), label: const Text('Save these settings as a template')),

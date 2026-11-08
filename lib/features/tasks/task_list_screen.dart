@@ -352,7 +352,7 @@ class _TaskGroupCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16), onTap: onOpen,
           child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
             Row(children: <Widget>[
-              const Icon(Icons.folder_open_rounded, color: AppColors.gold),
+              Icon(Icons.folder_open_rounded, color: AppColors.gold),
               const SizedBox(width: 10),
               Expanded(child: Text(parent.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
               Text('${(progress * 100).round()}%', style: const TextStyle(fontWeight: FontWeight.w700)),
