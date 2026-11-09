@@ -3,19 +3,17 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 
-/// Four clearly labelled destinations around one central creation action.
+/// Five primary destinations: Home, Habits, Activity, Tasks and Notes.
 class TickoffBottomBar extends StatelessWidget {
   const TickoffBottomBar({
     super.key,
     required this.currentIndex,
     required this.onSelect,
-    required this.onAdd,
   });
 
-  /// 0 = Dashboard, 1 = Habits, 2 = Tasks, 3 = Notes.
+  /// 0 = Dashboard, 1 = Habits, 2 = Activity, 3 = Tasks, 4 = Notes.
   final int currentIndex;
   final ValueChanged<int> onSelect;
-  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -29,21 +27,9 @@ class TickoffBottomBar extends StatelessWidget {
             children: <Widget>[
               Expanded(child: _NavItem(icon: Icons.dashboard_rounded, label: 'Home', selected: currentIndex == 0, onTap: () => onSelect(0))),
               Expanded(child: _NavItem(icon: Icons.check_circle_outline_rounded, label: 'Habits', selected: currentIndex == 1, onTap: () => onSelect(1))),
-              Semantics(
-                button: true,
-                label: 'Add habit or task',
-                child: GestureDetector(
-                  onTap: onAdd,
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(color: AppColors.primaryAccent, borderRadius: BorderRadius.circular(15)),
-                    child: Icon(Icons.add, color: AppColors.onAccent, size: 28),
-                  ),
-                ),
-              ),
-              Expanded(child: _NavItem(icon: Icons.checklist_rounded, label: 'Tasks', selected: currentIndex == 2, onTap: () => onSelect(2))),
-              Expanded(child: _NavItem(icon: Icons.sticky_note_2_rounded, label: 'Notes', selected: currentIndex == 3, onTap: () => onSelect(3))),
+              Expanded(child: _NavItem(icon: Icons.history_rounded, label: 'Activity', selected: currentIndex == 2, onTap: () => onSelect(2))),
+              Expanded(child: _NavItem(icon: Icons.checklist_rounded, label: 'Tasks', selected: currentIndex == 3, onTap: () => onSelect(3))),
+              Expanded(child: _NavItem(icon: Icons.sticky_note_2_rounded, label: 'Notes', selected: currentIndex == 4, onTap: () => onSelect(4))),
             ],
           ),
         ),

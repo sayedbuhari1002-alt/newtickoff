@@ -31,6 +31,30 @@ else
   exit 1
 fi
 
+# Limit package visibility to apps that expose a launcher icon. This lets the
+# distraction picker show installed app names without requesting QUERY_ALL_PACKAGES.
+if ! grep -q '<queries>' "$MANIFEST"; then
+  python3 - "$MANIFEST" <<'PYQUERIES'
+from pathlib import Path
+import re
+import sys
+path = Path(sys.argv[1])
+source = path.read_text()
+match = re.search(r'<manifest\b[^>]*>', source, re.S)
+if not match:
+    raise SystemExit(f"Could not find the manifest root in {path}")
+queries = """
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>"""
+source = source[:match.end()] + queries + source[match.end():]
+path.write_text(source)
+PYQUERIES
+fi
+
 # Apply the approved Tazkiyane launcher icon to the generated Android scaffold.
 # The Android project is generated in CI, so the source artwork and density
 # variants live in the repository and are copied in on every fresh build.

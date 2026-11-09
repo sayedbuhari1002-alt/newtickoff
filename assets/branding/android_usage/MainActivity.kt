@@ -3,6 +3,7 @@ package dev.tickoffreplacement.tickoff_replacement
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ResolveInfo
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
@@ -20,6 +21,13 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "hasUsageAccess" -> result.success(hasUsageAccess())
+                "getInstalledApps" -> {
+                    try {
+                        result.success(getInstalledLauncherApps())
+                    } catch (error: Exception) {
+                        result.error("APP_LIST_FAILED", error.message, null)
+                    }
+                }
                 "openUsageAccessSettings" -> {
                     try {
                         startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
@@ -45,6 +53,20 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getInstalledLauncherApps(): List<Map<String, String>> {
+        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val activities: List<ResolveInfo> = packageManager.queryIntentActivities(launcherIntent, 0)
+        val seenPackages = mutableSetOf<String>()
+        return activities.mapNotNull { resolveInfo ->
+            val activity = resolveInfo.activityInfo ?: return@mapNotNull null
+            val appPackage = activity.packageName
+            if (appPackage == packageName || !seenPackages.add(appPackage)) return@mapNotNull null
+            val label = resolveInfo.loadLabel(packageManager)?.toString()?.trim().orEmpty()
+            if (label.isBlank()) null else mapOf("packageName" to appPackage, "label" to label)
+        }.sortedBy { it["label"]?.lowercase() ?: "" }
     }
 
     private fun hasUsageAccess(): Boolean {

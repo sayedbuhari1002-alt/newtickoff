@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
-import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/utils/ids.dart';
@@ -22,6 +19,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
   DateTime _selectedDate = DateTime.now();
   bool _syncingUsage = false;
   bool? _usagePermission;
+  Map<String, String> _installedAppLabels = <String, String>{};
   String? _autoRefreshRequestedForDate;
 
   @override
@@ -29,6 +27,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadUsagePermission();
+    _loadInstalledAppLabels();
   }
 
   @override
@@ -42,6 +41,21 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
     if (state == AppLifecycleState.resumed) {
       _autoRefreshRequestedForDate = null;
       _loadUsagePermission();
+      _loadInstalledAppLabels();
+    }
+  }
+
+  Future<void> _loadInstalledAppLabels() async {
+    try {
+      final List<InstalledApp> apps = await ProductivityUsageService.instance.getInstalledApps();
+      if (!mounted) return;
+      setState(() {
+        _installedAppLabels = <String, String>{
+          for (final InstalledApp app in apps) app.packageName: app.label,
+        };
+      });
+    } catch (_) {
+      // Manual distraction logging remains available if app visibility is unavailable.
     }
   }
 
@@ -105,54 +119,162 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
     controller.dispose();
   }
 
-  Future<void> _createAssignment({Assignment? existing}) async {
-    final TextEditingController title = TextEditingController(text: existing?.title ?? '');
-    final TextEditingController description = TextEditingController(text: existing?.description ?? '');
-    final TextEditingController points = TextEditingController(text: (existing?.difficultyScore ?? 1.0).toString());
-    DateTime? dueAt = existing?.dueAt;
-    String priority = existing?.priority ?? 'medium';
-    final bool? saved = await showDialog<bool>(context: context, builder: (BuildContext dialogContext) => StatefulBuilder(builder: (BuildContext context, StateSetter setDialogState) => AlertDialog(
-      title: Text(existing == null ? 'New assignment' : 'Edit assignment'),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
-        TextField(controller: title, autofocus: true, textCapitalization: TextCapitalization.sentences, decoration: const InputDecoration(labelText: 'Assignment title')),
-        TextField(controller: description, maxLines: 2, decoration: const InputDecoration(labelText: 'Description (optional)')),
-        TextField(controller: points, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Productivity points (1.0–5.0)')),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(value: priority, decoration: const InputDecoration(labelText: 'Priority'), items: const <DropdownMenuItem<String>>[
-          DropdownMenuItem(value: 'low', child: Text('Low')), DropdownMenuItem(value: 'medium', child: Text('Medium')), DropdownMenuItem(value: 'high', child: Text('High')),
-        ], onChanged: (String? value) { if (value != null) setDialogState(() => priority = value); }),
-        ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.event_outlined), title: const Text('Deadline'), subtitle: Text(dueAt == null ? 'No deadline' : _dateLabel(dueAt!)), onTap: () async {
-          final DateTime? picked = await showDatePicker(context: context, initialDate: dueAt ?? _selectedDate, firstDate: DateTime.now().subtract(const Duration(days: 3650)), lastDate: DateTime.now().add(const Duration(days: 3650)));
-          if (picked != null) setDialogState(() => dueAt = DateTime(picked.year, picked.month, picked.day));
-        }),
-        if (dueAt != null) Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => setDialogState(() => dueAt = null), child: const Text('Clear deadline'))),
-      ])),
-      actions: <Widget>[TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save'))],
-    )));
-    if (saved == true && mounted) {
-      final DateTime now = DateTime.now();
-      final Assignment assignment = Assignment(id: existing?.id ?? newId(), title: title.text.trim(), description: description.text.trim(), dueAt: dueAt, priority: priority, difficultyScore: double.tryParse(points.text.trim().replaceAll(',', '.')) ?? 1, isCompleted: existing?.isCompleted ?? false, completedAt: existing?.completedAt, createdAt: existing?.createdAt ?? now, updatedAt: now);
-      await _guard(() => ref.read(appDataProvider.notifier).saveAssignment(assignment));
+  Future<({List<InstalledApp> apps, Set<String> selected})?> _chooseInstalledApps(
+    Set<String> currentSelection,
+  ) async {
+    List<InstalledApp> apps;
+    try {
+      apps = await ProductivityUsageService.instance.getInstalledApps();
+    } catch (error) {
+      if (mounted) _message('Could not load installed apps: $error');
+      return null;
     }
-    title.dispose(); description.dispose(); points.dispose();
+    if (apps.isEmpty) {
+      if (mounted) _message('No launchable apps were found on this device.');
+      return null;
+    }
+
+    final TextEditingController search = TextEditingController();
+    final Set<String> selected = Set<String>.of(currentSelection);
+    String query = '';
+    final Set<String>? result = await showDialog<Set<String>>(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) {
+          final List<InstalledApp> visible = apps.where((InstalledApp app) {
+            return app.label.toLowerCase().contains(query.toLowerCase());
+          }).toList();
+          return AlertDialog(
+            title: const Text('Choose distracting apps'),
+            content: SizedBox(
+              width: 420,
+              height: MediaQuery.sizeOf(context).height * 0.58,
+              child: Column(
+                children: <Widget>[
+                  TextField(
+                    controller: search,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search_rounded),
+                      hintText: 'Search installed apps',
+                    ),
+                    onChanged: (String value) => setDialogState(() => query = value),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${selected.length} selected',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: visible.length,
+                      itemBuilder: (BuildContext context, int index) {
+                        final InstalledApp app = visible[index];
+                        final bool checked = selected.contains(app.packageName);
+                        return CheckboxListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          secondary: const Icon(Icons.apps_rounded),
+                          title: Text(app.label),
+                          value: checked,
+                          onChanged: (bool? value) => setDialogState(() {
+                            if (value == true) {
+                              selected.add(app.packageName);
+                            } else {
+                              selected.remove(app.packageName);
+                            }
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => setDialogState(selected.clear),
+                child: const Text('Clear'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, selected),
+                child: const Text('Use selected apps'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    search.dispose();
+    if (result == null) return null;
+    return (apps: apps, selected: result);
   }
 
   Future<void> _createCategory({DistractionCategory? existing}) async {
     final TextEditingController name = TextEditingController(text: existing?.name ?? '');
     final TextEditingController severity = TextEditingController(text: (existing?.severityPointsPerHour ?? 1.0).toString());
     final TextEditingController details = TextEditingController(text: existing?.details ?? '');
-    final TextEditingController packages = TextEditingController(text: (existing?.packageNames ?? const <String>[]).join('\n'));
+    Set<String> selectedPackages = Set<String>.of(existing?.packageNames ?? const <String>[]);
+    List<InstalledApp> selectedAppCatalog = <InstalledApp>[];
+    if (selectedPackages.isNotEmpty) {
+      try {
+        selectedAppCatalog = await ProductivityUsageService.instance.getInstalledApps();
+      } catch (_) {
+        // The existing category remains editable even if the app list is unavailable.
+      }
+    }
     bool autoTrack = existing?.autoTrack ?? false;
     final bool? saved = await showDialog<bool>(context: context, builder: (BuildContext dialogContext) => StatefulBuilder(builder: (BuildContext context, StateSetter setDialogState) => AlertDialog(
       title: Text(existing == null ? 'Distraction category' : 'Edit category'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
         TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: 'Category name')),
-        TextField(controller: severity, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Penalty points per hour')),
+        TextField(controller: severity, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Distraction penalty (points per hour)')),
         TextField(controller: details, maxLines: 2, decoration: const InputDecoration(labelText: 'Details (optional)')),
         SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Track app usage automatically'), value: autoTrack, onChanged: (bool value) => setDialogState(() => autoTrack = value)),
         if (autoTrack) ...<Widget>[
-          TextField(controller: packages, maxLines: 3, decoration: const InputDecoration(labelText: 'Android package names', hintText: 'com.instagram.android\ncom.google.android.youtube'),),
-          const Text('Enter one package name per line. Add app package IDs for social media or games you want tracked.', style: TextStyle(fontSize: 11)),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final ({List<InstalledApp> apps, Set<String> selected})? result =
+                  await _chooseInstalledApps(selectedPackages);
+              if (result != null) {
+                setDialogState(() {
+                  selectedAppCatalog = result.apps;
+                  selectedPackages = result.selected;
+                });
+              }
+            },
+            icon: const Icon(Icons.apps_rounded),
+            label: Text('Choose installed apps (${selectedPackages.length} selected)'),
+          ),
+          if (selectedPackages.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: selectedPackages.map((String packageName) {
+                    final InstalledApp? app = selectedAppCatalog
+                        .where((InstalledApp item) => item.packageName == packageName)
+                        .firstOrNull;
+                    return Chip(
+                      label: Text(app?.label ?? 'App no longer available', style: const TextStyle(fontSize: 11)),
+                      onDeleted: () => setDialogState(() => selectedPackages.remove(packageName)),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          const SizedBox(height: 4),
+          Text('Choose the apps you want Tazkiyane to count as distractions. Only apps with an icon in your app drawer are listed.', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
         ],
       ])),
       actions: <Widget>[
@@ -166,12 +288,12 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
         id: existing?.id ?? newId(), name: name.text.trim(),
         severityPointsPerHour: double.tryParse(severity.text.trim().replaceAll(',', '.')) ?? 1,
         details: details.text.trim(), autoTrack: autoTrack,
-        packageNames: packages.text.split('\n').map((String value) => value.trim()).where((String value) => value.isNotEmpty).toSet().toList(),
+        packageNames: selectedPackages.toList()..sort(),
         createdAt: existing?.createdAt ?? DateTime.now(),
       );
       await _guard(() => ref.read(appDataProvider.notifier).saveDistractionCategory(category));
     }
-    name.dispose(); severity.dispose(); details.dispose(); packages.dispose();
+    name.dispose(); severity.dispose(); details.dispose();
   }
 
   Future<void> _createDistractionLog(AppData data) async {
@@ -258,7 +380,6 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
 
   Widget _buildContent(AppData data) {
     final String selectedKey = _dateKey(_selectedDate);
-    final DateTime today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
     final DateTime selectedDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     final bool hasAutoTrackedCategories = data.distractionCategories.any((DistractionCategory value) => value.autoTrack && value.packageNames.isNotEmpty);
     if (_usagePermission == true && hasAutoTrackedCategories && !selectedDay.isAfter(today) && _autoRefreshRequestedForDate != selectedKey) {
@@ -276,15 +397,11 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
       tasks: data.tasks,
       activities: data.taskActivities,
       progressEvents: data.taskProgressEvents,
-      assignments: data.assignments,
+      assignments: const <Assignment>[],
       distractionCategories: data.distractionCategories,
       distractionLogs: data.distractionLogs,
       appUsageRecords: data.appUsageRecords,
     );
-    final bool isHistoricalDate = selectedDay.isBefore(today);
-    final List<RecommendedTask> recommendations = isHistoricalDate
-        ? <RecommendedTask>[]
-        : engine.recommendTasks(tasks: data.tasks, date: _selectedDate, remainingTarget: score.target - score.netScore);
     final List<DistractionLog> dayLogs = data.distractionLogs.where((DistractionLog log) => log.startAt.isBefore(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).add(const Duration(days: 1))) && log.endAt.isAfter(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day))).toList();
     final List<AppUsageRecord> dayUsage = data.appUsageRecords.where((AppUsageRecord record) => record.startAt.isBefore(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).add(const Duration(days: 1))) && record.endAt.isAfter(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day))).toList();
     return ListView(
@@ -297,10 +414,6 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
         _historyStrip(data, engine),
         const SizedBox(height: 18),
         _contributionCard(score),
-        const SizedBox(height: 18),
-        _recommendationCard(recommendations, isHistoricalDate: isHistoricalDate),
-        const SizedBox(height: 18),
-        _assignmentCard(data),
         const SizedBox(height: 18),
         _distractionCard(data, dayLogs, dayUsage),
       ],
@@ -344,7 +457,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
         for (int i = 6; i >= 0; i--)
           Builder(builder: (BuildContext context) {
             final DateTime day = today.subtract(Duration(days: i));
-            final ProductivityDayScore value = engine.calculateDay(date: day, target: data.targetForDate(day), habits: data.habits, completions: data.completions, tasks: data.tasks, activities: data.taskActivities, progressEvents: data.taskProgressEvents, assignments: data.assignments, distractionCategories: data.distractionCategories, distractionLogs: data.distractionLogs, appUsageRecords: data.appUsageRecords);
+            final ProductivityDayScore value = engine.calculateDay(date: day, target: data.targetForDate(day), habits: data.habits, completions: data.completions, tasks: data.tasks, activities: data.taskActivities, progressEvents: data.taskProgressEvents, assignments: const <Assignment>[], distractionCategories: data.distractionCategories, distractionLogs: data.distractionLogs, appUsageRecords: data.appUsageRecords);
             final bool selected = _dateKey(day) == _dateKey(_selectedDate);
             return Padding(padding: const EdgeInsets.only(right: 7), child: InkWell(onTap: () => setState(() => _selectedDate = day), borderRadius: BorderRadius.circular(12), child: Container(width: 62, padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 5), decoration: BoxDecoration(color: selected ? AppColors.surfaceRaised : AppColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: selected ? AppColors.gold : AppColors.border)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: <Widget>[
               Text('${day.day}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
@@ -371,50 +484,6 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
     ]),
   );
 
-  Widget _recommendationCard(List<RecommendedTask> recommendations, {required bool isHistoricalDate}) => _Panel(
-    title: 'Recommended tasks',
-    trailing: IconButton(tooltip: 'Open tasks', onPressed: () => context.go(AppRoutes.tasks), icon: const Icon(Icons.open_in_new_rounded, size: 18)),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-      if (isHistoricalDate)
-        const _Muted('Task recommendations are available for today and future dates. Historical dates show the recorded score only.'),
-      if (!isHistoricalDate) ...<Widget>[
-        const _Muted('Suggestions rank priority, deadline urgency, and how much each task can contribute toward your remaining target. Adding one to the schedule does not award points.'),
-        const SizedBox(height: 10),
-        if (recommendations.isEmpty) const _Muted('No eligible unscheduled or overdue tasks.'),
-      ],
-      for (final RecommendedTask item in recommendations.take(5))
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(item.task.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: Text(item.reason, style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-          trailing: IconButton(tooltip: 'Schedule for ${_dateLabel(_selectedDate)}', onPressed: () async { await _guard(() => ref.read(appDataProvider.notifier).scheduleTaskForDate(item.task.id, _selectedDate)); _message('Added to ${_dateLabel(_selectedDate)} schedule.'); }, icon: Icon(Icons.add_task_rounded, color: AppColors.gold)),
-        ),
-    ]),
-  );
-
-  Widget _assignmentCard(AppData data) {
-    final List<Assignment> ordered = List<Assignment>.of(data.assignments)..sort((Assignment a, Assignment b) {
-      if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
-      return (a.dueAt ?? DateTime(9999)).compareTo(b.dueAt ?? DateTime(9999));
-    });
-    return _Panel(
-      title: 'Assignments',
-      trailing: IconButton(tooltip: 'Add assignment', onPressed: _createAssignment, icon: const Icon(Icons.add_circle_outline_rounded)),
-      child: Column(children: <Widget>[
-        if (ordered.isEmpty) const _Muted('Create assignments and give each one its own point value.'),
-        for (final Assignment assignment in ordered)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Checkbox(value: assignment.isCompleted, onChanged: (bool? value) => _guard(() => ref.read(appDataProvider.notifier).saveAssignment(assignment.copyWith(isCompleted: value == true, completedAt: value == true ? (assignment.completedAt ?? DateTime.now()) : assignment.completedAt)))),
-            title: Text(assignment.title, style: TextStyle(fontWeight: FontWeight.w600, decoration: assignment.isCompleted ? TextDecoration.lineThrough : null)),
-            subtitle: Text('${assignment.difficultyScore.toStringAsFixed(1)} points${assignment.dueAt == null ? '' : ' · Due ${_dateLabel(assignment.dueAt!)}'}', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-            onTap: () => _createAssignment(existing: assignment),
-      trailing: PopupMenuButton<String>(onSelected: (String value) { if (value == 'edit') _createAssignment(existing: assignment); if (value == 'delete') _guard(() => ref.read(appDataProvider.notifier).deleteAssignment(assignment.id)); }, itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[PopupMenuItem(value: 'edit', child: Text('Edit')), PopupMenuItem(value: 'delete', child: Text('Delete'))]),
-          ),
-      ]),
-    );
-  }
-
   Widget _distractionCard(AppData data, List<DistractionLog> dayLogs, List<AppUsageRecord> dayUsage) => _Panel(
     title: 'Distractions',
     trailing: PopupMenuButton<String>(onSelected: (String value) { if (value == 'category') _createCategory(); if (value == 'log') _createDistractionLog(data); }, itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[
@@ -429,12 +498,12 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
         TextButton.icon(onPressed: _syncingUsage ? null : () => _refreshUsage(data), icon: _syncingUsage ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync_rounded, size: 17), label: const Text('Refresh')),
       ]),
       const SizedBox(height: 8),
-      if (data.distractionCategories.isEmpty) const _Muted('Create a category with a severity value (points per hour). You can add Instagram, Facebook, YouTube or game package IDs for automatic monitoring.'),
+      if (data.distractionCategories.isEmpty) const _Muted('Create a distraction category, then choose installed apps to monitor automatically. You can also record distraction time manually.'),
       for (final DistractionCategory category in data.distractionCategories)
         ListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(category.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: Text('${category.severityPointsPerHour.toStringAsFixed(1)} penalty points/hour${category.autoTrack ? ' · ${category.packageNames.length} app package(s)' : ' · manual only'}', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          subtitle: Text('${category.severityPointsPerHour.toStringAsFixed(1)} penalty points/hour${category.autoTrack ? ' · ${category.packageNames.length} app(s) selected' : ' · manual only'}', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           trailing: IconButton(tooltip: 'Edit category', onPressed: () => _createCategory(existing: category), icon: const Icon(Icons.edit_outlined, size: 18)),
         ),
       const Divider(height: 18),
@@ -443,7 +512,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
         _LogRow(title: data.distractionCategories.where((DistractionCategory c) => c.id == log.categoryId).firstOrNull?.name ?? 'Category removed', subtitle: '${_timeLabel(log.startAt)} · ${log.durationMinutes.toStringAsFixed(0)} min', onDelete: () => _guard(() => ref.read(appDataProvider.notifier).deleteDistractionLog(log.id))),
       Row(children: <Widget>[Expanded(child: Text('Automatic usage · ${dayUsage.length} session(s)', style: const TextStyle(fontWeight: FontWeight.w700))), Text('${_minutes(dayUsage.fold<double>(0, (double sum, AppUsageRecord r) => sum + r.endAt.difference(r.startAt).inSeconds / 60))} min', style: TextStyle(color: AppColors.textSecondary, fontSize: 12))]),
       for (final AppUsageRecord record in dayUsage.take(8))
-        Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(children: <Widget>[Expanded(child: Text(record.packageName, style: TextStyle(fontSize: 12, color: AppColors.textSecondary))), Text('${(record.endAt.difference(record.startAt).inMinutes)} min', style: const TextStyle(fontSize: 12))])),
+        Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(children: <Widget>[Expanded(child: Text(_installedAppLabels[record.packageName] ?? 'App no longer available', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))), Text('${(record.endAt.difference(record.startAt).inMinutes)} min', style: const TextStyle(fontSize: 12))])),
       const SizedBox(height: 6),
       const _Muted('Manual and automatic time intervals are merged across categories; overlapping time is charged once at the highest active severity.'),
     ]),

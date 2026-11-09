@@ -10,6 +10,7 @@ class AppRoutes {
   static const String habits = '/habits';
   static const String tasks = '/tasks';
   static const String notes = '/notes';
+  static const String activity = '/activity';
 
   // Habits (full-screen, no bottom bar)
   static const String habitNew = '/habit/new';

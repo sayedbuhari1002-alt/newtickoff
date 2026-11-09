@@ -29,6 +29,12 @@ class DashboardScreen extends ConsumerWidget {
     final DateTime selected = ref.watch(selectedDateProvider);
     final AsyncValue<AppData> async = ref.watch(appDataProvider);
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showCreateMenu(context),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Create'),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -87,6 +93,41 @@ class DashboardScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _showCreateMenu(BuildContext context) async {
+    final String? choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Create new', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.check_circle_outline_rounded),
+              title: const Text('Add Habit'),
+              onTap: () => Navigator.pop(sheetContext, 'habit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.task_alt_rounded),
+              title: const Text('Add Task'),
+              onTap: () => Navigator.pop(sheetContext, 'task'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted || choice == null) return;
+    if (choice == 'habit') context.push(AppRoutes.habitNew);
+    if (choice == 'task') context.push(AppRoutes.taskNew);
+  }
 }
 
 class _OverviewBody extends ConsumerWidget {
@@ -134,7 +175,7 @@ class _OverviewBody extends ConsumerWidget {
     final List<String> order = dashboardSectionOrder(data.settings);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(AppDimens.pagePadding, 0, AppDimens.pagePadding, 24),
+      padding: const EdgeInsets.fromLTRB(AppDimens.pagePadding, 0, AppDimens.pagePadding, 104),
       children: <Widget>[
         if (hasConfiguredReminder &&
             reminderPermissions != null &&

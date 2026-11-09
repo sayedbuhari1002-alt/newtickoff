@@ -996,7 +996,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     if (name.isEmpty) throw ArgumentError('Enter a distraction category name.');
     if (!category.severityPointsPerHour.isFinite || category.severityPointsPerHour < 0 || category.severityPointsPerHour > 100) throw ArgumentError('Severity must be between 0 and 100 points per hour.');
     final Set<String> packages = category.packageNames.map((String value) => value.trim()).where((String value) => value.isNotEmpty).toSet();
-    if (category.autoTrack && packages.isEmpty) throw ArgumentError('Add at least one Android package name to enable automatic tracking.');
+    if (category.autoTrack && packages.isEmpty) throw ArgumentError('Choose at least one installed app to enable automatic tracking.');
     String normalise(String value) => value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
     final bool duplicate = _current.distractionCategories.any((DistractionCategory value) => value.id != category.id && normalise(value.name) == normalise(name));
     if (duplicate) throw ArgumentError('A category with this name already exists.');
@@ -1005,7 +1005,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         if (value.autoTrack) ...value.packageNames.map((String packageName) => packageName.trim()),
     };
     if (category.autoTrack && category.packageNames.any((String packageName) => otherPackages.contains(packageName.trim()))) {
-      throw ArgumentError('An app package can be assigned to only one automatic tracking category.');
+      throw ArgumentError('An app can be assigned to only one automatic tracking category.');
     }
     await _repo.upsertDistractionCategory(category);
     final AppData data = _current;

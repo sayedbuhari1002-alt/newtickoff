@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
 import '../../domain/models/models.dart';
 import '../../features/analytics/analytics_screen.dart';
+import '../../features/activity/activity_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/dashboard/habits_screen.dart';
 import '../../features/habit_detail/habit_detail_screen.dart';
@@ -34,7 +35,7 @@ import 'routes.dart';
 
 final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) => buildRouter());
 
-/// The four primary destinations share a navigation shell. Forms, detail pages
+/// The five primary destinations share a navigation shell. Forms, detail pages
 /// and analytics remain full-screen so task and habit workflows are not nested
 /// inside a small modal.
 GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
@@ -55,6 +56,9 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
           ]),
           StatefulShellBranch(routes: <RouteBase>[
             GoRoute(path: AppRoutes.habits, builder: (BuildContext c, GoRouterState s) => const HabitsScreen()),
+          ]),
+          StatefulShellBranch(routes: <RouteBase>[
+            GoRoute(path: AppRoutes.activity, builder: (BuildContext c, GoRouterState s) => const ActivityScreen()),
           ]),
           StatefulShellBranch(routes: <RouteBase>[
             GoRoute(path: AppRoutes.tasks, builder: (BuildContext c, GoRouterState s) => const TaskListScreen()),

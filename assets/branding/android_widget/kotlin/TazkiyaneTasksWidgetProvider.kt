@@ -26,6 +26,10 @@ class TazkiyaneTasksWidgetProvider : HomeWidgetProvider() {
         } catch (_: Exception) {
             JSONObject()
         }
+        val recommendations = snapshot.optJSONArray("recommendations")
+        val suggestedTasks = (0 until (recommendations?.length() ?: 0)).take(2).mapNotNull { index ->
+            recommendations?.optJSONObject(index)?.optString("title", "")?.trim()?.takeIf { it.isNotBlank() }
+        }
         val allTasks = snapshot.optJSONArray("tasks")
         data class WidgetTask(val title: String, val overdue: Boolean, val dueDate: String, val completed: Boolean)
         val dueTasks = mutableListOf<WidgetTask>()
@@ -67,6 +71,14 @@ class TazkiyaneTasksWidgetProvider : HomeWidgetProvider() {
                     else "$totalOpen open · $totalCompleted done"
                 )
                 setTextViewText(R.id.widget_tasks, visibleText)
+                setTextViewText(
+                    R.id.widget_recommendation,
+                    when (suggestedTasks.size) {
+                        0 -> "No extra task suggestion right now"
+                        1 -> "Suggested next: ${suggestedTasks[0]}"
+                        else -> "Suggested next: ${suggestedTasks[0]}\nThen: ${suggestedTasks[1]}"
+                    }
+                )
                 val launchIntent = HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java)
                 setOnClickPendingIntent(R.id.widget_root, launchIntent)
             }

@@ -3,7 +3,7 @@
     android:description="@string/tazkiyane_tasks_widget_description"
     android:initialLayout="@layout/tazkiyane_tasks_widget"
     android:minWidth="250dp"
-    android:minHeight="170dp"
+    android:minHeight="195dp"
     android:minResizeWidth="180dp"
     android:minResizeHeight="110dp"
     android:resizeMode="horizontal|vertical"

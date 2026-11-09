@@ -19,6 +19,19 @@ class ProductivityUsageService {
     }
   }
 
+  Future<List<InstalledApp>> getInstalledApps() async {
+    final List<dynamic>? raw = await _channel.invokeListMethod<dynamic>('getInstalledApps');
+    final List<InstalledApp> apps = <InstalledApp>[];
+    for (final dynamic item in raw ?? const <dynamic>[]) {
+      if (item is! Map) continue;
+      final String packageName = item['packageName'] as String? ?? '';
+      final String label = item['label'] as String? ?? packageName;
+      if (packageName.isNotEmpty) apps.add(InstalledApp(packageName: packageName, label: label));
+    }
+    apps.sort((InstalledApp a, InstalledApp b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+    return apps;
+  }
+
   Future<void> openSettings() async {
     try {
       await _channel.invokeMethod<void>('openUsageAccessSettings');
@@ -70,4 +83,11 @@ class ProductivityUsageService {
     }
     return records;
   }
+}
+
+/// A launchable Android app shown by name in the distraction-app picker.
+class InstalledApp {
+  const InstalledApp({required this.packageName, required this.label});
+  final String packageName;
+  final String label;
 }

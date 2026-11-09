@@ -78,7 +78,7 @@ class WidgetsSettingsScreen extends ConsumerWidget {
           const Text('Android home-screen widget', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           Text(
-            'Add the Tazkiyane Tasks widget from your phone launcher: long-press an empty area of the Home screen, open Widgets, find Tazkiyane, then drag “Today’s Tasks” onto the screen. It shows tasks scheduled for today, overdue tasks, and tasks completed today. Tap it to open the app.',
+            'Add the Tazkiyane Tasks widget from your phone launcher: long-press an empty area of the Home screen, open Widgets, find Tazkiyane, then drag “Today’s Tasks” onto the screen. It shows tasks scheduled for today, overdue tasks, tasks completed today, and a suggested next task based on priority and deadline. Tap it to open the app.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.45),
           ),
           const SizedBox(height: 8),

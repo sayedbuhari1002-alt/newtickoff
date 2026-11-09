@@ -49,6 +49,18 @@
         android:textSize="12sp" />
 
     <TextView
+        android:id="@+id/widget_recommendation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:text="Suggested next: add a task"
+        android:textColor="#E5C77A"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+    <TextView
         android:id="@+id/widget_footer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
