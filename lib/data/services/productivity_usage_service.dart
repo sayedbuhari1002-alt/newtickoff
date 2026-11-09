@@ -85,7 +85,7 @@ class ProductivityUsageService {
   }
 }
 
-/// A launchable Android app shown by name in the distraction-app picker.
+/// An installed Android application shown by name in the distraction-app picker.
 class InstalledApp {
   const InstalledApp({required this.packageName, required this.label});
   final String packageName;

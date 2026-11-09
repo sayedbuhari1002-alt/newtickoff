@@ -130,7 +130,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
       return null;
     }
     if (apps.isEmpty) {
-      if (mounted) _message('No launchable apps were found on this device.');
+      if (mounted) _message('No installed apps were found on this device.');
       return null;
     }
 

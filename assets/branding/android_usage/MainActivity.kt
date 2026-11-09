@@ -3,7 +3,8 @@ package dev.tickoffreplacement.tickoff_replacement
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ResolveInfo
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
@@ -23,7 +24,7 @@ class MainActivity : FlutterActivity() {
                 "hasUsageAccess" -> result.success(hasUsageAccess())
                 "getInstalledApps" -> {
                     try {
-                        result.success(getInstalledLauncherApps())
+                        result.success(getInstalledApps())
                     } catch (error: Exception) {
                         result.error("APP_LIST_FAILED", error.message, null)
                     }
@@ -56,17 +57,30 @@ class MainActivity : FlutterActivity() {
     }
 
     @Suppress("DEPRECATION")
-    private fun getInstalledLauncherApps(): List<Map<String, String>> {
-        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val activities: List<ResolveInfo> = packageManager.queryIntentActivities(launcherIntent, 0)
-        val seenPackages = mutableSetOf<String>()
-        return activities.mapNotNull { resolveInfo ->
-            val activity = resolveInfo.activityInfo ?: return@mapNotNull null
-            val appPackage = activity.packageName
-            if (appPackage == packageName || !seenPackages.add(appPackage)) return@mapNotNull null
-            val label = resolveInfo.loadLabel(packageManager)?.toString()?.trim().orEmpty()
+    private fun getInstalledApps(): List<Map<String, String>> {
+        // QUERY_ALL_PACKAGES is declared in the generated Android manifest.
+        // Enumerating installed applications is necessary because some OEM and
+        // preinstalled apps (including YouTube on certain devices) are not
+        // consistently returned by a launcher-intent query.
+        val applications: List<ApplicationInfo> =
+            packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+
+        return applications.mapNotNull { application ->
+            val appPackage = application.packageName
+            if (appPackage == packageName || !application.enabled) return@mapNotNull null
+
+            // Keep regular installed apps and user-visible system apps. Omit
+            // non-launchable system services so the picker is not flooded with
+            // Android internals that users cannot meaningfully select.
+            val isSystemApp = (application.flags and ApplicationInfo.FLAG_SYSTEM) != 0 ||
+                (application.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+            val hasLauncherActivity = packageManager.getLaunchIntentForPackage(appPackage) != null
+            if (isSystemApp && !hasLauncherActivity) return@mapNotNull null
+
+            val label = application.loadLabel(packageManager)?.toString()?.trim().orEmpty()
             if (label.isBlank()) null else mapOf("packageName" to appPackage, "label" to label)
-        }.sortedBy { it["label"]?.lowercase() ?: "" }
+        }.distinctBy { it["packageName"] }
+            .sortedBy { it["label"]?.lowercase() ?: "" }
     }
 
     private fun hasUsageAccess(): Boolean {

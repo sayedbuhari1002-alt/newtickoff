@@ -23,6 +23,21 @@ void main() {
     expect(find.text('Due (0)'), findsOneWidget);
   });
 
+  testWidgets(
+    'middle bottom-navigation tab opens Productivity instead of Activity',
+    (WidgetTester tester) async {
+      await pumpApp(tester);
+
+      expect(find.text('Activity'), findsNothing);
+      await tester.tap(find.text('Productivity').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Productivity'), findsWidgets);
+      expect(find.byTooltip('Choose date'), findsOneWidget);
+      expect(find.text('Activity'), findsNothing);
+    },
+  );
+
   testWidgets('quit habits with no slip count as successful in Daily Progress',
       (WidgetTester tester) async {
     final InMemoryAppRepository repo = InMemoryAppRepository()
@@ -231,6 +246,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Rearrange'), findsOneWidget);
     expect(find.text('Archive'), findsOneWidget);
+    expect(find.text('Productivity'), findsNothing);
     expect(find.textContaining('Ultimate'), findsNothing);
     expect(find.textContaining('Cloud'), findsNothing);
   });

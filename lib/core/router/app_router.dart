@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
 import '../../domain/models/models.dart';
 import '../../features/analytics/analytics_screen.dart';
-import '../../features/activity/activity_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/dashboard/habits_screen.dart';
 import '../../features/habit_detail/habit_detail_screen.dart';
@@ -58,7 +57,7 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
             GoRoute(path: AppRoutes.habits, builder: (BuildContext c, GoRouterState s) => const HabitsScreen()),
           ]),
           StatefulShellBranch(routes: <RouteBase>[
-            GoRoute(path: AppRoutes.activity, builder: (BuildContext c, GoRouterState s) => const ActivityScreen()),
+            GoRoute(path: AppRoutes.productivity, builder: (BuildContext c, GoRouterState s) => const ProductivityScreen()),
           ]),
           StatefulShellBranch(routes: <RouteBase>[
             GoRoute(path: AppRoutes.tasks, builder: (BuildContext c, GoRouterState s) => const TaskListScreen()),
@@ -100,7 +99,6 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
           GoRoute(path: 'analytics', builder: (BuildContext c, GoRouterState s) => AnalyticsScreen(habitId: s.pathParameters['id'])),
         ],
       ),
-      GoRoute(path: AppRoutes.productivity, builder: (BuildContext c, GoRouterState s) => const ProductivityScreen()),
       GoRoute(path: AppRoutes.analytics, builder: (BuildContext c, GoRouterState s) => const AnalyticsScreen()),
       GoRoute(path: AppRoutes.noteLibrary, builder: (BuildContext c, GoRouterState s) => const NoteLibraryScreen()),
       GoRoute(path: AppRoutes.noteNewPath, builder: (BuildContext c, GoRouterState s) => NoteEditorScreen(habitId: s.uri.queryParameters['habit'], logDate: parseDateKey(s.uri.queryParameters['date'] ?? ''), noteType: NoteType.values.where((NoteType type) => type.name == s.uri.queryParameters['type']).firstOrNull ?? NoteType.daily, periodDate: parseDateKey(s.uri.queryParameters['period'] ?? ''))),

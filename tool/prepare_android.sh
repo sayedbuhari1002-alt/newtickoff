@@ -31,8 +31,9 @@ else
   exit 1
 fi
 
-# Limit package visibility to apps that expose a launcher icon. This lets the
-# distraction picker show installed app names without requesting QUERY_ALL_PACKAGES.
+# Keep an intent query for launcher apps, and request broad package visibility
+# so the distraction picker can include installed apps that are not consistently
+# exposed by launcher-intent queries (for example, some preinstalled apps).
 if ! grep -q '<queries>' "$MANIFEST"; then
   python3 - "$MANIFEST" <<'PYQUERIES'
 from pathlib import Path
@@ -181,11 +182,15 @@ echo "Applied Gson TypeToken keep rules and R8 compatibility-mode workaround."
 python3 tool/configure_release_signing.py "$APP_GRADLE"
 
 # Runtime permissions and receivers required by exact local reminders and recording.
-for permission in POST_NOTIFICATIONS RECEIVE_BOOT_COMPLETED RECORD_AUDIO SCHEDULE_EXACT_ALARM PACKAGE_USAGE_STATS; do
+for permission in POST_NOTIFICATIONS RECEIVE_BOOT_COMPLETED RECORD_AUDIO SCHEDULE_EXACT_ALARM PACKAGE_USAGE_STATS QUERY_ALL_PACKAGES; do
   if ! grep -q "android.permission.${permission}" "$MANIFEST"; then
     sed -i "/<application/i\    <uses-permission android:name=\"android.permission.${permission}\" />" "$MANIFEST"
   fi
 done
+# QUERY_ALL_PACKAGES is a manifest-only package-visibility permission; Android
+# does not show a runtime prompt for it. It is used by this sideloadable,
+# offline-first app to populate the user's installed-app selection list.
+grep -q 'android.permission.QUERY_ALL_PACKAGES' "$MANIFEST"
 if ! grep -q 'ScheduledNotificationReceiver' "$MANIFEST"; then
   sed -i '/<\/application>/i\        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />\n        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">\n            <intent-filter>\n                <action android:name="android.intent.action.BOOT_COMPLETED" />\n                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />\n                <action android:name="android.intent.action.QUICKBOOT_POWERON" />\n                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />\n            </intent-filter>\n        </receiver>' "$MANIFEST"
 fi

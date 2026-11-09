@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 
-/// Five primary destinations: Home, Habits, Activity, Tasks and Notes.
+/// Five primary destinations: Home, Habits, Productivity, Tasks and Notes.
 class TickoffBottomBar extends StatelessWidget {
   const TickoffBottomBar({
     super.key,
@@ -11,7 +11,7 @@ class TickoffBottomBar extends StatelessWidget {
     required this.onSelect,
   });
 
-  /// 0 = Dashboard, 1 = Habits, 2 = Activity, 3 = Tasks, 4 = Notes.
+  /// 0 = Dashboard, 1 = Habits, 2 = Productivity, 3 = Tasks, 4 = Notes.
   final int currentIndex;
   final ValueChanged<int> onSelect;
 
@@ -27,7 +27,7 @@ class TickoffBottomBar extends StatelessWidget {
             children: <Widget>[
               Expanded(child: _NavItem(icon: Icons.dashboard_rounded, label: 'Home', selected: currentIndex == 0, onTap: () => onSelect(0))),
               Expanded(child: _NavItem(icon: Icons.check_circle_outline_rounded, label: 'Habits', selected: currentIndex == 1, onTap: () => onSelect(1))),
-              Expanded(child: _NavItem(icon: Icons.history_rounded, label: 'Activity', selected: currentIndex == 2, onTap: () => onSelect(2))),
+              Expanded(child: _NavItem(icon: Icons.insights_rounded, label: 'Productivity', selected: currentIndex == 2, onTap: () => onSelect(2))),
               Expanded(child: _NavItem(icon: Icons.checklist_rounded, label: 'Tasks', selected: currentIndex == 3, onTap: () => onSelect(3))),
               Expanded(child: _NavItem(icon: Icons.sticky_note_2_rounded, label: 'Notes', selected: currentIndex == 4, onTap: () => onSelect(4))),
             ],
