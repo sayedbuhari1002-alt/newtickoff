@@ -9,7 +9,7 @@ import '../support/test_helpers.dart';
 /// Starts the app and opens the Add Habit form the way a user does.
 Future<InMemoryAppRepository> openNewForm(WidgetTester tester) async {
   final InMemoryAppRepository repo = await pumpApp(tester);
-  await tester.tap(find.byIcon(Icons.add));
+  await tester.tap(find.byIcon(Icons.add_rounded));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Add Habit'));
   await tester.pumpAndSettle();
