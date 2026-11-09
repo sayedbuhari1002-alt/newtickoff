@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/router/routes.dart';
 import '../../shared/widgets/widgets.dart';
 
 class AppShell extends StatelessWidget {

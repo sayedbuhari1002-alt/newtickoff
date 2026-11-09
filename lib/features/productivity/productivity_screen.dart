@@ -381,6 +381,8 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
   Widget _buildContent(AppData data) {
     final String selectedKey = _dateKey(_selectedDate);
     final DateTime selectedDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final DateTime now = DateTime.now();
+    final DateTime today = DateTime(now.year, now.month, now.day);
     final bool hasAutoTrackedCategories = data.distractionCategories.any((DistractionCategory value) => value.autoTrack && value.packageNames.isNotEmpty);
     if (_usagePermission == true && hasAutoTrackedCategories && !selectedDay.isAfter(today) && _autoRefreshRequestedForDate != selectedKey) {
       _autoRefreshRequestedForDate = selectedKey;
