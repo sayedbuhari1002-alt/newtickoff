@@ -8,6 +8,7 @@ import '../../domain/logic/productivity_engine.dart';
 import '../../domain/models/models.dart';
 import '../../state/app_data.dart';
 import '../../state/app_settings.dart';
+import '../../state/app_state.dart';
 
 /// Productivity analytics embedded in the unified Analytics destination.
 /// Historical days are evaluated by ProductivityEngine, which preserves the
