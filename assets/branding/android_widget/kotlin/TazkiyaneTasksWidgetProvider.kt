@@ -39,11 +39,16 @@ class TazkiyaneTasksWidgetProvider : HomeWidgetProvider() {
                 val completed = task.optBoolean("isCompleted", false)
                 val paused = task.optBoolean("isPaused", false)
                 val dueDate = task.optString("dueDate", "")
-                val startDate = task.optString("startDate", dueDate)
+                val scheduledDate = task.optString("scheduledDate", "")
+                val reminderDate = task.optString("reminderDate", "")
+                val startDate = if (reminderDate.isNotBlank()) reminderDate else dueDate
                 val completedDate = task.optString("completedDate", "")
                 val overdue = !completed && !paused && dueDate.isNotBlank() && dueDate < today
-                val scheduledToday = !paused && startDate.isNotBlank() && startDate <= today &&
-                    (dueDate.isBlank() || dueDate >= today)
+                val scheduledToday = !paused && (
+                    scheduledDate == today ||
+                    (startDate.isNotBlank() && startDate <= today &&
+                        (dueDate.isBlank() || dueDate >= today))
+                )
                 val completedToday = completed && completedDate == today
                 if (!scheduledToday && !overdue && !completedToday) continue
                 val title = task.optString("title", "Untitled task").trim().ifBlank { "Untitled task" }

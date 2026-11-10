@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/utils/date_utils.dart';
 import '../../domain/models/models.dart';
 import '../../features/analytics/analytics_screen.dart';
+import '../../features/analytics/unified_analytics_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/dashboard/habits_screen.dart';
 import '../../features/habit_detail/habit_detail_screen.dart';
@@ -72,7 +73,7 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
       GoRoute(path: AppRoutes.subtaskEditor, builder: (BuildContext c, GoRouterState s) => SubtaskEditorScreen(
         initial: s.extra is List<Subtask> ? List<Subtask>.from(s.extra! as List<Subtask>) : const <Subtask>[],
       )),
-      GoRoute(path: AppRoutes.taskAnalytics, builder: (BuildContext c, GoRouterState s) => const TaskAnalyticsScreen()),
+      GoRoute(path: AppRoutes.taskAnalytics, builder: (BuildContext c, GoRouterState s) => const UnifiedAnalyticsScreen()),
       GoRoute(
         path: '/task/:id',
         builder: (BuildContext c, GoRouterState s) => TaskDetailScreen(taskId: s.pathParameters['id'] ?? ''),
@@ -99,7 +100,7 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
           GoRoute(path: 'analytics', builder: (BuildContext c, GoRouterState s) => AnalyticsScreen(habitId: s.pathParameters['id'])),
         ],
       ),
-      GoRoute(path: AppRoutes.analytics, builder: (BuildContext c, GoRouterState s) => const AnalyticsScreen()),
+      GoRoute(path: AppRoutes.analytics, builder: (BuildContext c, GoRouterState s) => const UnifiedAnalyticsScreen()),
       GoRoute(path: AppRoutes.noteLibrary, builder: (BuildContext c, GoRouterState s) => const NoteLibraryScreen()),
       GoRoute(path: AppRoutes.noteNewPath, builder: (BuildContext c, GoRouterState s) => NoteEditorScreen(habitId: s.uri.queryParameters['habit'], logDate: parseDateKey(s.uri.queryParameters['date'] ?? ''), noteType: NoteType.values.where((NoteType type) => type.name == s.uri.queryParameters['type']).firstOrNull ?? NoteType.daily, periodDate: parseDateKey(s.uri.queryParameters['period'] ?? ''))),
       GoRoute(path: '/note/:id', builder: (BuildContext c, GoRouterState s) => NoteEditorScreen(noteId: s.pathParameters['id'])),

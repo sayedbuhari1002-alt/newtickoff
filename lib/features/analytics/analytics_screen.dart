@@ -21,9 +21,10 @@ import 'trend_chart.dart';
 ///
 /// With [habitId] the screen starts on that habit; otherwise on all habits.
 class AnalyticsScreen extends ConsumerStatefulWidget {
-  const AnalyticsScreen({super.key, this.habitId});
+  const AnalyticsScreen({super.key, this.habitId, this.embedded = false});
 
   final String? habitId;
+  final bool embedded;
 
   @override
   ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
@@ -122,7 +123,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     final AppData? data = ref.watch(appDataProvider).valueOrNull;
     if (data == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Analytics')),
+        appBar: widget.embedded ? null : AppBar(title: const Text('Analytics')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -134,7 +135,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
 
     if (selected.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Analytics')),
+        appBar: widget.embedded ? null : AppBar(title: const Text('Analytics')),
         body: const EmptyState(
           icon: Icons.insights_rounded,
           title: 'No data to analyse yet',
@@ -169,7 +170,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     final double score = engine.overallScore(selectedStats);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Analytics')),
+      appBar: widget.embedded ? null : AppBar(title: const Text('Analytics')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppDimens.pagePadding,

@@ -35,12 +35,19 @@ void main() {
   testWidgets('new users see a helpful empty state, not fake numbers',
       (WidgetTester tester) async {
     await pumpApp(tester, location: AppRoutes.analytics);
+    expect(find.text('Analytics'), findsOneWidget);
+    expect(find.text('Tasks'), findsOneWidget);
+    expect(find.text('Productivity'), findsOneWidget);
+    await tester.tap(find.text('Habits').first);
+    await tester.pumpAndSettle();
     expect(find.text('No data to analyse yet'), findsOneWidget);
     expect(find.byType(StatTile), findsNothing);
   });
 
   testWidgets('figures come from the stored records', (WidgetTester tester) async {
     await pumpApp(tester, repo: seededTwo(), location: AppRoutes.analytics);
+    await tester.tap(find.text('Habits').first);
+    await tester.pumpAndSettle();
 
     expect(find.text('Analytics'), findsOneWidget);
     expect(find.text('Daily completion rate'), findsOneWidget);
@@ -75,6 +82,8 @@ void main() {
     repo.records[record.key] = record;
 
     await pumpApp(tester, repo: repo, location: AppRoutes.analytics);
+    await tester.tap(find.text('Habits').first);
+    await tester.pumpAndSettle();
     expect(find.text('Actual Count History'), findsOneWidget);
     expect(find.textContaining('120/100'), findsOneWidget);
   });
@@ -82,6 +91,8 @@ void main() {
   testWidgets('date-range filter changes the figures',
       (WidgetTester tester) async {
     await pumpApp(tester, repo: seededTwo(), location: AppRoutes.analytics);
+    await tester.tap(find.text('Habits').first);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('7D')); // Oct 21..27
     await tester.pumpAndSettle();
@@ -93,6 +104,8 @@ void main() {
   testWidgets('a single habit can be analysed on its own',
       (WidgetTester tester) async {
     await pumpApp(tester, repo: seededTwo(), location: AppRoutes.analytics);
+    await tester.tap(find.text('Habits').first);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Bravo').first); // the chip
     await tester.pumpAndSettle();
@@ -101,6 +114,22 @@ void main() {
     expect(find.text('Achievements'), findsOneWidget);
     expect(tileValue(tester, 'Completions'), '3');
     expect(tileValue(tester, 'Completion Rate'), '43%');
+  });
+
+  testWidgets('unified Analytics offers task, productivity and habit sections', (WidgetTester tester) async {
+    await pumpApp(tester, repo: seededTwo(), location: AppRoutes.analytics);
+    expect(find.text('Tasks'), findsOneWidget);
+    expect(find.text('Productivity'), findsOneWidget);
+    expect(find.text('Habits'), findsOneWidget);
+
+    await tester.tap(find.text('Productivity').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Productivity trend'), findsOneWidget);
+    expect(find.text('Daily productivity scores'), findsOneWidget);
+
+    await tester.tap(find.text('Tasks').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Daily completions'), findsOneWidget);
   });
 
   testWidgets('the detail screen opens analytics for that habit',
@@ -115,6 +144,16 @@ void main() {
     expect(find.text('Streaks'), findsNothing);
     expect(tileValue(tester, 'Completions'), '7');
     expect(tileValue(tester, 'Completion Rate'), '100%');
+  });
+
+  testWidgets('Home header Analytics button opens the unified Analytics screen', (WidgetTester tester) async {
+    await pumpApp(tester, repo: seededTwo());
+    await tester.tap(find.byTooltip('Analytics'));
+    await tester.pumpAndSettle();
+    expect(find.text('Analytics'), findsOneWidget);
+    expect(find.text('Tasks'), findsOneWidget);
+    expect(find.text('Productivity'), findsOneWidget);
+    expect(find.text('Habits'), findsOneWidget);
   });
 
   testWidgets('the Dashboard Insights shortcut opens analytics',

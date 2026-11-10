@@ -27,7 +27,7 @@ class HabitsScreen extends ConsumerWidget {
       body: SafeArea(bottom: false, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
         Padding(padding: const EdgeInsets.fromLTRB(AppDimens.pagePadding, 12, 10, 0), child: Row(children: <Widget>[
           const Expanded(child: Text('Habits', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w800))),
-          IconButton(tooltip: 'Habit analytics', onPressed: () => context.push(AppRoutes.analytics), icon: const Icon(Icons.insights_outlined)),
+          IconButton(tooltip: 'Analytics', onPressed: () => context.push(AppRoutes.analytics), icon: const Icon(Icons.analytics_outlined)),
           IconButton(tooltip: 'Settings', onPressed: () => context.push(AppRoutes.settings), icon: const Icon(Icons.settings_outlined)),
         ])),
         const SizedBox(height: 8),

@@ -172,7 +172,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
             IconButton(tooltip: 'Cancel selection', onPressed: _clearSelection, icon: const Icon(Icons.close_rounded)),
           ] else ...<Widget>[
             IconButton(tooltip: 'Task templates', onPressed: () => context.push(AppRoutes.taskTemplates), icon: const Icon(Icons.bookmarks_outlined)),
-            IconButton(tooltip: 'Task analytics', onPressed: () => context.push(AppRoutes.taskAnalytics), icon: const Icon(Icons.insights_rounded)),
+            IconButton(tooltip: 'Analytics', onPressed: () => context.push(AppRoutes.analytics), icon: const Icon(Icons.analytics_outlined)),
             IconButton(tooltip: 'Add task', onPressed: () => context.push(AppRoutes.taskNew), icon: const Icon(Icons.add_circle_outline_rounded)),
           ],
         ])),

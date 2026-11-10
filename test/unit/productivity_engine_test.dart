@@ -221,28 +221,50 @@ void main() {
     expect(data.targetForDate(DateTime(2026, 11, 12)), 20);
   });
 
-  test('Recommendations exclude future scheduled, completed, paused and already scheduled tasks', () {
-    Task task(String id, {TaskPriority priority = TaskPriority.medium, DateTime? dueAt, DateTime? scheduledDate, bool completed = false, bool paused = false, bool isGroup = false, String? parentTaskId}) => Task(
+  test('Suggestions include upcoming and unscheduled leaf tasks but exclude today and overdue work', () {
+    Task task(String id, {TaskPriority priority = TaskPriority.medium, DateTime? dueAt, DateTime? scheduledDate, bool completed = false, bool paused = false, bool isGroup = false, String? parentTaskId, double difficulty = 1}) => Task(
       id: id, title: id, createdAt: day, updatedAt: day, priority: priority,
       dueAt: dueAt, scheduledDate: scheduledDate, isCompleted: completed,
       isPaused: paused, isGroup: isGroup, parentTaskId: parentTaskId,
+      difficultyScore: difficulty,
     );
     final recommendations = engine.recommendTasks(
       date: day,
       remainingTarget: 5,
       tasks: <Task>[
-        task('urgent-high', priority: TaskPriority.high, dueAt: DateTime(2026, 11, 8, 18)),
+        task('overdue-high', priority: TaskPriority.high, dueAt: DateTime(2026, 11, 7)),
         task('group-parent', isGroup: true),
-        task('group-child', parentTaskId: 'group-parent'),
-        task('future-deadline', dueAt: DateTime(2026, 11, 10)),
+        task('future-deadline', dueAt: DateTime(2026, 11, 10), difficulty: 8),
         task('future-plan', scheduledDate: DateTime(2026, 11, 9)),
         task('today-plan', scheduledDate: day),
+        task('unscheduled', priority: TaskPriority.high, difficulty: 6),
         task('completed', completed: true),
         task('paused', paused: true),
       ],
     );
-    expect(recommendations.map((RecommendedTask value) => value.task.id).toSet(), <String>{'urgent-high', 'group-child'});
-    expect(recommendations.first.task.id, 'urgent-high');
+    final Set<String> ids = recommendations.map((RecommendedTask value) => value.task.id).toSet();
+    expect(ids, <String>{'future-deadline', 'future-plan', 'unscheduled'});
+    expect(ids, isNot(contains('today-plan')));
+    expect(ids, isNot(contains('overdue-high')));
+    expect(ids, isNot(contains('group-parent')));
+    expect(ids, isNot(contains('completed')));
+    expect(ids, isNot(contains('paused')));
+    expect(recommendations.first.task.id, 'future-deadline');
+  });
+
+  test('A child task may be suggested without suggesting its group parent', () {
+    final Task parent = Task(
+      id: 'parent', title: 'Project', createdAt: day, updatedAt: day,
+      isGroup: true,
+    );
+    final Task child = Task(
+      id: 'child', title: 'Write documentation', createdAt: day, updatedAt: day,
+      parentTaskId: parent.id, priority: TaskPriority.high,
+    );
+    final List<RecommendedTask> recommendations = engine.recommendTasks(
+      tasks: <Task>[parent, child], date: day, remainingTarget: 5,
+    );
+    expect(recommendations.map((RecommendedTask value) => value.task.id).toList(), <String>['child']);
   });
 
   test('Today habit points follow the current saved count and checklist state', () {

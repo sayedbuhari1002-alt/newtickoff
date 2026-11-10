@@ -1,4 +1,5 @@
 import '../models/models.dart';
+import 'task_engine.dart';
 
 class ProductivityContribution {
   const ProductivityContribution({required this.label, required this.points, required this.kind, this.detail = ''});
@@ -195,47 +196,90 @@ class ProductivityEngine {
     required DateTime date,
     required double remainingTarget,
   }) {
-    final DateTime today = DateTime(date.year, date.month, date.day);
+    final DateTime selectedDay = dayOnly(date);
     final List<RecommendedTask> result = <RecommendedTask>[];
+
     for (final Task task in tasks) {
-      if (task.isCompleted || task.isPaused || task.isGroup || tasks.any((Task child) => child.parentTaskId == task.id)) continue;
-      if (task.scheduledDate != null) {
-        final DateTime scheduled = DateTime(task.scheduledDate!.year, task.scheduledDate!.month, task.scheduledDate!.day);
-        if (!scheduled.isBefore(today)) continue;
+      final bool hasChildren = tasks.any((Task child) => child.parentTaskId == task.id);
+      if (task.isCompleted || task.isPaused || task.isGroup || hasChildren) continue;
+
+      // Keep the recommendation list separate from Today's Tasks. Anything
+      // already visible on the selected day or already overdue belongs in the
+      // day list, not in Suggested Next.
+      if (isTaskScheduledOnDate(task, selectedDay) ||
+          isTaskOverdueOnDate(task, selectedDay)) {
+        continue;
       }
-      if (task.dueAt != null) {
-        final DateTime due = DateTime(task.dueAt!.year, task.dueAt!.month, task.dueAt!.day);
-        // Recommendations focus on unplanned and overdue work. Future-dated work
-        // remains for its planned date instead of being pulled forward.
-        if (due.isAfter(today)) continue;
-      }
-      final double priority = switch (task.priority) {
+
+      final DateTime? dueDate = task.dueAt == null ? null : dayOnly(task.dueAt!);
+      final DateTime? plannedDate = task.scheduledDate == null
+          ? (task.reminderAt == null ? null : dayOnly(task.reminderAt!))
+          : dayOnly(task.scheduledDate!);
+      final int daysToDue = dueDate == null ? 9999 : dueDate.difference(selectedDay).inDays;
+      final int daysToPlan = plannedDate == null ? 9999 : plannedDate.difference(selectedDay).inDays;
+
+      final double priorityWeight = switch (task.priority) {
         TaskPriority.high => 1.0,
-        TaskPriority.medium => 0.55,
-        TaskPriority.low => 0.2,
+        TaskPriority.medium => 0.65,
+        TaskPriority.low => 0.30,
       };
-      final DateTime? dueDate = task.dueAt == null
-          ? null
-          : DateTime(task.dueAt!.year, task.dueAt!.month, task.dueAt!.day);
-      final int overdueDays = dueDate == null ? 0 : today.difference(dueDate).inDays;
-      final double urgency = dueDate == null
-          ? 0.12
-          : (0.90 + (overdueDays.clamp(0, 30) / 30) * 0.10).clamp(0, 1).toDouble();
-      final double contribution = remainingTarget <= 0
-          ? 0
-          : (task.difficultyScore / remainingTarget).clamp(0, 1).toDouble();
-      final double unscheduled = task.scheduledDate == null ? 1.0 : 0.0;
-      final double score = priority * 0.40 + urgency * 0.40 + contribution * 0.15 + unscheduled * 0.05;
-      final String deadlineReason = dueDate == null
-          ? 'no deadline'
-          : overdueDays > 0
-              ? 'overdue by $overdueDays day(s)'
-              : 'deadline is today';
-      final String reason = '${task.priority.name[0].toUpperCase()}${task.priority.name.substring(1)} priority · $deadlineReason · ${task.difficultyScore.toStringAsFixed(1)} points';
-      result.add(RecommendedTask(task: task, score: score, reason: reason));
+      final double urgencyWeight = dueDate != null
+          ? daysToDue <= 1
+              ? 1.0
+              : daysToDue <= 7
+                  ? 0.85
+                  : daysToDue <= 30
+                      ? 0.65
+                      : 0.45
+          : plannedDate != null && daysToPlan > 0
+              ? daysToPlan <= 7 ? 0.75 : 0.50
+              : 0.35;
+      final double difficultyWeight =
+          (task.difficultyScore.clamp(1.0, 10.0) / 10.0).toDouble();
+      final double targetFit = remainingTarget <= 0
+          ? 0.0
+          : (task.difficultyScore / remainingTarget).clamp(0.0, 1.0).toDouble();
+      final double scheduleWeight = plannedDate != null && daysToPlan > 0 ? 1.0 : 0.45;
+      final double score = priorityWeight * 0.40 +
+          urgencyWeight * 0.35 +
+          difficultyWeight * 0.15 +
+          targetFit * 0.07 +
+          scheduleWeight * 0.03;
+
+      final List<String> reasons = <String>[];
+      reasons.add('${task.priority.name[0].toUpperCase()}${task.priority.name.substring(1)} priority');
+      if (dueDate != null) {
+        reasons.add('Due ${_relativeDateLabel(dueDate, selectedDay)}');
+      }
+      if (plannedDate != null && daysToPlan > 0) {
+        reasons.add('Planned ${_relativeDateLabel(plannedDate, selectedDay)}');
+      } else if (plannedDate != null && daysToPlan < 0) {
+        reasons.add('Previously planned');
+      } else if (dueDate == null && plannedDate == null) {
+        reasons.add('Unscheduled');
+      }
+      reasons.add('${task.difficultyScore.toStringAsFixed(task.difficultyScore == task.difficultyScore.roundToDouble() ? 0 : 1)} points');
+      result.add(RecommendedTask(task: task, score: score, reason: reasons.join(' · ')));
     }
-    result.sort((RecommendedTask a, RecommendedTask b) => b.score.compareTo(a.score));
-    return result;
+
+    result.sort((RecommendedTask a, RecommendedTask b) {
+      final int scoreOrder = b.score.compareTo(a.score);
+      if (scoreOrder != 0) return scoreOrder;
+      final DateTime aDue = a.task.dueAt ?? DateTime(9999);
+      final DateTime bDue = b.task.dueAt ?? DateTime(9999);
+      final int dueOrder = aDue.compareTo(bDue);
+      if (dueOrder != 0) return dueOrder;
+      return b.task.priority.index.compareTo(a.task.priority.index);
+    });
+    return result.take(3).toList();
+  }
+
+  String _relativeDateLabel(DateTime value, DateTime from) {
+    final int difference = dayOnly(value).difference(dayOnly(from)).inDays;
+    if (difference == 0) return 'today';
+    if (difference == 1) return 'tomorrow';
+    if (difference > 1 && difference <= 7) return 'in $difference days';
+    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}';
   }
 
   /// Today's score follows the currently saved task state. A progressive task

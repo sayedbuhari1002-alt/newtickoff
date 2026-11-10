@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/utils/ids.dart';
@@ -414,12 +416,35 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
     );
     final List<DistractionLog> dayLogs = data.distractionLogs.where((DistractionLog log) => log.startAt.isBefore(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).add(const Duration(days: 1))) && log.endAt.isAfter(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day))).toList();
     final List<AppUsageRecord> dayUsage = data.appUsageRecords.where((AppUsageRecord record) => record.startAt.isBefore(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).add(const Duration(days: 1))) && record.endAt.isAfter(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day))).toList();
+    final ProductivityDayScore todayScore = _isToday
+        ? score
+        : engine.calculateDay(
+            date: today,
+            target: data.targetForDate(today),
+            habits: data.habits,
+            completions: data.completions,
+            tasks: data.tasks,
+            activities: data.taskActivities,
+            progressEvents: data.taskProgressEvents,
+            assignments: const <Assignment>[],
+            distractionCategories: data.distractionCategories,
+            distractionLogs: data.distractionLogs,
+            appUsageRecords: data.appUsageRecords,
+            currentStateScoringStartDate: _scoringModelStartDate(data),
+          );
+    final List<RecommendedTask> suggestedTasks = engine.recommendTasks(
+      tasks: data.tasks,
+      date: today,
+      remainingTarget: (todayScore.target - todayScore.netScore).clamp(0, double.infinity).toDouble(),
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppDimens.pagePadding, 4, AppDimens.pagePadding, 32),
       children: <Widget>[
         _dateSelector(),
         const SizedBox(height: 12),
         _scoreCard(score, data),
+        const SizedBox(height: 14),
+        _suggestedNextCard(context, suggestedTasks),
         const SizedBox(height: 18),
         _historyStrip(data, engine),
         const SizedBox(height: 18),
@@ -429,6 +454,56 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
       ],
     );
   }
+
+  Widget _suggestedNextCard(
+    BuildContext context,
+    List<RecommendedTask> recommendations,
+  ) => _Panel(
+        title: 'Suggested Next',
+        child: recommendations.isEmpty
+            ? const _Muted(
+                'No upcoming or unscheduled tasks to suggest. New recommendations appear when you add tasks or change their dates.',
+              )
+            : Column(
+                children: <Widget>[
+                  for (int index = 0; index < recommendations.length; index++) ...<Widget>[
+                    if (index > 0) const Divider(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      leading: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: AppColors.accentDim,
+                        child: Text(
+                          '${index + 1}',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        recommendations[index].task.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        recommendations[index].reason,
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => context.push(
+                        AppRoutes.taskDetail(recommendations[index].task.id),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+      );
 
   Widget _dateSelector() => Row(children: <Widget>[
     IconButton(onPressed: () => setState(() => _selectedDate = _selectedDate.subtract(const Duration(days: 1))), icon: const Icon(Icons.chevron_left_rounded)),

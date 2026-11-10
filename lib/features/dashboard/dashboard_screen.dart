@@ -58,9 +58,9 @@ class DashboardScreen extends ConsumerWidget {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Task analytics',
-                    icon: const Icon(Icons.insights_outlined),
-                    onPressed: () => context.push(AppRoutes.taskAnalytics),
+                    tooltip: 'Analytics',
+                    icon: const Icon(Icons.analytics_outlined),
+                    onPressed: () => context.push(AppRoutes.analytics),
                   ),
                   IconButton(
                     tooltip: 'Settings',
@@ -374,7 +374,7 @@ class _OverviewBody extends ConsumerWidget {
         Row(
           children: <Widget>[
             const Expanded(child: Text('Insights', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
-            TextButton(onPressed: () => context.push(AppRoutes.taskAnalytics), child: const Text('Task analytics')),
+            TextButton(onPressed: () => context.push(AppRoutes.analytics), child: const Text('View analytics')),
           ],
         ),
         Container(

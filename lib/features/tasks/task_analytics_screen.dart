@@ -12,8 +12,9 @@ import '../../state/app_state.dart';
 enum _Range { day, week, month, days30, days90, year, custom }
 
 class TaskAnalyticsScreen extends ConsumerStatefulWidget {
-  const TaskAnalyticsScreen({super.key, this.taskId});
+  const TaskAnalyticsScreen({super.key, this.taskId, this.embedded = false});
   final String? taskId;
+  final bool embedded;
   @override
   ConsumerState<TaskAnalyticsScreen> createState() => _TaskAnalyticsScreenState();
 }
@@ -53,7 +54,7 @@ class _TaskAnalyticsScreenState extends ConsumerState<TaskAnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     final AppData? data = ref.watch(appDataProvider).valueOrNull;
-    if (data == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (data == null) return Scaffold(appBar: widget.embedded ? null : AppBar(title: const Text('Task Analytics')), body: const Center(child: CircularProgressIndicator()));
     final Task? selectedTask = widget.taskId == null ? null : data.taskById(widget.taskId!);
     final List<Task> tasks = selectedTask == null ? data.tasks : <Task>[selectedTask];
     final List<TaskActivity> activities = widget.taskId == null ? data.taskActivities : data.activitiesForTask(widget.taskId!);
@@ -65,7 +66,7 @@ class _TaskAnalyticsScreenState extends ConsumerState<TaskAnalyticsScreen> {
         : null;
     final String heading = selectedTask == null ? 'Task Analytics' : 'Task Progress';
     return Scaffold(
-      appBar: AppBar(title: Text(heading)),
+      appBar: widget.embedded ? null : AppBar(title: Text(heading)),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), children: <Widget>[
         if (selectedTask != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(selectedTask.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
         Wrap(spacing: 6, runSpacing: 8, children: <Widget>[

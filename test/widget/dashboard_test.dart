@@ -38,6 +38,37 @@ void main() {
     },
   );
 
+  testWidgets('Productivity shows upcoming and unscheduled tasks in Suggested Next',
+      (WidgetTester tester) async {
+    final DateTime now = DateTime.now();
+    final InMemoryAppRepository repo = InMemoryAppRepository()
+      ..tasks['upcoming'] = Task(
+        id: 'upcoming',
+        title: 'Cisco Assignment',
+        createdAt: now,
+        updatedAt: now,
+        dueAt: now.add(const Duration(days: 2)),
+        priority: TaskPriority.high,
+        difficultyScore: 8,
+      )
+      ..tasks['unscheduled'] = Task(
+        id: 'unscheduled',
+        title: 'Project Documentation',
+        createdAt: now,
+        updatedAt: now,
+        priority: TaskPriority.medium,
+        difficultyScore: 5,
+      );
+
+    await pumpApp(tester, repo: repo);
+    await tester.tap(find.text('Productivity').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Suggested Next'), findsOneWidget);
+    expect(find.text('Cisco Assignment'), findsOneWidget);
+    expect(find.text('Project Documentation'), findsOneWidget);
+  });
+
   testWidgets('quit habits with no slip count as successful in Daily Progress',
       (WidgetTester tester) async {
     final InMemoryAppRepository repo = InMemoryAppRepository()
