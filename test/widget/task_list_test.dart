@@ -61,4 +61,34 @@ void main() {
     expect(find.byTooltip('Decrease by 1'), findsOneWidget);
     expect(find.byTooltip("Reset this day's count"), findsOneWidget);
   });
+
+  testWidgets('progressive task slider saves count-based progress',
+      (WidgetTester tester) async {
+    final InMemoryAppRepository repo = InMemoryAppRepository()
+      ..tasks['progressive'] = Task(
+        id: 'progressive',
+        title: 'Read the textbook',
+        dueAt: kToday,
+        createdAt: DateTime(2026, 10, 26),
+        updatedAt: DateTime(2026, 10, 26),
+        taskType: TaskType.progressive,
+        progressMode: TaskProgressMode.count,
+        progressValue: 2,
+        progressTarget: 8,
+        progressUnit: 'chapters',
+      );
+
+    await pumpApp(tester, repo: repo);
+    await tester.tap(find.text('Tasks').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 / 8 chapters'), findsOneWidget);
+    expect(find.byType(Slider), findsOneWidget);
+
+    await tester.drag(find.byType(Slider), const Offset(220, 0));
+    await tester.pumpAndSettle();
+
+    expect(repo.tasks['progressive']!.progressValue, greaterThan(2));
+    expect(repo.taskProgressEvents, isNotEmpty);
+  });
 }

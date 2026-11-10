@@ -269,6 +269,13 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                         try { await ref.read(appDataProvider.notifier).setTaskCompleted(child.id, done); }
                         catch (error) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error'))); }
                       },
+                      onChildProgress: (Task child, double value) async {
+                        try { await ref.read(appDataProvider.notifier).updateTaskProgress(child.id, value); }
+                        catch (error) {
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+                          rethrow;
+                        }
+                      },
                       selectedDate: _selectedDate,
                       showOverdue: _filter == TaskListFilter.today,
                     );
@@ -282,6 +289,13 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                     onToggle: (bool done) async {
                       try { await ref.read(appDataProvider.notifier).setTaskCompleted(task.id, done); }
                       catch (error) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error'))); }
+                    },
+                    onProgressChanged: (double value) async {
+                      try { await ref.read(appDataProvider.notifier).updateTaskProgress(task.id, value); }
+                      catch (error) {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+                        rethrow;
+                      }
                     },
                   );
                 }
@@ -323,6 +337,7 @@ class _TaskGroupCard extends StatelessWidget {
     required this.expanded, required this.onOpen, required this.onToggleExpanded,
     required this.selectionMode, required this.selectedIds, required this.onChildOpen,
     required this.onChildSelect, required this.onChildLongPress, required this.onChildToggle,
+    required this.onChildProgress,
     required this.selectedDate, required this.showOverdue,
   });
   final Task parent;
@@ -339,6 +354,7 @@ class _TaskGroupCard extends StatelessWidget {
   final ValueChanged<Task> onChildSelect;
   final ValueChanged<Task> onChildLongPress;
   final void Function(Task, bool) onChildToggle;
+  final Future<void> Function(Task, double) onChildProgress;
   final DateTime selectedDate;
   final bool showOverdue;
 
@@ -376,6 +392,7 @@ class _TaskGroupCard extends StatelessWidget {
                 selected: selectedIds.contains(child.id),
                 onSelect: () => onChildSelect(child), onLongPress: () => onChildLongPress(child),
                 onOpen: () => onChildOpen(child), onToggle: (bool done) => onChildToggle(child, done),
+                onProgressChanged: (double value) => onChildProgress(child, value),
               ),
               const SizedBox(height: 7),
             ],

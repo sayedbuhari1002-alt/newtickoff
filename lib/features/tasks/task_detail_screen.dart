@@ -13,40 +13,12 @@ import '../../domain/models/models.dart';
 import '../../shared/widgets/confirm_dialog.dart';
 import '../../state/app_data.dart';
 import '../../state/app_state.dart';
+import 'task_progress_slider.dart';
 
 class TaskDetailScreen extends ConsumerWidget {
   const TaskDetailScreen({super.key, required this.taskId});
   final String taskId;
 
-  Future<void> _editProgress(BuildContext context, WidgetRef ref, Task task) async {
-    final TextEditingController value = TextEditingController(text: task.progressValue.toString());
-    final double? result = await showDialog<double>(
-      context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: const Text('Update task progress'),
-        content: TextField(
-          controller: value,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: task.progressMode == TaskProgressMode.percentage ? 'Completed percentage (0–100)' : 'Completed count (target ${task.progressTarget})',
-            helperText: task.progressMode == TaskProgressMode.count && task.progressUnit.isNotEmpty ? 'Unit: ${task.progressUnit}' : null,
-          ),
-        ),
-        actions: <Widget>[
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-          FilledButton(onPressed: () {
-            final double? parsed = double.tryParse(value.text.trim());
-            if (parsed != null && parsed >= 0 && parsed <= task.progressTarget) Navigator.pop(dialogContext, parsed);
-          }, child: const Text('Save Progress')),
-        ],
-      ),
-    );
-    value.dispose();
-    if (result != null) {
-      await ref.read(appDataProvider.notifier).updateTaskProgress(task.id, result);
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -93,8 +65,7 @@ class TaskDetailScreen extends ConsumerWidget {
                 onSelected: (String value) async {
                   switch (value) {
                     case 'progress':
-                      if (task.taskType == TaskType.progressive && !isGroup) { await _editProgress(context, ref, task); }
-                      else { context.push(AppRoutes.taskProgress(task.id)); }
+                      context.push(AppRoutes.taskProgress(task.id));
                       break;
                     case 'edit': context.push(AppRoutes.taskEdit(task.id)); break;
                     case 'pause': await ref.read(appDataProvider.notifier).setTaskPaused(task.id, !task.isPaused); break;
@@ -127,7 +98,7 @@ class TaskDetailScreen extends ConsumerWidget {
                   }
                 },
                 itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                  if (!isGroup) PopupMenuItem(value: 'progress', child: ListTile(leading: Icon(task.taskType == TaskType.progressive ? Icons.trending_up_rounded : Icons.insights_outlined), title: Text(task.taskType == TaskType.progressive ? 'Update Progress' : 'Task Analytics'), contentPadding: EdgeInsets.zero)),
+                  if (!isGroup && task.taskType != TaskType.progressive) PopupMenuItem(value: 'progress', child: ListTile(leading: Icon(Icons.insights_outlined), title: Text('Task Analytics'), contentPadding: EdgeInsets.zero)),
                   const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit'), contentPadding: EdgeInsets.zero)),
                   PopupMenuItem(value: 'pause', child: ListTile(leading: Icon(task.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded), title: Text(task.isPaused ? 'Resume' : 'Pause'), contentPadding: EdgeInsets.zero)),
                   const PopupMenuItem(value: 'postpone_day', child: ListTile(leading: Icon(Icons.event_repeat_rounded), title: Text('Postpone 1 day'), contentPadding: EdgeInsets.zero)),
@@ -167,13 +138,21 @@ class TaskDetailScreen extends ConsumerWidget {
             if (task.taskType == TaskType.progressive && !isGroup) ...<Widget>[
               const SizedBox(height: 12),
               Row(children: <Widget>[
-                Expanded(child: Text('Progress · ${task.progressDisplay}', style: const TextStyle(fontWeight: FontWeight.w700))),
+                const Expanded(child: Text('Task Progress', style: TextStyle(fontWeight: FontWeight.w700))),
                 Text('${task.difficultyScore.toStringAsFixed(task.difficultyScore == task.difficultyScore.roundToDouble() ? 0 : 1)} difficulty', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
               ]),
-              const SizedBox(height: 8),
-              ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(value: task.progressPercent / 100, minHeight: 8, backgroundColor: AppColors.border, color: accent)),
-              const SizedBox(height: 10),
-              FilledButton.icon(onPressed: task.isPaused ? null : () => _editProgress(context, ref, task), icon: const Icon(Icons.trending_up_rounded), label: const Text('Update Progress')),
+              const SizedBox(height: 6),
+              TaskProgressSlider(
+                task: task,
+                onProgressChanged: (double value) async {
+                  try {
+                    await ref.read(appDataProvider.notifier).updateTaskProgress(task.id, value);
+                  } catch (error) {
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+                    rethrow;
+                  }
+                },
+              ),
             ] else if (!isGroup) ...<Widget>[
               Row(children: <Widget>[
                 Expanded(child: FilledButton.icon(onPressed: task.isPaused && !task.isCompleted ? null : task.isCompleted ? () => ref.read(appDataProvider.notifier).setTaskCompleted(task.id, false) : task.subtasks.any((Subtask s) => !s.isCompleted) ? null : () => ref.read(appDataProvider.notifier).setTaskCompleted(task.id, true), icon: Icon(task.isCompleted ? Icons.undo_rounded : Icons.check_rounded), label: Text(task.isCompleted ? 'Reopen Task' : 'Mark Complete'))),

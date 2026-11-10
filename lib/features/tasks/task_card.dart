@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../domain/logic/task_engine.dart';
 import '../../domain/models/models.dart';
+import 'task_progress_slider.dart';
 
 class TaskCard extends StatelessWidget {
   const TaskCard({
@@ -17,6 +18,7 @@ class TaskCard extends StatelessWidget {
     this.selected = false,
     this.onSelect,
     this.onLongPress,
+    this.onProgressChanged,
   });
   final Task task;
   final DateTime selectedDate;
@@ -28,6 +30,7 @@ class TaskCard extends StatelessWidget {
   final bool selected;
   final VoidCallback? onSelect;
   final VoidCallback? onLongPress;
+  final Future<void> Function(double value)? onProgressChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +55,7 @@ class TaskCard extends StatelessWidget {
             if (selectionMode)
               Checkbox(value: selected, onChanged: (_) => onSelect?.call(), activeColor: AppColors.gold, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)))
             else
-              Tooltip(message: blocked ? 'Complete all checklist items first' : task.isCompleted ? 'Reopen task' : 'Complete task', child: Checkbox(value: task.isCompleted, onChanged: task.isPaused || blocked || task.taskType == TaskType.progressive ? null : (bool? value) { if (value != null) onToggle(value); }, activeColor: accent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)))),
+              Tooltip(message: task.taskType == TaskType.progressive ? 'Adjust progress using the slider' : blocked ? 'Complete all checklist items first' : task.isCompleted ? 'Reopen task' : 'Complete task', child: Checkbox(value: task.isCompleted, onChanged: task.isPaused || blocked || task.taskType == TaskType.progressive ? null : (bool? value) { if (value != null) onToggle(value); }, activeColor: accent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)))),
             const SizedBox(width: 6),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
               Row(children: <Widget>[
@@ -68,13 +71,18 @@ class TaskCard extends StatelessWidget {
               Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: <Widget>[
                 if (dueLabel != null) _MetaPill(icon: Icons.event_outlined, label: dueLabel, color: overdue ? AppColors.danger : AppColors.textSecondary),
                 if (task.category.trim().isNotEmpty) _MetaPill(icon: Icons.label_outline_rounded, label: task.category, color: AppColors.textSecondary),
-                _MetaPill(icon: task.taskType == TaskType.progressive ? Icons.trending_up_rounded : Icons.check_circle_outline_rounded, label: task.taskType == TaskType.progressive ? task.progressDisplay : 'Standard', color: AppColors.textSecondary),
+                if (task.taskType != TaskType.progressive) _MetaPill(icon: Icons.check_circle_outline_rounded, label: 'Standard', color: AppColors.textSecondary),
                 if (task.isPaused) _MetaPill(icon: Icons.pause_circle_outline_rounded, label: 'Paused', color: AppColors.textSecondary),
                 if (overdue) _MetaPill(icon: Icons.warning_amber_rounded, label: 'Overdue', color: AppColors.danger),
               ]),
               if (task.taskType == TaskType.progressive) ...<Widget>[
-                const SizedBox(height: 10),
-                ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: task.progressPercent / 100, minHeight: 5, backgroundColor: AppColors.border, color: accent)),
+                const SizedBox(height: 6),
+                TaskProgressSlider(
+                  task: task,
+                  compact: true,
+                  enabled: !selectionMode && onProgressChanged != null,
+                  onProgressChanged: onProgressChanged ?? (_) async {},
+                ),
               ],
               if (task.subtasks.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 10),

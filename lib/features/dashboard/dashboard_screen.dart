@@ -303,6 +303,16 @@ class _OverviewBody extends ConsumerWidget {
                   }
                 }
               },
+              onProgressChanged: (double value) async {
+                try {
+                  await ref.read(appDataProvider.notifier).updateTaskProgress(task.id, value);
+                } catch (error) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+                  }
+                  rethrow;
+                }
+              },
             ),
             const SizedBox(height: 9),
           ],
