@@ -7,6 +7,7 @@ class AppSettingKeys {
   static const String theme = 'ui.theme';
   static const String dashboardOrder = 'dashboard.section_order';
   static const String hiddenDashboardWidgets = 'dashboard.hidden_widgets';
+  static const String productivityScoringStartDate = 'productivity.scoring_state_model_start_date';
 }
 
 /// Section IDs are persisted instead of labels so labels can change safely.

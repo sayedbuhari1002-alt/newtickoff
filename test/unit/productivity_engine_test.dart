@@ -11,6 +11,8 @@ void main() {
   const String key = '2026-11-08';
 
   ProductivityDayScore calculate({
+    DateTime? scoreDate,
+    DateTime? today,
     List<Habit> habits = const <Habit>[],
     Map<String, Map<String, CompletionRecord>> completions = const <String, Map<String, CompletionRecord>>{},
     List<Task> tasks = const <Task>[],
@@ -20,8 +22,9 @@ void main() {
     List<DistractionCategory> categories = const <DistractionCategory>[],
     List<DistractionLog> logs = const <DistractionLog>[],
     List<AppUsageRecord> usage = const <AppUsageRecord>[],
+    DateTime? scoringStart,
   }) => engine.calculateDay(
-    date: day,
+    date: scoreDate ?? day,
     target: 15,
     habits: habits,
     completions: completions,
@@ -32,6 +35,8 @@ void main() {
     distractionCategories: categories,
     distractionLogs: logs,
     appUsageRecords: usage,
+    today: today ?? DateTime(2026, 11, 10),
+    currentStateScoringStartDate: scoringStart,
   );
 
   test('Build Habit count completion awards proportional decimal points; Quit slip is penalty only', () {
@@ -116,7 +121,7 @@ void main() {
     expect(score.contributions.map((ProductivityContribution value) => value.label), containsAll(<String>['Research', 'Write introduction']));
   });
 
-  test('Progressive task awards only new high-water progress and never re-awards regressed work', () {
+  test('Legacy incomplete activity snapshots retain event-based progressive fallback', () {
     final Task task = Task(
       id: 'progress', title: 'Read textbook', createdAt: day, updatedAt: day,
       taskType: TaskType.progressive, progressMode: TaskProgressMode.percentage,
@@ -238,5 +243,362 @@ void main() {
     );
     expect(recommendations.map((RecommendedTask value) => value.task.id).toSet(), <String>{'urgent-high', 'group-child'});
     expect(recommendations.first.task.id, 'urgent-high');
+  });
+
+  test('Today habit points follow the current saved count and checklist state', () {
+    final DateTime now = DateTime.now();
+    final String todayKey = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final Habit countHabit = Habit(
+      id: 'reading', title: 'Reading', createdAt: now,
+      tracking: TrackingMethod.count, dailyGoal: 10, productivityPoints: 10,
+    );
+    final Habit checklistHabit = Habit(
+      id: 'routine', title: 'Routine', createdAt: now,
+      tracking: TrackingMethod.checklist, productivityPoints: 5,
+      checklist: const <ChecklistItem>[
+        ChecklistItem(id: 'one', title: 'Stretch'),
+        ChecklistItem(id: 'two', title: 'Read'),
+        ChecklistItem(id: 'three', title: 'Plan'),
+        ChecklistItem(id: 'four', title: 'Walk'),
+        ChecklistItem(id: 'five', title: 'Water'),
+      ],
+    );
+    final CompletionRecord countRecord = CompletionRecord(
+      habitId: countHabit.id, dateKey: todayKey, updatedAt: now, count: 2.5,
+    );
+    final CompletionRecord checklistRecord = CompletionRecord(
+      habitId: checklistHabit.id, dateKey: todayKey, updatedAt: now,
+      checkedItemIds: const <String>{'one', 'two'},
+    );
+    final Map<String, Map<String, CompletionRecord>> records = <String, Map<String, CompletionRecord>>{
+      countHabit.id: <String, CompletionRecord>{todayKey: countRecord},
+      checklistHabit.id: <String, CompletionRecord>{todayKey: checklistRecord},
+    };
+    final ProductivityDayScore partiallyComplete = calculate(
+      scoreDate: now,
+      today: now,
+      habits: <Habit>[countHabit, checklistHabit],
+      completions: records,
+    );
+    expect(partiallyComplete.achievementPoints, closeTo(4.5, 0.0001));
+
+    final ProductivityDayScore reset = calculate(
+      scoreDate: now,
+      today: now,
+      habits: <Habit>[countHabit, checklistHabit],
+      completions: <String, Map<String, CompletionRecord>>{
+        countHabit.id: <String, CompletionRecord>{todayKey: countRecord.copyWith(count: 0)},
+        checklistHabit.id: <String, CompletionRecord>{todayKey: checklistRecord.copyWith(checkedItemIds: const <String>{})},
+      },
+    );
+    expect(reset.achievementPoints, 0);
+  });
+
+  test('Today progressive task score follows current saved progress, not its history', () {
+    final DateTime now = DateTime.now();
+    final Task task = Task(
+      id: 'cisco', title: 'Cisco', createdAt: now, updatedAt: now,
+      taskType: TaskType.progressive, progressValue: 20,
+      difficultyScore: 5,
+    );
+    final TaskProgressEvent event = TaskProgressEvent(
+      id: 'progress-20', taskId: task.id, previousValue: 0, newValue: 20,
+      previousPercent: 0, newPercent: 20, progressDelta: 20,
+      occurredAt: now, difficultyScore: 5,
+    );
+    final ProductivityDayScore atTwenty = calculate(
+      scoreDate: now,
+      today: now,
+      tasks: <Task>[task],
+      progressEvents: <TaskProgressEvent>[event],
+    );
+    expect(atTwenty.achievementPoints, closeTo(1, 0.0001));
+
+    final Task reducedTask = task.copyWith(progressValue: 10, isCompleted: false, clearCompletedAt: true);
+    final TaskProgressEvent reduction = TaskProgressEvent(
+      id: 'progress-10', taskId: task.id, previousValue: 20, newValue: 10,
+      previousPercent: 20, newPercent: 10, progressDelta: -10,
+      occurredAt: now.add(const Duration(seconds: 30)), difficultyScore: 5,
+    );
+    final ProductivityDayScore atTen = calculate(
+      scoreDate: now,
+      today: now,
+      tasks: <Task>[reducedTask],
+      progressEvents: <TaskProgressEvent>[event, reduction],
+    );
+    expect(atTen.achievementPoints, closeTo(0.5, 0.0001));
+
+    final Task resetTask = task.copyWith(progressValue: 0, isCompleted: false, clearCompletedAt: true);
+    final TaskProgressEvent reset = TaskProgressEvent(
+      id: 'progress-zero', taskId: task.id, previousValue: 20, newValue: 0,
+      previousPercent: 20, newPercent: 0, progressDelta: -20,
+      occurredAt: now.add(const Duration(minutes: 1)), difficultyScore: 5,
+    );
+    final ProductivityDayScore atZero = calculate(
+      scoreDate: now,
+      today: now,
+      tasks: <Task>[resetTask],
+      progressEvents: <TaskProgressEvent>[event, reset],
+    );
+    expect(atZero.achievementPoints, 0);
+  });
+
+  test('Count-based progressive tasks use their current saved count as a fraction of target', () {
+    final DateTime now = DateTime.now();
+    final Task task = Task(
+      id: 'count-progress', title: 'Cisco chapters', createdAt: now,
+      updatedAt: now, taskType: TaskType.progressive,
+      progressMode: TaskProgressMode.count, progressValue: 5,
+      progressTarget: 10, progressUnit: 'chapters', difficultyScore: 8,
+    );
+    final TaskProgressEvent event = TaskProgressEvent(
+      id: 'count-progress-event', taskId: task.id,
+      previousValue: 0, newValue: 5, previousPercent: 0,
+      newPercent: 50, progressDelta: 50, occurredAt: now,
+      difficultyScore: 8,
+    );
+    final ProductivityDayScore half = calculate(
+      scoreDate: now, today: now, tasks: <Task>[task],
+      progressEvents: <TaskProgressEvent>[event],
+    );
+    expect(half.achievementPoints, 4);
+
+    final Task reduced = task.copyWith(progressValue: 2.5, updatedAt: now.add(const Duration(minutes: 1)));
+    final ProductivityDayScore reducedScore = calculate(
+      scoreDate: now, today: now, tasks: <Task>[reduced],
+      progressEvents: <TaskProgressEvent>[event, TaskProgressEvent(
+        id: 'count-progress-reduced', taskId: task.id,
+        previousValue: 5, newValue: 2.5, previousPercent: 50,
+        newPercent: 25, progressDelta: -25,
+        occurredAt: now.add(const Duration(minutes: 1)), difficultyScore: 8,
+      )],
+    );
+    expect(reducedScore.achievementPoints, 2);
+  });
+
+  test('Dates before activation keep the previous progressive-event score', () {
+    final DateTime now = DateTime.now();
+    final DateTime oldDay = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 2));
+    final Task task = Task(
+      id: 'legacy-progress', title: 'Old Cisco task', createdAt: oldDay,
+      updatedAt: oldDay.add(const Duration(hours: 11)),
+      taskType: TaskType.progressive, progressValue: 0, difficultyScore: 5,
+    );
+    final List<TaskProgressEvent> events = <TaskProgressEvent>[
+      TaskProgressEvent(id: 'legacy-20', taskId: task.id, previousValue: 0, newValue: 20, previousPercent: 0, newPercent: 20, progressDelta: 20, occurredAt: oldDay.add(const Duration(hours: 9)), difficultyScore: 5),
+      TaskProgressEvent(id: 'legacy-zero', taskId: task.id, previousValue: 20, newValue: 0, previousPercent: 20, newPercent: 0, progressDelta: -20, occurredAt: oldDay.add(const Duration(hours: 11)), difficultyScore: 5),
+    ];
+    final TaskActivity finalState = TaskActivity(
+      id: 'legacy-final-state', taskId: task.id, entityId: task.id,
+      entityType: 'task', eventType: 'task_progress_updated',
+      occurredAt: oldDay.add(const Duration(hours: 11)),
+      snapshotJson: jsonEncode(<String, Object?>{
+        'title': task.title, 'isCompleted': false, 'completedAt': null,
+        'isGroup': false, 'hasSubtasks': false, 'subtaskCount': 0,
+        'taskType': 'progressive', 'progressValue': 0,
+        'progressTarget': 100, 'progressMode': 'percentage',
+        'difficultyScore': 5, 'subtasks': <Object>[],
+      }),
+    );
+
+    final ProductivityDayScore preserved = calculate(
+      scoreDate: oldDay, today: now, scoringStart: now,
+      tasks: <Task>[task], activities: <TaskActivity>[finalState],
+      progressEvents: events,
+    );
+    final ProductivityDayScore newModel = calculate(
+      scoreDate: oldDay, today: now, scoringStart: oldDay,
+      tasks: <Task>[task], activities: <TaskActivity>[finalState],
+      progressEvents: events,
+    );
+    expect(preserved.achievementPoints, 1);
+    expect(newModel.achievementPoints, 0);
+  });
+
+  test('Progressive task end-of-day snapshots preserve earlier scores after later resets', () {
+    final DateTime today = DateTime.now();
+    final DateTime monday = DateTime(today.year, today.month, today.day).subtract(const Duration(days: 2));
+    final DateTime tuesday = monday.add(const Duration(days: 1));
+    final Task task = Task(
+      id: 'progress-history', title: 'Study Cisco', createdAt: monday,
+      updatedAt: tuesday, taskType: TaskType.progressive,
+      progressValue: 0, difficultyScore: 5,
+    );
+    TaskActivity snapshot(String id, String eventType, DateTime at, double progress) => TaskActivity(
+      id: id, taskId: task.id, entityId: task.id, entityType: 'task',
+      eventType: eventType, occurredAt: at,
+      snapshotJson: jsonEncode(<String, Object?>{
+        'title': task.title, 'difficultyScore': 5, 'isGroup': false,
+        'hasSubtasks': false, 'subtaskCount': 0, 'isCompleted': false,
+        'completedAt': null, 'taskType': 'progressive',
+        'progressMode': 'percentage', 'progressValue': progress,
+        'progressTarget': 100, 'subtasks': <Object>[],
+      }),
+    );
+    final List<TaskActivity> activities = <TaskActivity>[
+      snapshot('monday-progress', 'task_progress_updated', monday.add(const Duration(hours: 18)), 20),
+      snapshot('tuesday-reset', 'task_progress_updated', tuesday.add(const Duration(hours: 9)), 0),
+    ];
+    final List<TaskProgressEvent> events = <TaskProgressEvent>[
+      TaskProgressEvent(id: 'monday-event', taskId: task.id, previousValue: 0, newValue: 20, previousPercent: 0, newPercent: 20, progressDelta: 20, occurredAt: monday.add(const Duration(hours: 18)), difficultyScore: 5),
+      TaskProgressEvent(id: 'tuesday-event', taskId: task.id, previousValue: 20, newValue: 0, previousPercent: 20, newPercent: 0, progressDelta: -20, occurredAt: tuesday.add(const Duration(hours: 9)), difficultyScore: 5),
+    ];
+    final ProductivityDayScore mondayScore = calculate(scoreDate: monday, today: today, scoringStart: monday, tasks: <Task>[task], activities: activities, progressEvents: events);
+    final ProductivityDayScore tuesdayScore = calculate(scoreDate: tuesday, today: today, scoringStart: monday, tasks: <Task>[task], activities: activities, progressEvents: events);
+    expect(mondayScore.achievementPoints, closeTo(1, 0.0001));
+    expect(tuesdayScore.achievementPoints, 0);
+  });
+
+  test('Inline subtask history uses the checked state saved at each day end', () {
+    final DateTime now = DateTime.now();
+    final DateTime monday = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 2));
+    final DateTime tuesday = monday.add(const Duration(days: 1));
+    final Task parent = Task(
+      id: 'history-parent', title: 'Project plan', createdAt: monday,
+      updatedAt: tuesday,
+      subtasks: <Subtask>[Subtask(
+        id: 'research', title: 'Research', createdAt: monday,
+        isCompleted: false, difficultyScore: 2,
+      )],
+    );
+    TaskActivity subtaskSnapshot(String id, String type, DateTime at, bool checked, DateTime? completedAt) => TaskActivity(
+      id: id, taskId: parent.id, entityId: 'research', entityType: 'subtask',
+      eventType: type, occurredAt: at,
+      snapshotJson: jsonEncode(<String, Object?>{
+        'title': parent.title, 'difficultyScore': 4, 'isGroup': false,
+        'hasSubtasks': true, 'subtaskCount': 1, 'isCompleted': false,
+        'completedAt': null, 'taskType': 'standard',
+        'subtasks': <Object>[
+          <String, Object?>{
+            'id': 'research', 'title': 'Research', 'isCompleted': checked,
+            'completedAt': completedAt?.toIso8601String(), 'difficultyScore': 2,
+          },
+        ],
+      }),
+    );
+    final List<TaskActivity> activities = <TaskActivity>[
+      subtaskSnapshot('checked-monday', 'subtask_completed', monday.add(const Duration(hours: 10)), true, monday.add(const Duration(hours: 10))),
+      subtaskSnapshot('unchecked-tuesday', 'subtask_uncompleted', tuesday.add(const Duration(hours: 11)), false, null),
+    ];
+    final ProductivityDayScore mondayScore = calculate(scoreDate: monday, today: now, scoringStart: monday, tasks: <Task>[parent], activities: activities);
+    final ProductivityDayScore tuesdayScore = calculate(scoreDate: tuesday, today: now, scoringStart: monday, tasks: <Task>[parent], activities: activities);
+    expect(mondayScore.achievementPoints, 2);
+    expect(tuesdayScore.achievementPoints, 0);
+  });
+
+  test('Today standard tasks and inline subtasks score only while currently completed', () {
+    final DateTime now = DateTime.now();
+    final Task standard = Task(
+      id: 'standard', title: 'Cisco quiz', createdAt: now, updatedAt: now,
+      isCompleted: false, difficultyScore: 6,
+    );
+    final TaskActivity staleCompletion = TaskActivity(
+      id: 'stale', taskId: standard.id, entityId: standard.id,
+      entityType: 'task', eventType: 'task_completed', occurredAt: now,
+      snapshotJson: jsonEncode(<String, Object?>{'title': 'Cisco quiz', 'difficultyScore': 6, 'isGroup': false, 'hasSubtasks': false}),
+    );
+    final Task checklist = Task(
+      id: 'parent', title: 'Project', createdAt: now, updatedAt: now,
+      subtasks: <Subtask>[
+        Subtask(id: 'a', title: 'Design', createdAt: now, isCompleted: true, completedAt: now, difficultyScore: 2),
+        Subtask(id: 'b', title: 'Implement', createdAt: now, isCompleted: false, difficultyScore: 3),
+      ],
+    );
+    final ProductivityDayScore score = calculate(
+      scoreDate: now,
+      today: now,
+      tasks: <Task>[standard, checklist],
+      activities: <TaskActivity>[staleCompletion],
+    );
+    expect(score.achievementPoints, closeTo(2, 0.0001));
+    expect(score.contributions.map((ProductivityContribution item) => item.label), <String>['Design']);
+
+    final Task uncheckedChecklist = checklist.copyWith(
+      subtasks: checklist.subtasks.map((Subtask item) => item.copyWith(
+        isCompleted: false,
+        clearCompletedAt: true,
+      )).toList(),
+    );
+    final ProductivityDayScore uncheckedScore = calculate(
+      scoreDate: now,
+      today: now,
+      tasks: <Task>[uncheckedChecklist],
+    );
+    expect(uncheckedScore.achievementPoints, 0);
+
+    final Task completedStandard = standard.copyWith(isCompleted: true, completedAt: now);
+    final ProductivityDayScore completedScore = calculate(
+      scoreDate: now,
+      today: now,
+      tasks: <Task>[completedStandard],
+    );
+    expect(completedScore.achievementPoints, 6);
+  });
+
+  test('First-class task groups score current completed children, never the parent', () {
+    final DateTime now = DateTime.now();
+    final Task parent = Task(
+      id: 'group', title: 'Project', createdAt: now, updatedAt: now,
+      isGroup: true, isCompleted: true, completedAt: now, difficultyScore: 10,
+    );
+    final Task childDone = Task(
+      id: 'child-done', title: 'Research', createdAt: now, updatedAt: now,
+      parentTaskId: parent.id, isCompleted: true, completedAt: now,
+      difficultyScore: 3,
+    );
+    final Task childOpen = Task(
+      id: 'child-open', title: 'Write report', createdAt: now, updatedAt: now,
+      parentTaskId: parent.id, difficultyScore: 4,
+    );
+    final ProductivityDayScore score = calculate(
+      scoreDate: now,
+      today: now,
+      tasks: <Task>[parent, childDone, childOpen],
+    );
+    expect(score.achievementPoints, 3);
+    expect(score.contributions.map((ProductivityContribution item) => item.label), <String>['Research']);
+  });
+
+  test('Changing a task today does not rewrite its previous-day score', () {
+    final DateTime now = DateTime.now();
+    final DateTime previousDay = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
+    final Task reopened = Task(
+      id: 'monday-task', title: 'Monday work', createdAt: previousDay,
+      updatedAt: now, isCompleted: false, difficultyScore: 4,
+    );
+    final TaskActivity completedYesterday = TaskActivity(
+      id: 'monday-completion', taskId: reopened.id, entityId: reopened.id,
+      entityType: 'task', eventType: 'task_completed', occurredAt: previousDay.add(const Duration(hours: 10)),
+      snapshotJson: jsonEncode(<String, Object?>{
+        'title': 'Monday work', 'difficultyScore': 4, 'isGroup': false,
+        'hasSubtasks': false, 'subtaskCount': 0, 'isCompleted': true,
+        'completedAt': previousDay.add(const Duration(hours: 10)).toIso8601String(),
+        'taskType': 'standard', 'subtasks': <Object>[],
+      }),
+    );
+    final TaskActivity reopenedToday = TaskActivity(
+      id: 'tuesday-reopen', taskId: reopened.id, entityId: reopened.id,
+      entityType: 'task', eventType: 'task_reopened', occurredAt: now,
+      snapshotJson: jsonEncode(<String, Object?>{
+        'title': 'Monday work', 'difficultyScore': 4, 'isGroup': false,
+        'hasSubtasks': false, 'subtaskCount': 0, 'isCompleted': false,
+        'completedAt': null, 'taskType': 'standard', 'subtasks': <Object>[],
+      }),
+    );
+    final ProductivityDayScore historical = calculate(
+      scoreDate: previousDay,
+      today: now,
+      scoringStart: previousDay,
+      tasks: <Task>[reopened],
+      activities: <TaskActivity>[completedYesterday, reopenedToday],
+    );
+    final ProductivityDayScore today = calculate(
+      scoreDate: now,
+      today: now,
+      tasks: <Task>[reopened],
+      activities: <TaskActivity>[completedYesterday, reopenedToday],
+    );
+    expect(historical.achievementPoints, 4);
+    expect(today.achievementPoints, 0);
   });
 }

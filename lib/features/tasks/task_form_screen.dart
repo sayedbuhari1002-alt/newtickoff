@@ -281,7 +281,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     if (save != true || !mounted) { name.dispose(); return; }
     final double? difficulty = double.tryParse(_difficulty.text.trim());
     final double? target = double.tryParse(_progressTarget.text.trim());
-    if (difficulty == null || difficulty < 1 || difficulty > 5 || (_taskType == TaskType.progressive && target != null && target <= 0) || (_taskType == TaskType.progressive && target == null)) {
+    if (difficulty == null || !difficulty.isFinite || difficulty < 1 || difficulty > 10 || (_taskType == TaskType.progressive && target != null && (!target.isFinite || target <= 0)) || (_taskType == TaskType.progressive && target == null)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Check the difficulty and progress target values.')));
       name.dispose();
       return;
@@ -470,10 +470,10 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
               TextFormField(
                 controller: _difficulty,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Difficulty score (1.0–5.0)', hintText: 'For future productivity scoring'),
+                decoration: const InputDecoration(labelText: 'Difficulty score (1.0–10.0)', hintText: 'Used to calculate productivity points'),
                 validator: (String? value) {
                   final double? parsed = double.tryParse(value?.trim() ?? '');
-                  return parsed == null || parsed < 1 || parsed > 5 ? 'Enter a score between 1 and 5.' : null;
+                  return parsed == null || !parsed.isFinite || parsed < 1 || parsed > 10 ? 'Enter a score between 1 and 10.' : null;
                 },
               ),
               if (_taskType == TaskType.progressive) ...<Widget>[
@@ -489,7 +489,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                 ),
                 if (_progressMode == TaskProgressMode.count) ...<Widget>[
                   const SizedBox(height: 12),
-                  TextFormField(controller: _progressTarget, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Total count / target'), validator: (String? value) { final double? parsed = double.tryParse(value?.trim() ?? ''); return parsed == null || parsed <= 0 ? 'Enter a target greater than zero.' : null; }),
+                  TextFormField(controller: _progressTarget, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Total count / target'), validator: (String? value) { final double? parsed = double.tryParse(value?.trim() ?? ''); return parsed == null || !parsed.isFinite || parsed <= 0 ? 'Enter a target greater than zero.' : null; }),
                   const SizedBox(height: 12),
                   TextFormField(controller: _progressUnit, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Unit (optional)', hintText: 'Chapters, pages, questions…')),
                 ] else

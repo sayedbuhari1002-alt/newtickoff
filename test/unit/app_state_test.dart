@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tickoff_replacement/core/utils/date_utils.dart';
 import 'package:tickoff_replacement/domain/models/models.dart';
 import 'package:tickoff_replacement/state/app_data.dart';
+import 'package:tickoff_replacement/state/app_settings.dart';
 import 'package:tickoff_replacement/state/app_state.dart';
 
 import '../support/in_memory_repository.dart';
@@ -73,6 +74,22 @@ void main() {
     final ProviderContainer c = containerFor(repo);
     await load(c);
     expect(dataOf(c).habits.length, 1);
+  });
+
+  test('scoring model activation date is saved once on first launch', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    await load(c);
+    expect(repo.settings[AppSettingKeys.productivityScoringStartDate], '2026-10-27');
+    expect(dataOf(c).settings[AppSettingKeys.productivityScoringStartDate], '2026-10-27');
+  });
+
+  test('existing scoring model activation date is preserved across launches', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    repo.settings[AppSettingKeys.productivityScoringStartDate] = '2026-10-20';
+    final ProviderContainer c = containerFor(repo);
+    await load(c);
+    expect(dataOf(c).settings[AppSettingKeys.productivityScoringStartDate], '2026-10-20');
   });
 
   test('saveHabit stores the habit and rejects invalid ones', () async {
@@ -394,6 +411,23 @@ void main() {
     expect(dataOf(c).taskTemplates.single.difficultyScore, 2.5);
     await n.deleteTaskTemplate(template.id);
     expect(dataOf(c).taskTemplates, isEmpty);
+  });
+
+  test('task templates accept difficulty 10 and reject values above 10', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    final AppDataNotifier n = await load(c);
+    final DateTime now = DateTime(2026, 10, 27);
+    final TaskTemplate template = TaskTemplate(
+      id: 'template-10', name: 'Deep Work', createdAt: now, updatedAt: now,
+      difficultyScore: 10,
+    );
+    await n.saveTaskTemplate(template);
+    expect(dataOf(c).taskTemplates.single.difficultyScore, 10);
+    await expectLater(
+      n.saveTaskTemplate(template.copyWith(difficultyScore: 10.1)),
+      throwsArgumentError,
+    );
   });
 
   test('deleting a task removes the live record but keeps its history', () async {

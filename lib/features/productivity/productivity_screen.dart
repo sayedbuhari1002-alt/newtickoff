@@ -7,6 +7,7 @@ import '../../data/services/productivity_usage_service.dart';
 import '../../domain/logic/productivity_engine.dart';
 import '../../domain/models/models.dart';
 import '../../state/app_data.dart';
+import '../../state/app_settings.dart';
 import '../../state/app_state.dart';
 
 class ProductivityScreen extends ConsumerStatefulWidget {
@@ -62,6 +63,12 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
   Future<void> _loadUsagePermission() async {
     final bool permitted = await ProductivityUsageService.instance.hasPermission();
     if (mounted) setState(() => _usagePermission = permitted);
+  }
+
+  DateTime? _scoringModelStartDate(AppData data) {
+    final String? stored = data.settings[AppSettingKeys.productivityScoringStartDate];
+    final DateTime? parsed = stored == null ? null : DateTime.tryParse(stored);
+    return parsed == null ? null : DateTime(parsed.year, parsed.month, parsed.day);
   }
 
   String _dateKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -403,6 +410,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
       distractionCategories: data.distractionCategories,
       distractionLogs: data.distractionLogs,
       appUsageRecords: data.appUsageRecords,
+      currentStateScoringStartDate: _scoringModelStartDate(data),
     );
     final List<DistractionLog> dayLogs = data.distractionLogs.where((DistractionLog log) => log.startAt.isBefore(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).add(const Duration(days: 1))) && log.endAt.isAfter(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day))).toList();
     final List<AppUsageRecord> dayUsage = data.appUsageRecords.where((AppUsageRecord record) => record.startAt.isBefore(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).add(const Duration(days: 1))) && record.endAt.isAfter(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day))).toList();
@@ -459,7 +467,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
         for (int i = 6; i >= 0; i--)
           Builder(builder: (BuildContext context) {
             final DateTime day = today.subtract(Duration(days: i));
-            final ProductivityDayScore value = engine.calculateDay(date: day, target: data.targetForDate(day), habits: data.habits, completions: data.completions, tasks: data.tasks, activities: data.taskActivities, progressEvents: data.taskProgressEvents, assignments: const <Assignment>[], distractionCategories: data.distractionCategories, distractionLogs: data.distractionLogs, appUsageRecords: data.appUsageRecords);
+            final ProductivityDayScore value = engine.calculateDay(date: day, target: data.targetForDate(day), habits: data.habits, completions: data.completions, tasks: data.tasks, activities: data.taskActivities, progressEvents: data.taskProgressEvents, assignments: const <Assignment>[], distractionCategories: data.distractionCategories, distractionLogs: data.distractionLogs, appUsageRecords: data.appUsageRecords, currentStateScoringStartDate: _scoringModelStartDate(data));
             final bool selected = _dateKey(day) == _dateKey(_selectedDate);
             return Padding(padding: const EdgeInsets.only(right: 7), child: InkWell(onTap: () => setState(() => _selectedDate = day), borderRadius: BorderRadius.circular(12), child: Container(width: 62, padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 5), decoration: BoxDecoration(color: selected ? AppColors.surfaceRaised : AppColors.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: selected ? AppColors.gold : AppColors.border)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: <Widget>[
               Text('${day.day}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),

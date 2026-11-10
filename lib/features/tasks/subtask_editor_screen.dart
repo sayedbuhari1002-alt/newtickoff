@@ -26,7 +26,7 @@ class _SubtaskEditorScreenState extends State<SubtaskEditorScreen> {
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
         TextField(controller: title, autofocus: true, textCapitalization: TextCapitalization.sentences, decoration: const InputDecoration(labelText: 'Subtask name')),
         const SizedBox(height: 10),
-        TextField(controller: points, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Productivity points (1.0–5.0)')),
+        TextField(controller: points, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Difficulty points (1.0–10.0)')),
         const SizedBox(height: 12),
         ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.event_outlined), title: const Text('Optional deadline'), subtitle: Text(dueAt == null ? 'No deadline' : '${dueAt!.day}/${dueAt!.month}/${dueAt!.year} ${dueAt!.hour == 0 && dueAt!.minute == 0 ? '' : TimeOfDay.fromDateTime(dueAt!).format(context)}'), onTap: () async {
           final DateTime now = DateTime.now();
@@ -52,7 +52,7 @@ class _SubtaskEditorScreenState extends State<SubtaskEditorScreen> {
       ])),
       actions: <Widget>[
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () { final double? value = double.tryParse(points.text.trim().replaceAll(',', '.')); if (title.text.trim().isEmpty || value == null || value < 1 || value > 5) return; Navigator.pop(context, true); }, child: const Text('Save')),
+        FilledButton(onPressed: () { final double? value = double.tryParse(points.text.trim().replaceAll(',', '.')); if (title.text.trim().isEmpty || value == null || !value.isFinite || value < 1 || value > 10) return; Navigator.pop(context, true); }, child: const Text('Save')),
       ],
     )));
     if (save == true && mounted) {

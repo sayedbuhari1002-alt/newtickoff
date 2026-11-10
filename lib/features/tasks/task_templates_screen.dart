@@ -49,7 +49,7 @@ class TaskTemplatesScreen extends ConsumerWidget {
                   onChanged: (TaskPriority? value) => setDialogState(() => priority = value ?? TaskPriority.medium),
                 ),
                 const SizedBox(height: 8),
-                TextField(controller: difficulty, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Difficulty (1–5)')),
+                TextField(controller: difficulty, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Difficulty (1–10)')),
                 const SizedBox(height: 8),
                 TextField(controller: category, decoration: const InputDecoration(labelText: 'Category')),
                 if (type == TaskType.progressive) ...<Widget>[
@@ -95,7 +95,7 @@ class TaskTemplatesScreen extends ConsumerWidget {
     if (save == true && context.mounted) {
       final double? parsedDifficulty = double.tryParse(difficulty.text.trim());
       final double? parsedTarget = double.tryParse(target.text.trim());
-      if (parsedDifficulty == null || parsedDifficulty < 1 || parsedDifficulty > 5 || (type == TaskType.progressive && mode == TaskProgressMode.count && (parsedTarget == null || parsedTarget <= 0))) {
+      if (parsedDifficulty == null || !parsedDifficulty.isFinite || parsedDifficulty < 1 || parsedDifficulty > 10 || (type == TaskType.progressive && mode == TaskProgressMode.count && (parsedTarget == null || !parsedTarget.isFinite || parsedTarget <= 0))) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Check the difficulty and progress target values.')));
       } else {
         try {

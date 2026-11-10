@@ -63,8 +63,8 @@ class Assignment {
 
   String? validate() {
     if (title.trim().isEmpty) return 'Enter an assignment title.';
-    if (!difficultyScore.isFinite || difficultyScore < 1 || difficultyScore > 5) {
-      return 'Assignment points must be between 1 and 5.';
+    if (!difficultyScore.isFinite || difficultyScore < 1 || difficultyScore > 10) {
+      return 'Assignment points must be between 1 and 10.';
     }
     return null;
   }

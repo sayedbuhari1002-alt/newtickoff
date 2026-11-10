@@ -350,7 +350,7 @@ class _HabitFormScreenState extends ConsumerState<HabitFormScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 if (!quit) ...<Widget>[
-                  const _FieldLabel('POINTS WHEN FULLY COMPLETED'),
+                  const _FieldLabel('POINTS WHEN FULLY COMPLETED (1–10)'),
                   TickTextField(
                     hintText: '1.0',
                     controller: _productivityPoints,

@@ -13,6 +13,7 @@ import '../domain/logic/achievements.dart';
 import '../domain/logic/habit_engine.dart';
 import '../domain/models/models.dart';
 import 'app_data.dart';
+import 'app_settings.dart';
 
 /// The persistence layer. `main.dart` overrides this with the SQLite
 /// repository; tests override it with an in-memory one.
@@ -67,6 +68,16 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     final List<DistractionLog> distractionLogs = await repo.loadDistractionLogs();
     final List<AppUsageRecord> appUsageRecords = await repo.loadAppUsageRecords();
     final Map<String, String> settings = await repo.loadSettings();
+    // Record the first day this version's live-state scoring model is active.
+    // Historical dates before this boundary continue using the old scoring
+    // calculation, so upgrading does not silently change existing history.
+    final String scoringStartKey = AppSettingKeys.productivityScoringStartDate;
+    final String? storedScoringStart = settings[scoringStartKey];
+    if (storedScoringStart == null || DateTime.tryParse(storedScoringStart) == null) {
+      final String effectiveDate = dateKey(ref.read(todayProvider));
+      await repo.saveSetting(scoringStartKey, effectiveDate);
+      settings[scoringStartKey] = effectiveDate;
+    }
 
     final Map<String, Map<String, CompletionRecord>> index =
         <String, Map<String, CompletionRecord>>{};
@@ -744,6 +755,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
 
 
   Future<void> updateTaskProgress(String taskId, double newValue, {String note = ''}) async {
+    if (!newValue.isFinite) throw ArgumentError('Progress must be a finite number.');
     final AppData data = _current;
     final Task? current = data.taskById(taskId);
     if (current == null || current.taskType != TaskType.progressive || current.isPaused) return;
@@ -867,7 +879,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
 
   Future<void> saveTaskTemplate(TaskTemplate template) async {
     if (template.name.trim().isEmpty) throw ArgumentError('Enter a template name.');
-    if (template.difficultyScore < 1 || template.difficultyScore > 5) throw ArgumentError('Template difficulty must be between 1 and 5.');
+    if (!template.difficultyScore.isFinite || template.difficultyScore < 1 || template.difficultyScore > 10) throw ArgumentError('Template difficulty must be between 1 and 10.');
     if (template.taskType == TaskType.progressive && template.progressTarget <= 0) throw ArgumentError('Progress target must be greater than zero.');
     final bool duplicateName = _current.taskTemplates.any((TaskTemplate existing) =>
       existing.id != template.id && existing.name.trim().toLowerCase() == template.name.trim().toLowerCase());

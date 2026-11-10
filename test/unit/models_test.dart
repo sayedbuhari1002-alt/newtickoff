@@ -168,6 +168,35 @@ void main() {
     });
   });
 
+  group('Productivity point ranges', () {
+    test('task, subtask and habit points accept the expanded 1–10 scale', () {
+      final DateTime now = DateTime(2026, 11, 10);
+      final Task task = Task(
+        id: 'ten-point-task', title: 'Deep work', createdAt: now,
+        updatedAt: now, difficultyScore: 10,
+      );
+      final Task checklistTask = Task(
+        id: 'ten-point-subtask', title: 'Plan', createdAt: now,
+        updatedAt: now,
+        subtasks: <Subtask>[Subtask(
+          id: 'sub-10', title: 'Research', createdAt: now, difficultyScore: 10,
+        )],
+      );
+      final Habit habit = Habit.create(title: 'Study', productivityPoints: 10, now: now);
+      expect(task.validate(), isNull);
+      expect(checklistTask.validate(), isNull);
+      expect(habit.validate(), isNull);
+      expect(task.copyWith(difficultyScore: 10.1).validate(), isNotNull);
+      expect(Habit.create(title: 'Study', productivityPoints: 10.1, now: now).validate(), isNotNull);
+      final Assignment assignment = Assignment(
+        id: 'assignment-10', title: 'Submit project', createdAt: now,
+        updatedAt: now, difficultyScore: 10,
+      );
+      expect(assignment.validate(), isNull);
+      expect(assignment.copyWith(difficultyScore: 10.1).validate(), isNotNull);
+    });
+  });
+
   group('CompletionRecord', () {
     test('key is unique per habit and day', () {
       final DateTime t = DateTime(2026, 10, 27);

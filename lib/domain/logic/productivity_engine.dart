@@ -53,6 +53,8 @@ class ProductivityEngine {
     required List<DistractionCategory> distractionCategories,
     required List<DistractionLog> distractionLogs,
     required List<AppUsageRecord> appUsageRecords,
+    DateTime? today,
+    DateTime? currentStateScoringStartDate,
   }) {
     final DateTime start = DateTime(date.year, date.month, date.day);
     final DateTime end = start.add(const Duration(days: 1));
@@ -60,101 +62,57 @@ class ProductivityEngine {
     final List<ProductivityContribution> positive = <ProductivityContribution>[];
     final List<ProductivityContribution> negative = <ProductivityContribution>[];
 
+    final bool isToday = _sameDay(date, today ?? DateTime.now());
     for (final Habit habit in habits) {
       final CompletionRecord? record = completions[habit.id]?[key];
       if (record == null) continue;
       final DateTime? archivedAt = habit.archivedAt;
       if (archivedAt != null && DateTime(archivedAt.year, archivedAt.month, archivedAt.day).isBefore(start)) continue;
-      final String recordedType = record.habitType ?? habit.type.name;
+      // Today's points use the current habit configuration and saved input.
+      // Earlier dates continue to use the configuration snapshot stored with
+      // that day's CompletionRecord, so later habit edits do not rewrite them.
+      final String recordedType = isToday ? habit.type.name : (record.habitType ?? habit.type.name);
       if (recordedType == HabitType.quit.name) {
-        if (record.slipped && (record.quitPenalty ?? habit.quitPenalty) > 0) {
-          negative.add(ProductivityContribution(label: habit.title, points: record.quitPenalty ?? habit.quitPenalty, kind: 'Quit Habit slip', detail: 'Explicit slip recorded'));
+        final double penalty = isToday ? habit.quitPenalty : (record.quitPenalty ?? habit.quitPenalty);
+        if (record.slipped && penalty > 0) {
+          negative.add(ProductivityContribution(label: habit.title, points: penalty, kind: 'Quit Habit slip', detail: 'Explicit slip recorded'));
         }
         continue;
       }
-      final double fraction = _habitFraction(habit, record);
+      final double fraction = isToday ? _currentHabitFraction(habit, record) : _habitFraction(habit, record);
       if (fraction > 0) {
-        final double points = (record.productivityPoints ?? habit.productivityPoints) * fraction;
-        positive.add(ProductivityContribution(label: habit.title, points: points, kind: 'Build Habit', detail: '${(fraction * 100).toStringAsFixed(0)}% completion'));
+        final double pointValue = isToday ? habit.productivityPoints : (record.productivityPoints ?? habit.productivityPoints);
+        positive.add(ProductivityContribution(label: habit.title, points: pointValue * fraction, kind: 'Build Habit', detail: '${(fraction * 100).toStringAsFixed(0)}% completion'));
       }
     }
 
-    final Map<String, Task> taskById = <String, Task>{for (final Task task in tasks) task.id: task};
-    final Map<String, List<TaskProgressEvent>> progressByTask = <String, List<TaskProgressEvent>>{};
-    for (final TaskProgressEvent event in progressEvents) {
-      progressByTask.putIfAbsent(event.taskId, () => <TaskProgressEvent>[]).add(event);
-    }
-    for (final List<TaskProgressEvent> events in progressByTask.values) {
-      events.sort((TaskProgressEvent a, TaskProgressEvent b) => a.occurredAt.compareTo(b.occurredAt));
-    }
-    final Map<String, Map<String, dynamic>> latestTaskSnapshots = <String, Map<String, dynamic>>{};
-    for (final TaskActivity activity in activities.toList()
-      ..sort((TaskActivity a, TaskActivity b) => a.occurredAt.compareTo(b.occurredAt))) {
-      if (activity.entityType == 'task') latestTaskSnapshots[activity.taskId] = activity.snapshot;
-    }
-    for (final MapEntry<String, List<TaskProgressEvent>> entry in progressByTask.entries) {
-      final Task? task = taskById[entry.key];
-      final Map<String, dynamic> historical = latestTaskSnapshots[entry.key] ?? <String, dynamic>{};
-      // A progress event can only be written for a Progressive task. Do not
-      // consult the task's current type here: changing its type later must not
-      // erase points earned by earlier progress events. Container structures
-      // remain excluded to avoid scoring a parent as well as its children.
-      final bool isContainer = historical.containsKey('isGroup')
-          ? historical['isGroup'] == true || historical['hasSubtasks'] == true ||
-              ((historical['subtaskCount'] as num?)?.toInt() ?? 0) > 0
-          : task?.isGroup == true || task?.subtasks.isNotEmpty == true ||
-              (task != null && tasks.any((Task child) => child.parentTaskId == task.id));
-      if (isContainer) continue;
-      final String title = task?.title ?? (historical['title'] as String? ?? entry.key);
-      // The first event may start above zero for tasks migrated from a build
-      // that did not yet record their initial progress. Treat that previous
-      // percentage as already earned, rather than awarding it retroactively.
-      double highWater = entry.value.first.previousPercent.clamp(0, 100).toDouble();
-      for (final TaskProgressEvent event in entry.value) {
-        final double nextHigh = event.newPercent > highWater ? event.newPercent : highWater;
-        final double newlyReached = (nextHigh - highWater).clamp(0, 100).toDouble();
-        if (newlyReached > 0 && _sameDay(event.occurredAt, date)) {
-          positive.add(ProductivityContribution(label: title, points: event.difficultyScore * newlyReached / 100, kind: 'Progressive Task', detail: '${newlyReached.toStringAsFixed(1)}% newly reached'));
-        }
-        highWater = nextHigh;
-      }
-    }
-
-    // Standard task completions: the earliest genuine completion only. Groups and
-    // checklist parents are organisational containers, never independently scored.
-    final Set<String> awardedStandardTasks = <String>{};
-    final List<TaskActivity> orderedActivities = List<TaskActivity>.of(activities)
-      ..sort((TaskActivity a, TaskActivity b) => a.occurredAt.compareTo(b.occurredAt));
-    final Set<String> awardedSubtasks = <String>{};
-    for (final TaskActivity event in orderedActivities) {
-      if (event.entityType == 'subtask' && event.eventType == 'subtask_completed') {
-        final String childId = event.entityId;
-        if (awardedSubtasks.add(childId) && _sameDay(event.occurredAt, date)) {
-          final Map<String, dynamic> snapshot = event.snapshot;
-          final String title = (snapshot['subtaskTitle'] as String?) ?? childId;
-          final double difficulty = (snapshot['subtaskDifficultyScore'] as num?)?.toDouble() ?? 1.0;
-          positive.add(ProductivityContribution(label: title, points: difficulty, kind: 'Subtask', detail: 'Completed'));
-        }
-      }
-      if (event.entityType != 'task' || event.eventType != 'task_completed') continue;
-      final Map<String, dynamic> snapshot = event.snapshot;
-      final Task? task = taskById[event.taskId];
-      final bool wasProgressive = snapshot.containsKey('taskType')
-          ? snapshot['taskType'] == 'progressive'
-          : task?.taskType == TaskType.progressive;
-      if (wasProgressive) continue;
-      final bool wasContainer = snapshot.containsKey('isGroup')
-          ? snapshot['isGroup'] == true || snapshot['hasSubtasks'] == true ||
-              ((snapshot['subtaskCount'] as num?)?.toInt() ?? 0) > 0
-          : task?.isGroup == true || task?.subtasks.isNotEmpty == true ||
-              (task != null && tasks.any((Task child) => child.parentTaskId == task.id));
-      if (wasContainer) continue;
-      if (!awardedStandardTasks.add(event.taskId)) continue;
-      if (_sameDay(event.occurredAt, date)) {
-        final String title = (snapshot['title'] as String?) ?? task?.title ?? event.taskId;
-        final double difficulty = (snapshot['difficultyScore'] as num?)?.toDouble() ?? task?.difficultyScore ?? 1.0;
-        positive.add(ProductivityContribution(label: title, points: difficulty, kind: 'Task', detail: 'Completed'));
-      }
+    final DateTime? scoringStart = currentStateScoringStartDate == null
+        ? null
+        : DateTime(currentStateScoringStartDate.year, currentStateScoringStartDate.month, currentStateScoringStartDate.day);
+    final bool usesNewScoringModel = scoringStart != null && !DateTime(date.year, date.month, date.day).isBefore(scoringStart);
+    if (isToday) {
+      _addCurrentTaskContributions(
+        date: date,
+        tasks: tasks,
+        progressEvents: progressEvents,
+        positive: positive,
+      );
+    } else if (usesNewScoringModel) {
+      _addHistoricalTaskContributions(
+        date: date,
+        tasks: tasks,
+        activities: activities,
+        progressEvents: progressEvents,
+        positive: positive,
+      );
+    } else {
+      _addLegacyHistoricalTaskContributions(
+        date: date,
+        tasks: tasks,
+        activities: activities,
+        progressEvents: progressEvents,
+        positive: positive,
+      );
     }
 
     for (final Assignment assignment in assignments) {
@@ -278,6 +236,350 @@ class ProductivityEngine {
     }
     result.sort((RecommendedTask a, RecommendedTask b) => b.score.compareTo(a.score));
     return result;
+  }
+
+  /// Today's score follows the currently saved task state. A progressive task
+  /// contributes its current percentage only when its progress was changed
+  /// today; reducing that percentage immediately reduces today's points.
+  void _addCurrentTaskContributions({
+    required DateTime date,
+    required List<Task> tasks,
+    required List<TaskProgressEvent> progressEvents,
+    required List<ProductivityContribution> positive,
+  }) {
+    final Map<String, List<TaskProgressEvent>> todayEventsByTask = <String, List<TaskProgressEvent>>{};
+    for (final TaskProgressEvent event in progressEvents) {
+      if (_sameDay(event.occurredAt, date)) {
+        todayEventsByTask.putIfAbsent(event.taskId, () => <TaskProgressEvent>[]).add(event);
+      }
+    }
+
+    bool isContainer(Task task) => task.isGroup || task.subtasks.isNotEmpty ||
+        tasks.any((Task child) => child.parentTaskId == task.id);
+
+    for (final Task task in tasks) {
+      final bool container = isContainer(task);
+
+      if (!container && task.taskType == TaskType.progressive) {
+        final bool changedToday =
+            (todayEventsByTask[task.id]?.isNotEmpty ?? false) || _sameDay(task.createdAt, date);
+        final double currentPercent = changedToday ? task.progressPercent : 0;
+        if (currentPercent > 0) {
+          positive.add(ProductivityContribution(
+            label: task.title,
+            points: task.difficultyScore * currentPercent / 100,
+            kind: 'Progressive Task',
+            detail: '${currentPercent.toStringAsFixed(1)}% current progress',
+          ));
+        }
+      } else if (!container && task.isCompleted && task.completedAt != null && _sameDay(task.completedAt!, date)) {
+        positive.add(ProductivityContribution(
+          label: task.title,
+          points: task.difficultyScore,
+          kind: 'Task',
+          detail: 'Currently completed today',
+        ));
+      }
+
+      // Inline checklist subtasks are scored individually. Their parent is a
+      // container and is deliberately not awarded a second time.
+      for (final Subtask subtask in task.subtasks) {
+        if (subtask.isCompleted && subtask.completedAt != null && _sameDay(subtask.completedAt!, date)) {
+          positive.add(ProductivityContribution(
+            label: subtask.title,
+            points: subtask.difficultyScore,
+            kind: 'Subtask',
+            detail: 'Currently completed today',
+          ));
+        }
+      }
+    }
+  }
+
+  /// Preserves the scoring calculation that existed before this update.
+  /// It is used only for historical dates before the new scoring model became
+  /// active on this installation.
+  void _addLegacyHistoricalTaskContributions({
+    required DateTime date,
+    required List<Task> tasks,
+    required List<TaskActivity> activities,
+    required List<TaskProgressEvent> progressEvents,
+    required List<ProductivityContribution> positive,
+  }) {
+    final Map<String, Task> taskById = <String, Task>{for (final Task task in tasks) task.id: task};
+    final Map<String, List<TaskProgressEvent>> progressByTask = <String, List<TaskProgressEvent>>{};
+    for (final TaskProgressEvent event in progressEvents) {
+      progressByTask.putIfAbsent(event.taskId, () => <TaskProgressEvent>[]).add(event);
+    }
+    for (final List<TaskProgressEvent> events in progressByTask.values) {
+      events.sort((TaskProgressEvent a, TaskProgressEvent b) => a.occurredAt.compareTo(b.occurredAt));
+    }
+    final Map<String, Map<String, dynamic>> latestTaskSnapshots = <String, Map<String, dynamic>>{};
+    for (final TaskActivity activity in activities.toList()
+      ..sort((TaskActivity a, TaskActivity b) => a.occurredAt.compareTo(b.occurredAt))) {
+      if (activity.entityType == 'task') latestTaskSnapshots[activity.taskId] = activity.snapshot;
+    }
+    for (final MapEntry<String, List<TaskProgressEvent>> entry in progressByTask.entries) {
+      final Task? task = taskById[entry.key];
+      final Map<String, dynamic> historical = latestTaskSnapshots[entry.key] ?? <String, dynamic>{};
+      // A progress event can only be written for a Progressive task. Do not
+      // consult the task's current type here: changing its type later must not
+      // erase points earned by earlier progress events. Container structures
+      // remain excluded to avoid scoring a parent as well as its children.
+      final bool isContainer = historical.containsKey('isGroup')
+          ? historical['isGroup'] == true || historical['hasSubtasks'] == true ||
+              ((historical['subtaskCount'] as num?)?.toInt() ?? 0) > 0
+          : task?.isGroup == true || task?.subtasks.isNotEmpty == true ||
+              (task != null && tasks.any((Task child) => child.parentTaskId == task.id));
+      if (isContainer) continue;
+      final String title = task?.title ?? (historical['title'] as String? ?? entry.key);
+      // The first event may start above zero for tasks migrated from a build
+      // that did not yet record their initial progress. Treat that previous
+      // percentage as already earned, rather than awarding it retroactively.
+      double highWater = entry.value.first.previousPercent.clamp(0, 100).toDouble();
+      for (final TaskProgressEvent event in entry.value) {
+        final double nextHigh = event.newPercent > highWater ? event.newPercent : highWater;
+        final double newlyReached = (nextHigh - highWater).clamp(0, 100).toDouble();
+        if (newlyReached > 0 && _sameDay(event.occurredAt, date)) {
+          positive.add(ProductivityContribution(label: title, points: event.difficultyScore * newlyReached / 100, kind: 'Progressive Task', detail: '${newlyReached.toStringAsFixed(1)}% newly reached'));
+        }
+        highWater = nextHigh;
+      }
+    }
+
+    // Standard task completions: the earliest genuine completion only. Groups and
+    // checklist parents are organisational containers, never independently scored.
+    final Set<String> awardedStandardTasks = <String>{};
+    final List<TaskActivity> orderedActivities = List<TaskActivity>.of(activities)
+      ..sort((TaskActivity a, TaskActivity b) => a.occurredAt.compareTo(b.occurredAt));
+    final Set<String> awardedSubtasks = <String>{};
+    for (final TaskActivity event in orderedActivities) {
+      if (event.entityType == 'subtask' && event.eventType == 'subtask_completed') {
+        final String childId = event.entityId;
+        if (awardedSubtasks.add(childId) && _sameDay(event.occurredAt, date)) {
+          final Map<String, dynamic> snapshot = event.snapshot;
+          final String title = (snapshot['subtaskTitle'] as String?) ?? childId;
+          final double difficulty = (snapshot['subtaskDifficultyScore'] as num?)?.toDouble() ?? 1.0;
+          positive.add(ProductivityContribution(label: title, points: difficulty, kind: 'Subtask', detail: 'Completed'));
+        }
+      }
+      if (event.entityType != 'task' || event.eventType != 'task_completed') continue;
+      final Map<String, dynamic> snapshot = event.snapshot;
+      final Task? task = taskById[event.taskId];
+      final bool wasProgressive = snapshot.containsKey('taskType')
+          ? snapshot['taskType'] == 'progressive'
+          : task?.taskType == TaskType.progressive;
+      if (wasProgressive) continue;
+      final bool wasContainer = snapshot.containsKey('isGroup')
+          ? snapshot['isGroup'] == true || snapshot['hasSubtasks'] == true ||
+              ((snapshot['subtaskCount'] as num?)?.toInt() ?? 0) > 0
+          : task?.isGroup == true || task?.subtasks.isNotEmpty == true ||
+              (task != null && tasks.any((Task child) => child.parentTaskId == task.id));
+      if (wasContainer) continue;
+      if (!awardedStandardTasks.add(event.taskId)) continue;
+      if (_sameDay(event.occurredAt, date)) {
+        final String title = (snapshot['title'] as String?) ?? task?.title ?? event.taskId;
+        final double difficulty = (snapshot['difficultyScore'] as num?)?.toDouble() ?? task?.difficultyScore ?? 1.0;
+        positive.add(ProductivityContribution(label: title, points: difficulty, kind: 'Task', detail: 'Completed'));
+      }
+    }
+
+  }
+
+  /// Previous dates remain based on immutable activity snapshots. Editing a
+  /// task today therefore cannot rewrite an already recorded daily score.
+  void _addHistoricalTaskContributions({
+    required DateTime date,
+    required List<Task> tasks,
+    required List<TaskActivity> activities,
+    required List<TaskProgressEvent> progressEvents,
+    required List<ProductivityContribution> positive,
+  }) {
+    final DateTime dayEnd = DateTime(date.year, date.month, date.day, 23, 59, 59, 999);
+    final Map<String, Task> taskById = <String, Task>{for (final Task task in tasks) task.id: task};
+    final Map<String, TaskActivity> latestSnapshotByTask = <String, TaskActivity>{};
+    final Set<String> progressChangedOnDay = <String>{};
+    final Set<String> createdOnDay = <String>{};
+
+    for (final TaskActivity activity in activities) {
+      if ((activity.entityType != 'task' && activity.entityType != 'subtask') || activity.occurredAt.isAfter(dayEnd)) continue;
+      final TaskActivity? previous = latestSnapshotByTask[activity.taskId];
+      if (previous == null || !activity.occurredAt.isBefore(previous.occurredAt)) {
+        latestSnapshotByTask[activity.taskId] = activity;
+      }
+      if (_sameDay(activity.occurredAt, date) &&
+          (activity.eventType == 'task_created' || activity.eventType == 'task_duplicated')) {
+        createdOnDay.add(activity.taskId);
+      }
+    }
+    for (final TaskProgressEvent event in progressEvents) {
+      if (_sameDay(event.occurredAt, date)) progressChangedOnDay.add(event.taskId);
+    }
+
+    final Set<String> taskIds = <String>{...latestSnapshotByTask.keys, ...taskById.keys};
+    final Set<String> legacyTaskIds = <String>{};
+    for (final String taskId in taskIds) {
+      final Task? task = taskById[taskId];
+      final TaskActivity? latest = latestSnapshotByTask[taskId];
+      final Map<String, dynamic> snapshot = latest?.snapshot ?? <String, dynamic>{};
+
+      // Current-format immutable snapshots contain the task completion and
+      // progress fields. They reconstruct the state at the end of this date,
+      // even if the task was reopened or edited on a later date.
+      final bool hasStateSnapshot = snapshot.containsKey('isCompleted') ||
+          snapshot.containsKey('progressValue') || snapshot.containsKey('subtasks');
+      if (!hasStateSnapshot) {
+        legacyTaskIds.add(taskId);
+        continue;
+      }
+
+      final bool hasContainerSnapshot = snapshot.containsKey('isGroup') ||
+          snapshot.containsKey('hasSubtasks') || snapshot.containsKey('subtaskCount');
+      final bool isContainer = hasContainerSnapshot
+          ? snapshot['isGroup'] == true || snapshot['hasSubtasks'] == true ||
+              ((snapshot['subtaskCount'] as num?)?.toInt() ?? 0) > 0
+          : task?.isGroup == true || task?.subtasks.isNotEmpty == true ||
+              tasks.any((Task child) => child.parentTaskId == taskId);
+      final String title = (snapshot['title'] as String?) ?? task?.title ?? taskId;
+      final String taskType = (snapshot['taskType'] as String?) ?? task?.taskType.name ?? TaskType.standard.name;
+
+      if (taskType == TaskType.progressive.name && !isContainer) {
+        final bool changedThatDay = progressChangedOnDay.contains(taskId) ||
+            createdOnDay.contains(taskId) || (task != null && _sameDay(task.createdAt, date));
+        if (!changedThatDay) continue;
+        final double progressValue = (snapshot['progressValue'] as num?)?.toDouble() ?? task?.progressValue ?? 0;
+        final double progressTarget = (snapshot['progressTarget'] as num?)?.toDouble() ?? task?.progressTarget ?? 100;
+        final String progressMode = (snapshot['progressMode'] as String?) ?? task?.progressMode.name ?? TaskProgressMode.percentage.name;
+        final double currentPercent = progressMode == TaskProgressMode.count.name
+            ? (progressTarget <= 0 ? 0 : (progressValue / progressTarget * 100).clamp(0, 100).toDouble())
+            : progressValue.clamp(0, 100).toDouble();
+        final double difficulty = (snapshot['difficultyScore'] as num?)?.toDouble() ?? task?.difficultyScore ?? 1;
+        if (currentPercent > 0) {
+          positive.add(ProductivityContribution(
+            label: title,
+            points: difficulty * currentPercent / 100,
+            kind: 'Progressive Task',
+            detail: '${currentPercent.toStringAsFixed(1)}% end-of-day progress',
+          ));
+        }
+      } else if (!isContainer) {
+        final bool completed = snapshot['isCompleted'] == true;
+        final DateTime? completedAt = snapshot.containsKey('completedAt')
+            ? DateTime.tryParse('${snapshot['completedAt'] ?? ''}')
+            : task?.completedAt;
+        if (completed && completedAt != null && _sameDay(completedAt, date)) {
+          final double difficulty = (snapshot['difficultyScore'] as num?)?.toDouble() ?? task?.difficultyScore ?? 1;
+          positive.add(ProductivityContribution(label: title, points: difficulty, kind: 'Task', detail: 'Completed and still complete at day end'));
+        }
+      }
+
+      // Inline checklist subtasks are read from the task snapshot for this
+      // date, not from the task's later live state.
+      final Object? rawSubtasks = snapshot['subtasks'];
+      final List<dynamic> subtaskSnapshots = rawSubtasks is List
+          ? rawSubtasks
+          : (task?.subtasks.map((Subtask item) => <String, dynamic>{
+                'id': item.id,
+                'title': item.title,
+                'isCompleted': item.isCompleted,
+                'completedAt': item.completedAt?.toIso8601String(),
+                'difficultyScore': item.difficultyScore,
+              }).toList() ?? <dynamic>[]);
+      for (final dynamic raw in subtaskSnapshots) {
+        if (raw is! Map) continue;
+        final Map<String, dynamic> child = Map<String, dynamic>.from(raw);
+        final DateTime? completedAt = DateTime.tryParse('${child['completedAt'] ?? ''}');
+        if (child['isCompleted'] == true && completedAt != null && _sameDay(completedAt, date)) {
+          positive.add(ProductivityContribution(
+            label: (child['title'] as String?) ?? (child['id'] as String?) ?? 'Subtask',
+            points: (child['difficultyScore'] as num?)?.toDouble() ?? 1,
+            kind: 'Subtask',
+            detail: 'Completed and still checked at day end',
+          ));
+        }
+      }
+    }
+
+    // Backward compatibility for older or partial snapshots (including records
+    // written before task-state fields were included). These retain the prior
+    // event-based interpretation without affecting complete modern snapshots.
+    if (legacyTaskIds.isEmpty) return;
+    final Map<String, List<TaskProgressEvent>> progressByTask = <String, List<TaskProgressEvent>>{};
+    for (final TaskProgressEvent event in progressEvents.where((TaskProgressEvent event) => legacyTaskIds.contains(event.taskId))) {
+      progressByTask.putIfAbsent(event.taskId, () => <TaskProgressEvent>[]).add(event);
+    }
+    for (final List<TaskProgressEvent> events in progressByTask.values) {
+      events.sort((TaskProgressEvent a, TaskProgressEvent b) => a.occurredAt.compareTo(b.occurredAt));
+    }
+    for (final String taskId in legacyTaskIds) {
+      final Task? task = taskById[taskId];
+      final TaskActivity? latest = latestSnapshotByTask[taskId];
+      final Map<String, dynamic> historical = latest?.snapshot ?? <String, dynamic>{};
+      final bool isContainer = historical['isGroup'] == true || historical['hasSubtasks'] == true ||
+          ((historical['subtaskCount'] as num?)?.toInt() ?? 0) > 0 || task?.isGroup == true ||
+          task?.subtasks.isNotEmpty == true || tasks.any((Task child) => child.parentTaskId == taskId);
+      if (isContainer) continue;
+      final String title = task?.title ?? (historical['title'] as String? ?? taskId);
+      final List<TaskProgressEvent> events = progressByTask[taskId] ?? const <TaskProgressEvent>[];
+      if (events.isNotEmpty) {
+        double highWater = events.first.previousPercent.clamp(0, 100).toDouble();
+        for (final TaskProgressEvent event in events) {
+          final double nextHigh = event.newPercent > highWater ? event.newPercent : highWater;
+          final double newlyReached = (nextHigh - highWater).clamp(0, 100).toDouble();
+          if (newlyReached > 0 && _sameDay(event.occurredAt, date)) {
+            positive.add(ProductivityContribution(label: title, points: event.difficultyScore * newlyReached / 100, kind: 'Progressive Task', detail: '${newlyReached.toStringAsFixed(1)}% legacy progress event'));
+          }
+          highWater = nextHigh;
+        }
+      }
+    }
+
+    final List<TaskActivity> orderedActivities = activities.toList()
+      ..sort((TaskActivity a, TaskActivity b) => a.occurredAt.compareTo(b.occurredAt));
+    final Set<String> awardedStandardTasks = <String>{};
+    final Set<String> awardedSubtasks = <String>{};
+    for (final TaskActivity event in orderedActivities) {
+      if (!legacyTaskIds.contains(event.taskId)) continue;
+      if (event.entityType == 'subtask' && event.eventType == 'subtask_completed') {
+        if (awardedSubtasks.add(event.entityId) && _sameDay(event.occurredAt, date)) {
+          final Map<String, dynamic> snapshot = event.snapshot;
+          positive.add(ProductivityContribution(
+            label: (snapshot['subtaskTitle'] as String?) ?? event.entityId,
+            points: (snapshot['subtaskDifficultyScore'] as num?)?.toDouble() ?? 1,
+            kind: 'Subtask', detail: 'Completed (legacy activity)',
+          ));
+        }
+      }
+      if (event.entityType != 'task' || event.eventType != 'task_completed') continue;
+      final Map<String, dynamic> snapshot = event.snapshot;
+      final Task? task = taskById[event.taskId];
+      final bool progressive = snapshot['taskType'] == TaskType.progressive.name ||
+          (snapshot['taskType'] == null && task?.taskType == TaskType.progressive);
+      if (progressive) continue;
+      if (!awardedStandardTasks.add(event.taskId)) continue;
+      if (_sameDay(event.occurredAt, date)) {
+        positive.add(ProductivityContribution(
+          label: (snapshot['title'] as String?) ?? task?.title ?? event.taskId,
+          points: (snapshot['difficultyScore'] as num?)?.toDouble() ?? task?.difficultyScore ?? 1,
+          kind: 'Task', detail: 'Completed (legacy activity)',
+        ));
+      }
+    }
+  }
+
+  double _currentHabitFraction(Habit habit, CompletionRecord record) {
+    switch (habit.tracking) {
+      case TrackingMethod.tick:
+        return record.done ? 1 : 0;
+      case TrackingMethod.count:
+        final double goal = habit.dailyGoal ?? 1;
+        return goal <= 0 ? 0 : (record.count / goal).clamp(0, 1).toDouble();
+      case TrackingMethod.checklist:
+        final Set<String> activeIds = habit.checklist.map((ChecklistItem item) => item.id).toSet();
+        if (activeIds.isEmpty) return 0;
+        final int checked = record.checkedItemIds.intersection(activeIds).length;
+        return (checked / activeIds.length).clamp(0, 1).toDouble();
+    }
   }
 
   double _habitFraction(Habit habit, CompletionRecord record) {

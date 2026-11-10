@@ -110,7 +110,7 @@ class Habit {
   final DateTime createdAt;
   final DateTime? archivedAt;
   final int sortOrder;
-  /// Points awarded when this Build Habit is fully completed (1.0–5.0).
+  /// Productivity points awarded when this Build Habit is fully completed (1.0–10.0).
   final double productivityPoints;
   /// Penalty applied only when a Quit Habit slip is explicitly recorded.
   final double quitPenalty;
@@ -128,7 +128,7 @@ class Habit {
       }
       if (step <= 0) return 'Each tap must add more than zero.';
     }
-    if (!productivityPoints.isFinite || productivityPoints < 1 || productivityPoints > 5) return 'Habit points must be between 1 and 5.';
+    if (!productivityPoints.isFinite || productivityPoints < 1 || productivityPoints > 10) return 'Habit points must be between 1 and 10.';
     if (!quitPenalty.isFinite || quitPenalty < 0 || quitPenalty > 10) return 'Quit penalty must be between 0 and 10.';
     if (tracking == TrackingMethod.checklist) {
       if (checklist.isEmpty) return 'Add at least one checklist item.';

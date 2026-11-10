@@ -153,7 +153,7 @@ class Task {
   /// 100 for percentage mode; configured total for count mode.
   final double progressTarget;
   final String progressUnit;
-  /// Reusable weight for future Productivity scoring (supports decimals).
+  /// Reusable weight used by the productivity scoring engine (supports decimals).
   final double difficultyScore;
   final int sortOrder;
 
@@ -190,8 +190,8 @@ class Task {
   String? validate() {
     if (title.trim().isEmpty) return 'Please enter a task title.';
     if (subtasks.any((Subtask s) => s.title.trim().isEmpty)) return 'Subtask names cannot be empty.';
-    if (subtasks.any((Subtask s) => !s.difficultyScore.isFinite || s.difficultyScore < 1 || s.difficultyScore > 5)) {
-      return 'Subtask points must be between 1 and 5.';
+    if (subtasks.any((Subtask s) => !s.difficultyScore.isFinite || s.difficultyScore < 1 || s.difficultyScore > 10)) {
+      return 'Subtask points must be between 1 and 10.';
     }
     if (dueAt != null && reminderAt != null) {
       final DateTime deadlineDay = DateTime(dueAt!.year, dueAt!.month, dueAt!.day);
@@ -200,13 +200,13 @@ class Task {
         return 'The reminder date cannot be after the deadline date.';
       }
     }
-    if (difficultyScore < 1 || difficultyScore > 5) {
-      return 'Difficulty score must be between 1 and 5.';
+    if (!difficultyScore.isFinite || difficultyScore < 1 || difficultyScore > 10) {
+      return 'Difficulty score must be between 1 and 10.';
     }
-    if (taskType == TaskType.progressive && progressTarget <= 0) {
+    if (taskType == TaskType.progressive && (!progressTarget.isFinite || progressTarget <= 0)) {
       return 'Progress target must be greater than zero.';
     }
-    if (progressValue < 0 || progressValue > progressTarget) {
+    if (!progressValue.isFinite || progressValue < 0 || progressValue > progressTarget) {
       return 'Progress must be between zero and the configured target.';
     }
     return null;
