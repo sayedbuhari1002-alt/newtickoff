@@ -468,36 +468,39 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
                 children: <Widget>[
                   for (int index = 0; index < recommendations.length; index++) ...<Widget>[
                     if (index > 0) const Divider(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      leading: CircleAvatar(
-                        radius: 16,
-                        backgroundColor: AppColors.accentDim,
-                        child: Text(
-                          '${index + 1}',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w800,
+                    Material(
+                      color: Colors.transparent,
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        leading: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: AppColors.accentDim,
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                      ),
-                      title: Text(
-                        recommendations[index].task.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(
-                        recommendations[index].reason,
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
+                        title: Text(
+                          recommendations[index].task.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
-                      ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () => context.push(
-                        AppRoutes.taskDetail(recommendations[index].task.id),
+                        subtitle: Text(
+                          recommendations[index].reason,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () => context.push(
+                          AppRoutes.taskDetail(recommendations[index].task.id),
+                        ),
                       ),
                     ),
                   ],
