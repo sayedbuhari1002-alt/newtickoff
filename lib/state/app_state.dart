@@ -775,7 +775,11 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       updatedAt: now,
     );
     await _repo.upsertTask(updated);
-    await TaskReminderService.instance.scheduleTask(updated);
+    // Progress persistence must not wait on the platform notification plugin.
+    // Reminder scheduling is best-effort background work; in widget tests (and
+    // on devices where notification services are slow) waiting here can leave
+    // the progress control in its saving state even though the task was saved.
+    unawaited(TaskReminderService.instance.scheduleTask(updated));
     final TaskProgressEvent event = TaskProgressEvent(
       id: newId(), taskId: taskId,
       previousValue: current.progressValue, newValue: bounded,
