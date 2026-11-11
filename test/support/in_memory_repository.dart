@@ -27,6 +27,7 @@ class InMemoryAppRepository implements AppRepository {
   final Map<String, DistractionCategory> distractionCategories = <String, DistractionCategory>{};
   final Map<String, DistractionLog> distractionLogs = <String, DistractionLog>{};
   final Map<String, AppUsageRecord> appUsageRecords = <String, AppUsageRecord>{};
+  final Map<String, AppUsageDailyTotal> appUsageDailyTotals = <String, AppUsageDailyTotal>{};
 
   @override
   Future<Map<String, String>> loadSettings() async => Map<String, String>.of(settings);
@@ -187,7 +188,7 @@ class InMemoryAppRepository implements AppRepository {
   @override
   Future<void> upsertDistractionCategory(DistractionCategory value) async => distractionCategories[value.id] = value;
   @override
-  Future<void> deleteDistractionCategory(String id) async { distractionCategories.remove(id); distractionLogs.removeWhere((_, value) => value.categoryId == id); appUsageRecords.removeWhere((_, value) => value.categoryId == id); }
+  Future<void> deleteDistractionCategory(String id) async { distractionCategories.remove(id); distractionLogs.removeWhere((_, value) => value.categoryId == id); appUsageRecords.removeWhere((_, value) => value.categoryId == id); appUsageDailyTotals.removeWhere((_, value) => value.categoryId == id); }
   @override
   Future<List<DistractionLog>> loadDistractionLogs() async => distractionLogs.values.toList();
   @override
@@ -200,5 +201,11 @@ class InMemoryAppRepository implements AppRepository {
   Future<void> upsertAppUsageRecord(AppUsageRecord value) async => appUsageRecords[value.id] = value;
   @override
   Future<void> deleteAppUsageRecordsForDate(String key) async { final DateTime day = DateTime.parse(key); appUsageRecords.removeWhere((_, r) => r.startAt.isBefore(day.add(const Duration(days: 1))) && r.endAt.isAfter(day)); }
+  @override
+  Future<List<AppUsageDailyTotal>> loadAppUsageDailyTotals() async => appUsageDailyTotals.values.toList();
+  @override
+  Future<void> upsertAppUsageDailyTotal(AppUsageDailyTotal value) async => appUsageDailyTotals[value.id] = value;
+  @override
+  Future<void> deleteAppUsageDailyTotalsForDate(String key) async => appUsageDailyTotals.removeWhere((_, value) => value.dateKey == key);
 
 }

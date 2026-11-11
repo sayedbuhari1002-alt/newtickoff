@@ -76,4 +76,7 @@ abstract class AppRepository {
   Future<List<AppUsageRecord>> loadAppUsageRecords();
   Future<void> upsertAppUsageRecord(AppUsageRecord record);
   Future<void> deleteAppUsageRecordsForDate(String dateKey);
+  Future<List<AppUsageDailyTotal>> loadAppUsageDailyTotals();
+  Future<void> upsertAppUsageDailyTotal(AppUsageDailyTotal total);
+  Future<void> deleteAppUsageDailyTotalsForDate(String dateKey);
 }

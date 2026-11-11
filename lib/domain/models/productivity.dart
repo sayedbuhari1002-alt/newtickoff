@@ -195,6 +195,50 @@ class AppUsageRecord {
 }
 
 @immutable
+class AppUsageDailyTotal {
+  const AppUsageDailyTotal({
+    required this.id,
+    required this.dateKey,
+    required this.categoryId,
+    required this.packageName,
+    required this.androidForegroundMillis,
+    required this.reconstructedMillis,
+    required this.nativeStatsAvailable,
+  });
+
+  final String id;
+  final String dateKey;
+  final String categoryId;
+  final String packageName;
+  final int androidForegroundMillis;
+  final int reconstructedMillis;
+  final bool nativeStatsAvailable;
+
+  int get discrepancyMillis => androidForegroundMillis - reconstructedMillis;
+  int get displayMillis => nativeStatsAvailable ? androidForegroundMillis : reconstructedMillis;
+
+  Map<String, Object?> toMap() => <String, Object?>{
+    'id': id,
+    'date_key': dateKey,
+    'category_id': categoryId,
+    'package_name': packageName,
+    'android_foreground_ms': androidForegroundMillis,
+    'reconstructed_ms': reconstructedMillis,
+    'native_stats_available': nativeStatsAvailable ? 1 : 0,
+  };
+
+  factory AppUsageDailyTotal.fromMap(Map<String, Object?> row) => AppUsageDailyTotal(
+    id: row['id'] as String,
+    dateKey: row['date_key'] as String,
+    categoryId: row['category_id'] as String,
+    packageName: row['package_name'] as String? ?? '',
+    androidForegroundMillis: (row['android_foreground_ms'] as num?)?.toInt() ?? 0,
+    reconstructedMillis: (row['reconstructed_ms'] as num?)?.toInt() ?? 0,
+    nativeStatsAvailable: (row['native_stats_available'] as int? ?? 0) != 0,
+  );
+}
+
+@immutable
 class ProductivityTargetChange {
   const ProductivityTargetChange({required this.effectiveDate, required this.target});
   final String effectiveDate;

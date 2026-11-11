@@ -51,6 +51,20 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                 }
+                "queryDailyUsageStats" -> {
+                    if (!hasUsageAccess()) {
+                        result.error("USAGE_ACCESS_REQUIRED", "Enable Usage Access for Tazkiyane in Android Settings.", null)
+                    } else {
+                        try {
+                            val start = call.argument<Number>("startMillis")?.toLong() ?: 0L
+                            val end = call.argument<Number>("endMillis")?.toLong() ?: 0L
+                            val packages = call.argument<List<String>>("packageNames")?.toSet() ?: emptySet()
+                            result.success(readDailyUsageStats(start, end, packages))
+                        } catch (error: Exception) {
+                            result.error("USAGE_STATS_QUERY_FAILED", error.message, null)
+                        }
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -94,41 +108,136 @@ class MainActivity : FlutterActivity() {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
+    /**
+     * Reconstruct package foreground sessions without treating an individual
+     * Activity's onPause/onStop as the end of the whole package session.
+     * Android Q+ emits ACTIVITY_RESUMED/PAUSED per Activity. A package remains
+     * foreground while at least one of its Activities is resumed. STOPPED is
+     * intentionally ignored because it is a later, activity-level callback and
+     * can arrive after a different Activity in the same package has resumed.
+     */
     private fun readUsageEvents(start: Long, end: Long, packages: Set<String>): List<Map<String, Any>> {
         if (end <= start || packages.isEmpty()) return emptyList()
         val manager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val events = manager.queryEvents(start, end) ?: return emptyList()
         val event = UsageEvents.Event()
-        val active = mutableMapOf<String, Long>()
         val records = mutableListOf<Map<String, Any>>()
+        val packageSessionStarts = mutableMapOf<String, Long>()
+        val activeActivityCounts = mutableMapOf<String, MutableMap<String, Int>>()
+        val unknownActivityKey = "__unknown_activity__"
+
+        fun closeSession(packageName: String, at: Long) {
+            val sessionStart = packageSessionStarts.remove(packageName) ?: return
+            if (at > sessionStart) {
+                records.add(mapOf(
+                    "packageName" to packageName,
+                    "startMillis" to sessionStart,
+                    "endMillis" to at
+                ))
+            }
+        }
+
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
+            val eventType = event.eventType
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && eventType == UsageEvents.Event.DEVICE_SHUTDOWN) {
+                // Device-level shutdown events use the system package name, not
+                // one of the selected app package names. Close every open app.
+                for (packageName in packageSessionStarts.keys.toList()) {
+                    closeSession(packageName, event.timeStamp)
+                }
+                activeActivityCounts.clear()
+                continue
+            }
             val packageName = event.packageName ?: continue
             if (!packages.contains(packageName)) continue
-            val eventType = event.eventType
-            val foreground = eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
-                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && eventType == UsageEvents.Event.ACTIVITY_RESUMED)
-            val background = eventType == UsageEvents.Event.MOVE_TO_BACKGROUND ||
-                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && (eventType == UsageEvents.Event.ACTIVITY_PAUSED || eventType == UsageEvents.Event.ACTIVITY_STOPPED))
-            if (foreground) {
-                val previous = active.put(packageName, event.timeStamp)
-                if (previous != null && event.timeStamp > previous) {
-                    records.add(mapOf("packageName" to packageName, "startMillis" to previous, "endMillis" to event.timeStamp))
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                when (eventType) {
+                    UsageEvents.Event.ACTIVITY_RESUMED -> {
+                        val activityName = event.className?.takeIf { it.isNotBlank() } ?: unknownActivityKey
+                        val counts = activeActivityCounts.getOrPut(packageName) { mutableMapOf() }
+                        val activeBefore = counts.values.sum()
+                        counts[activityName] = (counts[activityName] ?: 0) + 1
+                        if (activeBefore == 0 && !packageSessionStarts.containsKey(packageName)) {
+                            packageSessionStarts[packageName] = event.timeStamp
+                        }
+                    }
+                    UsageEvents.Event.ACTIVITY_PAUSED -> {
+                        val counts = activeActivityCounts[packageName] ?: continue
+                        val suppliedName = event.className?.takeIf { it.isNotBlank() }
+                        val activityName = when {
+                            suppliedName != null && (counts[suppliedName] ?: 0) > 0 -> suppliedName
+                            suppliedName == null && counts.values.sum() == 1 -> counts.keys.firstOrNull()
+                            else -> null
+                        } ?: continue
+                        val currentCount = counts[activityName] ?: 0
+                        if (currentCount <= 1) counts.remove(activityName) else counts[activityName] = currentCount - 1
+                        val activeAfter = counts.values.sum()
+                        if (activeAfter == 0) {
+                            activeActivityCounts.remove(packageName)
+                            closeSession(packageName, event.timeStamp)
+                        }
+                    }
+                    // ACTIVITY_STOPPED is not a package-background event.
                 }
-            } else if (background) {
-                val previous = active.remove(packageName)
-                if (previous != null && event.timeStamp > previous) {
-                    records.add(mapOf("packageName" to packageName, "startMillis" to previous, "endMillis" to event.timeStamp))
+            } else {
+                // Before Android Q the legacy events are package-level.
+                when (eventType) {
+                    UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                        if (!packageSessionStarts.containsKey(packageName)) {
+                            packageSessionStarts[packageName] = event.timeStamp
+                        }
+                    }
+                    UsageEvents.Event.MOVE_TO_BACKGROUND -> closeSession(packageName, event.timeStamp)
                 }
             }
         }
-        // An app that is still in the foreground must only be charged up to
-        // the current time when the selected day is today, never through the
-        // future end-of-day query boundary.
+
+        // If an app is still foreground at query time, stop its interval at now;
+        // never extend the current day's usage into the future.
         val cutoff = minOf(end, System.currentTimeMillis())
-        for ((packageName, from) in active) {
-            if (cutoff > from) records.add(mapOf("packageName" to packageName, "startMillis" to from, "endMillis" to cutoff))
+        for (packageName in packageSessionStarts.keys.toList()) {
+            closeSession(packageName, cutoff)
         }
-        return records
+        return records.sortedBy { (it["startMillis"] as Number).toLong() }
     }
+
+    /**
+     * Gets Android's daily aggregate for the selected apps. This is independent
+     * of the event parser and is the primary source for each app's daily total.
+     * An explicit availability flag prevents an unavailable stats query from
+     * being mistaken for a genuine zero-minute day.
+     */
+    private fun readDailyUsageStats(
+        start: Long,
+        end: Long,
+        packages: Set<String>
+    ): Map<String, Any> {
+        if (end <= start || packages.isEmpty()) {
+            return mapOf("available" to true, "items" to emptyList<Map<String, Any>>())
+        }
+        val manager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val queryEnd = minOf(end, System.currentTimeMillis())
+        if (queryEnd <= start) {
+            return mapOf("available" to true, "items" to packages.map {
+                mapOf("packageName" to it, "foregroundMillis" to 0L)
+            })
+        }
+
+        val stats = manager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, start, queryEnd)
+            ?: return mapOf("available" to false, "items" to emptyList<Map<String, Any>>())
+        val totals = packages.associateWith { 0L }.toMutableMap()
+        for (usage in stats) {
+            val appPackage = usage.packageName ?: continue
+            if (totals.containsKey(appPackage)) {
+                totals[appPackage] = (totals[appPackage] ?: 0L) + usage.totalTimeInForeground
+            }
+        }
+        val items = totals.map { (appPackage, foregroundMillis) ->
+            mapOf("packageName" to appPackage, "foregroundMillis" to foregroundMillis)
+        }
+        return mapOf("available" to true, "items" to items)
+    }
+
 }

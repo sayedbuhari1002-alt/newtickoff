@@ -316,8 +316,43 @@ void main() {
         'distraction_categories',
         'distraction_logs',
         'app_usage_records',
+        'app_usage_daily_totals',
       ]),
     );
+  });
+
+  test('Android daily usage totals round-trip through SQLite', () async {
+    final DateTime created = DateTime(2026, 11, 10, 8);
+    final DistractionCategory category = DistractionCategory(
+      id: 'daily-usage-category',
+      name: 'Social apps',
+      severityPointsPerHour: 2,
+      autoTrack: true,
+      packageNames: const <String>['com.instagram.android'],
+      createdAt: created,
+    );
+    await repo.upsertDistractionCategory(category);
+    final AppUsageDailyTotal total = AppUsageDailyTotal(
+      id: 'usage_day_2026-11-10_com_instagram_android',
+      dateKey: '2026-11-10',
+      categoryId: category.id,
+      packageName: 'com.instagram.android',
+      androidForegroundMillis: 7200000,
+      reconstructedMillis: 1320000,
+      nativeStatsAvailable: true,
+    );
+    await repo.upsertAppUsageDailyTotal(total);
+
+    final AppUsageDailyTotal loaded = (await repo.loadAppUsageDailyTotals()).single;
+    expect(loaded.dateKey, '2026-11-10');
+    expect(loaded.packageName, 'com.instagram.android');
+    expect(loaded.androidForegroundMillis, 7200000);
+    expect(loaded.reconstructedMillis, 1320000);
+    expect(loaded.discrepancyMillis, 5880000);
+    expect(loaded.nativeStatsAvailable, isTrue);
+
+    await repo.deleteAppUsageDailyTotalsForDate('2026-11-10');
+    expect(await repo.loadAppUsageDailyTotals(), isEmpty);
   });
 
   test('local settings round-trip through SQLite', () async {

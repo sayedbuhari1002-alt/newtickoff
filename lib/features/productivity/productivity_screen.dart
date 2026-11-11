@@ -349,8 +349,12 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
         if (mounted && showMessage) _message('Enable Usage Access for Tazkiyane, then return and tap Refresh app usage.');
         return;
       }
-      final List<AppUsageRecord> records = await service.readUsageForDay(day: _selectedDate, categories: data.distractionCategories);
-      await ref.read(appDataProvider.notifier).replaceAutomaticUsageForDate(_selectedDate, records);
+      final UsageDayResult usage = await service.readUsageForDay(day: _selectedDate, categories: data.distractionCategories);
+      await ref.read(appDataProvider.notifier).replaceAutomaticUsageForDate(
+        _selectedDate,
+        usage.sessions,
+        dailyTotals: usage.dailyTotals,
+      );
       if (mounted && showMessage) _message('App usage refreshed for ${_dateLabel(_selectedDate)}.');
     } catch (error) {
       if (mounted && showMessage) _message('Usage tracking could not be refreshed: $error');
@@ -416,6 +420,9 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
     );
     final List<DistractionLog> dayLogs = data.distractionLogs.where((DistractionLog log) => log.startAt.isBefore(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).add(const Duration(days: 1))) && log.endAt.isAfter(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day))).toList();
     final List<AppUsageRecord> dayUsage = data.appUsageRecords.where((AppUsageRecord record) => record.startAt.isBefore(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).add(const Duration(days: 1))) && record.endAt.isAfter(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day))).toList();
+    final String selectedDateKey = _dateKey(_selectedDate);
+    final List<AppUsageDailyTotal> dayUsageTotals = data.appUsageDailyTotals.where((AppUsageDailyTotal total) => total.dateKey == selectedDateKey).toList()
+      ..sort((AppUsageDailyTotal a, AppUsageDailyTotal b) => b.displayMillis.compareTo(a.displayMillis));
     final ProductivityDayScore todayScore = _isToday
         ? score
         : engine.calculateDay(
@@ -450,7 +457,7 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
         const SizedBox(height: 18),
         _contributionCard(score),
         const SizedBox(height: 18),
-        _distractionCard(data, dayLogs, dayUsage),
+        _distractionCard(data, dayLogs, dayUsage, dayUsageTotals),
       ],
     );
   }
@@ -572,7 +579,12 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
     ]),
   );
 
-  Widget _distractionCard(AppData data, List<DistractionLog> dayLogs, List<AppUsageRecord> dayUsage) => _Panel(
+  Widget _distractionCard(
+    AppData data,
+    List<DistractionLog> dayLogs,
+    List<AppUsageRecord> dayUsage,
+    List<AppUsageDailyTotal> dayUsageTotals,
+  ) => _Panel(
     title: 'Distractions',
     trailing: PopupMenuButton<String>(onSelected: (String value) { if (value == 'category') _createCategory(); if (value == 'log') _createDistractionLog(data); }, itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[
       PopupMenuItem(value: 'log', child: Text('Log distraction')), PopupMenuItem(value: 'category', child: Text('Manage categories')),
@@ -598,11 +610,50 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
       Row(children: <Widget>[Expanded(child: Text('Manual logs · ${dayLogs.length}', style: const TextStyle(fontWeight: FontWeight.w700))), Text('${_minutes(dayLogs.fold<double>(0, (double sum, DistractionLog l) => sum + l.durationMinutes))} min', style: TextStyle(color: AppColors.textSecondary, fontSize: 12))]),
       for (final DistractionLog log in dayLogs)
         _LogRow(title: data.distractionCategories.where((DistractionCategory c) => c.id == log.categoryId).firstOrNull?.name ?? 'Category removed', subtitle: '${_timeLabel(log.startAt)} · ${log.durationMinutes.toStringAsFixed(0)} min', onDelete: () => _guard(() => ref.read(appDataProvider.notifier).deleteDistractionLog(log.id))),
-      Row(children: <Widget>[Expanded(child: Text('Automatic usage · ${dayUsage.length} session(s)', style: const TextStyle(fontWeight: FontWeight.w700))), Text('${_minutes(dayUsage.fold<double>(0, (double sum, AppUsageRecord r) => sum + r.endAt.difference(r.startAt).inSeconds / 60))} min', style: TextStyle(color: AppColors.textSecondary, fontSize: 12))]),
-      for (final AppUsageRecord record in dayUsage.take(8))
-        Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(children: <Widget>[Expanded(child: Text(_installedAppLabels[record.packageName] ?? 'App no longer available', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))), Text('${(record.endAt.difference(record.startAt).inMinutes)} min', style: const TextStyle(fontSize: 12))])),
+      if (dayUsageTotals.isNotEmpty) ...<Widget>[
+        Builder(builder: (BuildContext context) {
+          final bool nativeAvailable = dayUsageTotals.every((AppUsageDailyTotal total) => total.nativeStatsAvailable);
+          final int androidTotal = dayUsageTotals.fold<int>(0, (int sum, AppUsageDailyTotal total) => sum + total.androidForegroundMillis);
+          final int reconstructedTotal = dayUsageTotals.fold<int>(0, (int sum, AppUsageDailyTotal total) => sum + total.reconstructedMillis);
+          final int shownTotal = nativeAvailable ? androidTotal : reconstructedTotal;
+          final int sessionCount = dayUsage.length;
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+            Row(children: <Widget>[
+              Expanded(child: Text(nativeAvailable ? 'Android daily usage · ${dayUsageTotals.length} app(s)' : 'Session estimate · ${dayUsageTotals.length} app(s)', style: const TextStyle(fontWeight: FontWeight.w700))),
+              Text('${(shownTotal / 60000).round()} min', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            ]),
+            const SizedBox(height: 4),
+            Text(
+              nativeAvailable
+                  ? 'Session reconstruction: ${(reconstructedTotal / 60000).round()} min across $sessionCount session(s) · Difference: ${((androidTotal - reconstructedTotal) / 60000).round()} min'
+                  : 'Android daily aggregate is unavailable. Showing the reconstructed session estimate.',
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            for (final AppUsageDailyTotal total in dayUsageTotals.where((AppUsageDailyTotal value) => value.displayMillis > 0 || value.reconstructedMillis > 0))
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(children: <Widget>[
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+                    Text(_installedAppLabels[total.packageName] ?? total.packageName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    Text(
+                      total.nativeStatsAvailable
+                          ? 'Android: ${(total.androidForegroundMillis / 60000).round()} min · Sessions: ${(total.reconstructedMillis / 60000).round()} min · Δ ${((total.discrepancyMillis) / 60000).round()} min'
+                          : 'Session events: ${(total.reconstructedMillis / 60000).round()} min',
+                      style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                    ),
+                  ])),
+                  Text('${(total.displayMillis / 60000).round()} min', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+          ]);
+        }),
+      ] else ...<Widget>[
+        Row(children: <Widget>[Expanded(child: Text('Automatic usage · ${dayUsage.length} session(s)', style: const TextStyle(fontWeight: FontWeight.w700))), Text('${_minutes(dayUsage.fold<double>(0, (double sum, AppUsageRecord r) => sum + r.endAt.difference(r.startAt).inSeconds / 60))} min', style: TextStyle(color: AppColors.textSecondary, fontSize: 12))]),
+        const _Muted('Refresh app usage to compare the session timeline with Android daily totals.'),
+      ],
       const SizedBox(height: 6),
-      const _Muted('Manual and automatic time intervals are merged across categories; overlapping time is charged once at the highest active severity.'),
+      const _Muted('Android daily totals are the screen-time reference. Timestamped foreground sessions remain the input to overlap-aware productivity scoring; background time must not be counted as an app session.'),
     ]),
   );
 

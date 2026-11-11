@@ -67,6 +67,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     final List<DistractionCategory> distractionCategories = await repo.loadDistractionCategories();
     final List<DistractionLog> distractionLogs = await repo.loadDistractionLogs();
     final List<AppUsageRecord> appUsageRecords = await repo.loadAppUsageRecords();
+    final List<AppUsageDailyTotal> appUsageDailyTotals = await repo.loadAppUsageDailyTotals();
     final Map<String, String> settings = await repo.loadSettings();
     // Record the first day this version's live-state scoring model is active.
     // Historical dates before this boundary continue using the old scoring
@@ -103,6 +104,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       distractionCategories: distractionCategories,
       distractionLogs: distractionLogs,
       appUsageRecords: appUsageRecords,
+      appUsageDailyTotals: appUsageDailyTotals,
       settings: settings,
     );
     // Refresh local notifications after every launch. A notification failure
@@ -1039,6 +1041,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       distractionCategories: data.distractionCategories.where((DistractionCategory value) => value.id != id).toList(),
       distractionLogs: data.distractionLogs.where((DistractionLog value) => value.categoryId != id).toList(),
       appUsageRecords: data.appUsageRecords.where((AppUsageRecord value) => value.categoryId != id).toList(),
+      appUsageDailyTotals: data.appUsageDailyTotals.where((AppUsageDailyTotal value) => value.categoryId != id).toList(),
     ));
   }
 
@@ -1064,9 +1067,14 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     state = AsyncData<AppData>(data.copyWith(distractionLogs: data.distractionLogs.where((DistractionLog value) => value.id != id).toList()));
   }
 
-  Future<void> replaceAutomaticUsageForDate(DateTime date, List<AppUsageRecord> records) async {
+  Future<void> replaceAutomaticUsageForDate(
+    DateTime date,
+    List<AppUsageRecord> records, {
+    List<AppUsageDailyTotal> dailyTotals = const <AppUsageDailyTotal>[],
+  }) async {
     final String key = _dateKey(date);
     await _repo.deleteAppUsageRecordsForDate(key);
+    await _repo.deleteAppUsageDailyTotalsForDate(key);
     final Map<String, DistractionCategory> categories = <String, DistractionCategory>{
       for (final DistractionCategory value in _current.distractionCategories) value.id: value,
     };
@@ -1082,11 +1090,21 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       await _repo.upsertAppUsageRecord(saved);
       savedRecords.add(saved);
     }
+    final List<AppUsageDailyTotal> savedTotals = <AppUsageDailyTotal>[];
+    for (final AppUsageDailyTotal total in dailyTotals) {
+      if (total.dateKey != key || !categories.containsKey(total.categoryId)) continue;
+      await _repo.upsertAppUsageDailyTotal(total);
+      savedTotals.add(total);
+    }
     final AppData data = _current;
     final DateTime start = DateTime(date.year, date.month, date.day);
     final DateTime end = start.add(const Duration(days: 1));
-    final List<AppUsageRecord> keep = data.appUsageRecords.where((AppUsageRecord record) => !record.startAt.isBefore(end) || !record.endAt.isAfter(start)).toList();
-    state = AsyncData<AppData>(data.copyWith(appUsageRecords: <AppUsageRecord>[...keep, ...savedRecords]));
+    final List<AppUsageRecord> keepRecords = data.appUsageRecords.where((AppUsageRecord record) => !record.startAt.isBefore(end) || !record.endAt.isAfter(start)).toList();
+    final List<AppUsageDailyTotal> keepTotals = data.appUsageDailyTotals.where((AppUsageDailyTotal total) => total.dateKey != key).toList();
+    state = AsyncData<AppData>(data.copyWith(
+      appUsageRecords: <AppUsageRecord>[...keepRecords, ...savedRecords],
+      appUsageDailyTotals: <AppUsageDailyTotal>[...keepTotals, ...savedTotals],
+    ));
   }
 
   Future<void> scheduleTaskForDate(String taskId, DateTime date) async {

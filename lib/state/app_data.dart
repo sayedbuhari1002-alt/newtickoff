@@ -21,6 +21,7 @@ class AppData {
     this.distractionCategories = const <DistractionCategory>[],
     this.distractionLogs = const <DistractionLog>[],
     this.appUsageRecords = const <AppUsageRecord>[],
+    this.appUsageDailyTotals = const <AppUsageDailyTotal>[],
     this.settings = const <String, String>{},
   });
 
@@ -46,6 +47,7 @@ class AppData {
   final List<DistractionCategory> distractionCategories;
   final List<DistractionLog> distractionLogs;
   final List<AppUsageRecord> appUsageRecords;
+  final List<AppUsageDailyTotal> appUsageDailyTotals;
 
   /// On-device preferences stored in the SQLite app_settings table.
   final Map<String, String> settings;
@@ -249,6 +251,7 @@ class AppData {
     List<DistractionCategory>? distractionCategories,
     List<DistractionLog>? distractionLogs,
     List<AppUsageRecord>? appUsageRecords,
+    List<AppUsageDailyTotal>? appUsageDailyTotals,
     Map<String, String>? settings,
   }) {
     return AppData(
@@ -269,6 +272,7 @@ class AppData {
       distractionCategories: distractionCategories ?? this.distractionCategories,
       distractionLogs: distractionLogs ?? this.distractionLogs,
       appUsageRecords: appUsageRecords ?? this.appUsageRecords,
+      appUsageDailyTotals: appUsageDailyTotals ?? this.appUsageDailyTotals,
       settings: settings ?? this.settings,
     );
   }

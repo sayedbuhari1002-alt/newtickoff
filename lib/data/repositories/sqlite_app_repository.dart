@@ -697,4 +697,18 @@ class SqliteAppRepository implements AppRepository {
     await _db.delete('app_usage_records', where: 'start_at < ? AND end_at > ?', whereArgs: <Object?>[end.toIso8601String(), start.toIso8601String()]);
   }
 
+  @override
+  Future<List<AppUsageDailyTotal>> loadAppUsageDailyTotals() async =>
+      (await _db.query('app_usage_daily_totals', orderBy: 'date_key ASC, package_name ASC'))
+          .map(AppUsageDailyTotal.fromMap).toList();
+
+  @override
+  Future<void> upsertAppUsageDailyTotal(AppUsageDailyTotal total) async =>
+      _upsert(_db, 'app_usage_daily_totals', total.toMap());
+
+  @override
+  Future<void> deleteAppUsageDailyTotalsForDate(String dateKey) async {
+    await _db.delete('app_usage_daily_totals', where: 'date_key = ?', whereArgs: <Object?>[dateKey]);
+  }
+
 }

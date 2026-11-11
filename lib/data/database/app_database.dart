@@ -12,13 +12,14 @@ import 'package:sqflite/sqflite.dart';
 /// * 6 - note categories/periods and independent subtask reminder timestamps.
 /// * 7 - first-class task groups, progressive task fields, templates and progress history.
 /// * 8 - Productivity targets, assignments, distractions and scoring metadata.
+/// * 9 - daily Android UsageStats totals and reconciliation against event sessions.
 ///
 /// To change the schema, bump [version], add a step to [_migrations] that
 /// upgrades from the previous version, and keep [_createV1] untouched.
 class AppDatabase {
   AppDatabase._();
 
-  static const int version = 8;
+  static const int version = 9;
   static const String fileName = 'tickoff.db';
 
   /// Opens (creating if needed) the database. Pass [path] to use another file
@@ -41,6 +42,7 @@ class AppDatabase {
         if (newVersion >= 6) await _migrateV6(db);
         if (newVersion >= 7) await _migrateV7(db);
         if (newVersion >= 8) await _migrateV8(db);
+        if (newVersion >= 9) await _migrateV9(db);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         for (int v = oldVersion; v < newVersion; v++) {
@@ -61,6 +63,7 @@ class AppDatabase {
         5: _migrateV6,
         6: _migrateV7,
         7: _migrateV8,
+        8: _migrateV9,
       };
 
 
@@ -156,6 +159,24 @@ class AppDatabase {
         severity_points_per_hour REAL
       )''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_app_usage_time ON app_usage_records(start_at, end_at)');
+  }
+
+  static Future<void> _migrateV9(Database db) async {
+    // Store Android's daily foreground totals separately from timestamped event
+    // sessions. Aggregate totals are authoritative for daily display, while
+    // sessions retain their real boundaries for overlap-aware productivity scoring.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS app_usage_daily_totals (
+        id TEXT PRIMARY KEY,
+        date_key TEXT NOT NULL,
+        category_id TEXT NOT NULL REFERENCES distraction_categories(id) ON DELETE CASCADE,
+        package_name TEXT NOT NULL,
+        android_foreground_ms INTEGER NOT NULL DEFAULT 0,
+        reconstructed_ms INTEGER NOT NULL DEFAULT 0,
+        native_stats_available INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(date_key, package_name)
+      )''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_app_usage_daily_date ON app_usage_daily_totals(date_key)');
   }
 
   static Future<void> _migrateV7(Database db) async {
