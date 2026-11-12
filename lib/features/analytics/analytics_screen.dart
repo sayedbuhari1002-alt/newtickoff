@@ -47,7 +47,8 @@ class _PartialProgressHistory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<_HabitProgressHistoryValue> values = <_HabitProgressHistoryValue>[];
+    final List<_HabitProgressHistoryValue> values =
+        <_HabitProgressHistoryValue>[];
     for (final Habit habit in habits.where(
       (Habit h) =>
           h.type == HabitType.build &&
@@ -75,11 +76,53 @@ class _PartialProgressHistory extends StatelessWidget {
           b.day.compareTo(a.day),
     );
 
+    final bool hasCountHabits = habits.any(
+      (Habit h) =>
+          h.type == HabitType.build && h.tracking == TrackingMethod.count,
+    );
+    final bool hasChecklistHabits = habits.any(
+      (Habit h) =>
+          h.type == HabitType.build && h.tracking == TrackingMethod.checklist,
+    );
+    final List<_HabitProgressHistoryValue> countValues = values
+        .where((v) => v.habit.tracking == TrackingMethod.count)
+        .toList();
+    final List<_HabitProgressHistoryValue> checklistValues = values
+        .where((v) => v.habit.tracking == TrackingMethod.checklist)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (hasCountHabits)
+          _historyCard(
+            title: 'Actual Count History',
+            emptyMessage: 'No count progress entries in this date range yet.',
+            values: countValues,
+          ),
+        if (hasChecklistHabits) ...<Widget>[
+          if (hasCountHabits) const SizedBox(height: AppDimens.gap),
+          _historyCard(
+            title: 'Checklist Progress History',
+            emptyMessage:
+                'No checklist progress entries in this date range yet.',
+            values: checklistValues,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _historyCard({
+    required String title,
+    required String emptyMessage,
+    required List<_HabitProgressHistoryValue> values,
+  }) {
     return SectionCard(
-      title: 'Count & Checklist Progress',
+      title: title,
       child: values.isEmpty
           ? Text(
-              'No count or checklist progress entries in this date range yet.',
+              emptyMessage,
               style: TextStyle(color: AppColors.textSecondary),
             )
           : Column(
@@ -97,7 +140,8 @@ class _PartialProgressHistory extends StatelessWidget {
                               values[i].habit.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 3),
                             Text(
@@ -214,6 +258,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     DateTime from = analytics.rangeStart(_range, selected, data.completions);
     if (from.isBefore(earliest)) from = earliest;
     final Tally tally = analytics.tally(selected, data.completions, from, today);
+    final int completionCount =
+        _completionCount(selected, data, engine, from, today);
     final List<TrendPoint> points =
         analytics.trend(selected, data.completions, from, today);
     final List<PeriodSummary> summaries =
@@ -261,11 +307,22 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             children: <Widget>[
               Expanded(
                 child: StatTile(
+                  value: '$completionCount',
+                  label: 'Completions',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: StatTile(
                   value: formatNumber(tally.completed),
                   label: 'Progress Units',
                 ),
               ),
-              const SizedBox(width: 10),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
               Expanded(
                 child: StatTile(
                   value: percentLabel(tally.rate),
@@ -375,6 +432,26 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   }
 
   int _milestoneCount() => kMilestones.length;
+
+  int _completionCount(
+    List<Habit> habits,
+    AppData data,
+    HabitEngine engine,
+    DateTime from,
+    DateTime to,
+  ) {
+    int total = 0;
+    final DateTime last = dateOnly(to.isAfter(engine.today) ? engine.today : to);
+    for (final Habit habit in habits) {
+      final Map<String, CompletionRecord> records = data.recordsFor(habit.id);
+      final DateTime habitStart = engine.startDate(habit, records);
+      DateTime day = dateOnly(from.isBefore(habitStart) ? habitStart : from);
+      for (; !day.isAfter(last); day = addDays(day, 1)) {
+        if (engine.isSuccess(habit, records[dateKey(day)])) total++;
+      }
+    }
+    return total;
+  }
 
   Widget _habitChips(List<Habit> active, Habit? chosen) {
     return SizedBox(

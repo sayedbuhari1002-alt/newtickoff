@@ -88,6 +88,41 @@ void main() {
     expect(find.textContaining('120/100'), findsOneWidget);
   });
 
+  testWidgets('checklist analytics show partial item progress',
+      (WidgetTester tester) async {
+    final InMemoryAppRepository repo = InMemoryAppRepository()
+      ..habits['checklist'] = sampleHabit(
+        id: 'checklist',
+        title: 'Morning Routine',
+        tracking: TrackingMethod.checklist,
+        created: kToday,
+        checklist: const <ChecklistItem>[
+          ChecklistItem(id: 'a', title: 'Drink water'),
+          ChecklistItem(id: 'b', title: 'Read'),
+          ChecklistItem(id: 'c', title: 'Stretch'),
+          ChecklistItem(id: 'd', title: 'Plan the day'),
+          ChecklistItem(id: 'e', title: 'Meditate'),
+        ],
+      );
+    final CompletionRecord record = CompletionRecord(
+      habitId: 'checklist',
+      dateKey: '2026-10-27',
+      updatedAt: kToday,
+      checkedItemIds: <String>{'a', 'b', 'c', 'd'},
+    );
+    repo.records[record.key] = record;
+
+    await pumpApp(tester, repo: repo, location: AppRoutes.analytics);
+    await tester.tap(find.text('Habits').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Checklist Progress History'), findsOneWidget);
+    expect(find.text('4/5 items'), findsOneWidget);
+    expect(find.text('80%'), findsWidgets);
+    expect(tileValue(tester, 'Completions'), '0');
+    expect(tileValue(tester, 'Progress Units'), '0.8');
+  });
+
   testWidgets('date-range filter changes the figures',
       (WidgetTester tester) async {
     await pumpApp(tester, repo: seededTwo(), location: AppRoutes.analytics);

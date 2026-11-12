@@ -22,6 +22,61 @@ else
   echo "android/ already exists - leaving it untouched."
 fi
 
+# Android Gradle Plugin 9.3.0/9.3.1 contains a known lint crash on JDK 17:
+# NoSuchMethodError: java.util.List.removeLast() in the bundled JavaDocParser.
+# Google fixed this in AGP 9.3.2. Pin only the affected patch versions while
+# keeping the Flutter-generated Gradle wrapper and Java 17 toolchain intact.
+python3 - <<'PYAGP'
+from pathlib import Path
+import re
+
+candidates = [
+    Path("android/settings.gradle.kts"),
+    Path("android/settings.gradle"),
+    Path("android/build.gradle.kts"),
+    Path("android/build.gradle"),
+]
+patterns = [
+    re.compile(
+        r'(id\(["\']com\.android\.(?:application|library)["\']\)\s+version\s+["\'])'
+        r'9\.3\.[01](["\'])'
+    ),
+    re.compile(
+        r'(id\s+["\']com\.android\.(?:application|library)["\']\s+version\s+["\'])'
+        r'9\.3\.[01](["\'])'
+    ),
+    re.compile(
+        r'(classpath\(["\']com\.android\.tools\.build:gradle:)'
+        r'9\.3\.[01](["\']\))'
+    ),
+]
+changed = False
+found = []
+for path in candidates:
+    if not path.is_file():
+        continue
+    source = path.read_text()
+    updated = source
+    for pattern in patterns:
+        updated, count = pattern.subn(r'\g<1>9.3.2\g<2>', updated)
+        changed = changed or count > 0
+    if updated != source:
+        path.write_text(updated)
+        print(f"Updated Android Gradle Plugin to 9.3.2 in {path}")
+    for match in re.finditer(
+        r'(?:com\.android\.(?:application|library)["\']?\)?\s+version\s+["\']|'
+        r'com\.android\.tools\.build:gradle:)([0-9]+\.[0-9]+\.[0-9]+)',
+        updated,
+    ):
+        found.append((path, match.group(1)))
+if not any(path.is_file() for path in candidates):
+    raise SystemExit("Could not find generated Android Gradle settings/build files.")
+if changed:
+    print("Applied the AGP 9.3.2 lint-crash fix.")
+else:
+    print("No AGP 9.3.0/9.3.1 pin needed; leaving the Flutter scaffold's AGP version unchanged.")
+PYAGP
+
 MANIFEST="android/app/src/main/AndroidManifest.xml"
 if [ -f "$MANIFEST" ]; then
   sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_LABEL\"/" "$MANIFEST"
