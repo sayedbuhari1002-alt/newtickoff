@@ -241,6 +241,12 @@ void main() {
       expect(expense.validate(), isNull);
       expect(Expense.fromJson(expense.toJson()), expense);
       expect(expense.copyWith(clearCategory: true).categoryId, isNull);
+      final Expense income = expense.copyWith(transactionType: TransactionType.income);
+      expect(income.isIncome, isTrue);
+      expect(Expense.fromJson(income.toJson()), income);
+      final Map<String, dynamic> legacyJson = Map<String, dynamic>.of(expense.toJson())
+        ..remove('transactionType');
+      expect(Expense.fromJson(legacyJson).transactionType, TransactionType.expense);
     });
 
     test('expense amount and description are validated', () {

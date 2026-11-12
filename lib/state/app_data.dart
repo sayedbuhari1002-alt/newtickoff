@@ -121,6 +121,7 @@ class AppData {
           note.createdAt.day == date.day)
       .toList();
 
+  /// All income and expense transactions recorded for a date.
   List<Expense> expensesForDate(DateTime date) {
     final List<Expense> result = expenses.where((Expense expense) =>
       expense.expenseDate.year == date.year &&
@@ -130,12 +131,22 @@ class AppData {
     return result;
   }
 
+  /// All income and expense transactions recorded for a month.
   List<Expense> expensesForMonth(DateTime month) {
     final List<Expense> result = expenses.where((Expense expense) =>
       expense.expenseDate.year == month.year &&
       expense.expenseDate.month == month.month).toList();
-    result.sort((Expense a, Expense b) => a.expenseDate.compareTo(b.expenseDate));
+    result.sort((Expense a, Expense b) {
+      final int byDate = b.expenseDate.compareTo(a.expenseDate);
+      return byDate != 0 ? byDate : b.createdAt.compareTo(a.createdAt);
+    });
     return result;
+  }
+
+  List<ExpenseCategory> expenseCategoriesForType(TransactionType type) {
+    return sortedExpenseCategories
+        .where((ExpenseCategory category) => category.transactionType == type)
+        .toList();
   }
 
   List<ExpenseCategory> get sortedExpenseCategories {

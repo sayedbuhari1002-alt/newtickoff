@@ -13,13 +13,14 @@ import 'package:sqflite/sqflite.dart';
 /// * 7 - first-class task groups, progressive task fields, templates and progress history.
 /// * 8 - Productivity targets, assignments, distractions and scoring metadata.
 /// * 9 - daily Android UsageStats totals and reconciliation against event sessions.
+/// * 10 - income/expense transaction types and separate income categories.
 ///
 /// To change the schema, bump [version], add a step to [_migrations] that
 /// upgrades from the previous version, and keep [_createV1] untouched.
 class AppDatabase {
   AppDatabase._();
 
-  static const int version = 9;
+  static const int version = 10;
   static const String fileName = 'tickoff.db';
 
   /// Opens (creating if needed) the database. Pass [path] to use another file
@@ -43,6 +44,7 @@ class AppDatabase {
         if (newVersion >= 7) await _migrateV7(db);
         if (newVersion >= 8) await _migrateV8(db);
         if (newVersion >= 9) await _migrateV9(db);
+        if (newVersion >= 10) await _migrateV10(db);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         for (int v = oldVersion; v < newVersion; v++) {
@@ -64,6 +66,7 @@ class AppDatabase {
         6: _migrateV7,
         7: _migrateV8,
         8: _migrateV9,
+        9: _migrateV10,
       };
 
 
@@ -177,6 +180,60 @@ class AppDatabase {
         UNIQUE(date_key, package_name)
       )''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_app_usage_daily_date ON app_usage_daily_totals(date_key)');
+  }
+
+  static Future<void> _migrateV10(Database db) async {
+    // Existing rows are expenses by default, preserving historical meaning.
+    final List<Map<String, Object?>> expenseColumns = await db.rawQuery(
+      'PRAGMA table_info(expenses)',
+    );
+    final Set<String> expenseNames = expenseColumns
+        .map((Map<String, Object?> column) => column['name'] as String)
+        .toSet();
+    if (expenseNames.isNotEmpty && !expenseNames.contains('transaction_type')) {
+      await db.execute(
+        "ALTER TABLE expenses ADD COLUMN transaction_type TEXT NOT NULL DEFAULT 'expense'",
+      );
+    }
+
+    final List<Map<String, Object?>> categoryColumns = await db.rawQuery(
+      'PRAGMA table_info(expense_categories)',
+    );
+    final Set<String> categoryNames = categoryColumns
+        .map((Map<String, Object?> column) => column['name'] as String)
+        .toSet();
+    if (categoryNames.isNotEmpty && !categoryNames.contains('transaction_type')) {
+      await db.execute(
+        "ALTER TABLE expense_categories ADD COLUMN transaction_type TEXT NOT NULL DEFAULT 'expense'",
+      );
+    }
+
+    if (categoryNames.isNotEmpty) {
+      const List<Map<String, Object>> incomeCategories = <Map<String, Object>>[
+        <String, Object>{'id': 'inc_salary', 'name': 'Salary', 'icon': 'payments', 'color': 0xFF66BB6A, 'order': 0},
+        <String, Object>{'id': 'inc_freelance', 'name': 'Freelance', 'icon': 'work', 'color': 0xFF26A69A, 'order': 1},
+        <String, Object>{'id': 'inc_business', 'name': 'Business', 'icon': 'business', 'color': 0xFF42A5F5, 'order': 2},
+        <String, Object>{'id': 'inc_investment', 'name': 'Investment', 'icon': 'trending_up', 'color': 0xFFAB47BC, 'order': 3},
+        <String, Object>{'id': 'inc_interest', 'name': 'Interest', 'icon': 'savings', 'color': 0xFF26A69A, 'order': 4},
+        <String, Object>{'id': 'inc_gift', 'name': 'Gift', 'icon': 'card_giftcard', 'color': 0xFFFFA726, 'order': 5},
+        <String, Object>{'id': 'inc_other', 'name': 'Other income', 'icon': 'more_horiz', 'color': 0xFF90A4AE, 'order': 6},
+      ];
+      for (final Map<String, Object> category in incomeCategories) {
+        await db.insert(
+          'expense_categories',
+          <String, Object?>{
+            'id': category['id'],
+            'name': category['name'],
+            'icon_key': category['icon'],
+            'color_value': category['color'],
+            'sort_order': category['order'],
+            'is_builtin': 1,
+            'transaction_type': 'income',
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+    }
   }
 
   static Future<void> _migrateV7(Database db) async {

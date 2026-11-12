@@ -1,3 +1,24 @@
+# Tazkiyane next-version changes
+
+## 0.6.5+28 — partial count/checklist progress in habit analytics
+
+- Habit analytics now calculates Build count-based habit progress proportionally against the configured daily goal. For example, 4 of 8 counts contributes 50% rather than 0% until the target is fully reached.
+- Checklist-based Build habits contribute the percentage of checked items. For example, 4 of 5 checked items contributes 80%.
+- Partial progress recorded today is included immediately in analytics; an untouched current day remains pending and is excluded from the denominator.
+- Historical partial count/checklist records contribute their saved progress instead of being treated as a completely missed day.
+- Added a Partial Progress History panel showing the recorded count/checklist amount and percentage for each date.
+- Trend charts, calendar intensity, period summaries, overall completion rate, and the 30-day score now use fractional progress.
+- Full completion is still required for habit completion status, streaks, and completion-based achievements. Quit habits and simple tick habits retain their existing rules.
+- No database schema change is required; existing completion records are read using the new analytics calculation.
+
+## 0.6.4+27 — income and expense analytics
+
+- Expense entry supports income and expense transaction types with separate category lists.
+- Added built-in income sources for Salary, Freelance, Business, Investment, Interest, Gift, and Other income.
+- Daily Log now shows incoming money, spending, and daily net cash flow.
+- Expanded monthly finance analytics with total income, total expenses, net cash flow, income/expense averages, transaction counts, zero-expense days, highest income/spending days, top spending/income categories, income-source and expense-category breakdowns, and daily bar charts.
+- SQLite schema version 10 adds transaction types without changing existing transactions; legacy rows remain expenses.
+
 # Tazkiyane 0.4.0 — next-version changes
 
 This release carries forward the previously agreed habit/task improvements and adds deadline actions, completion-aware habit reminders, a date-based journal, expense tracking, and Tazkiyane branding.

@@ -24,8 +24,10 @@ enum DayOutcome {
   failure,
 }
 
-/// "Expected" vs "completed" units over some days. Regular habits expect 1 per
-/// due day; "some days per period" habits expect target/period-length per day.
+/// "Expected" vs "completed" units over some days. Count/checklist Build
+/// habits may contribute fractional completed units based on their daily
+/// progress. Regular habits expect 1 per due day; flexible habits expect the
+/// period target distributed across the period's calendar days.
 class Tally {
   const Tally({this.expected = 0, this.completed = 0});
 
@@ -180,6 +182,13 @@ class HabitEngine {
   bool _isFlexible(Habit habit) =>
       habit.type == HabitType.build && habit.schedule.isFlexible;
 
+  /// Build count/checklist habits contribute their actual daily progress to
+  /// analytics. Streaks and day-level completion still require the full goal.
+  bool _usesPartialAnalyticsProgress(Habit habit) =>
+      habit.type == HabitType.build &&
+      (habit.tracking == TrackingMethod.count ||
+          habit.tracking == TrackingMethod.checklist);
+
   /// First day that counts for [habit]: its creation day, or an earlier day
   /// that already has a record (so back-filled history is never ignored).
   DateTime startDate(Habit habit, Map<String, CompletionRecord> records) {
@@ -286,7 +295,8 @@ class HabitEngine {
 
   // ------------------------------------------------------------------ tallies
 
-  /// Expected/completed units for one day.
+  /// Expected/completed units for one day. Build count/checklist habits
+  /// contribute their actual fraction of progress, even before full completion.
   Tally tallyDay(
     Habit habit,
     DateTime date,
@@ -295,12 +305,41 @@ class HabitEngine {
   ) {
     final DateTime day = dateOnly(date);
     if (day.isAfter(today) || day.isBefore(start)) return Tally.zero;
+    final CompletionRecord? record = records[dateKey(day)];
+    final bool partialProgress = _usesPartialAnalyticsProgress(habit);
+
     if (_isFlexible(habit)) {
-      final bool done = isCompleted(habit, records[dateKey(day)]);
-      if (isSameDay(day, today) && !done) return Tally.zero;
-      return Tally(expected: _flexRate(habit, day), completed: done ? 1 : 0);
+      final double progress = partialProgress
+          ? dayProgress(habit, record)
+          : (isCompleted(habit, record) ? 1 : 0);
+      if (isSameDay(day, today) && progress <= 0) return Tally.zero;
+      return Tally(
+        expected: _flexRate(habit, day),
+        completed: progress,
+      );
     }
-    switch (outcomeOn(habit, day, records, start)) {
+
+    final DayOutcome outcome = outcomeOn(habit, day, records, start);
+    if (partialProgress) {
+      final double progress = dayProgress(habit, record);
+      switch (outcome) {
+        case DayOutcome.success:
+        case DayOutcome.failure:
+          return Tally(expected: 1, completed: progress);
+        case DayOutcome.pending:
+          // Keep an untouched current day out of the denominator, but include
+          // any count/checklist work already recorded for today.
+          return progress > 0
+              ? Tally(expected: 1, completed: progress)
+              : Tally.zero;
+        case DayOutcome.future:
+        case DayOutcome.beforeStart:
+        case DayOutcome.notScheduled:
+          return Tally.zero;
+      }
+    }
+
+    switch (outcome) {
       case DayOutcome.success:
         return const Tally(expected: 1, completed: 1);
       case DayOutcome.failure:

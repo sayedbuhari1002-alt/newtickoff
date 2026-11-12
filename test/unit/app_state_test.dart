@@ -505,6 +505,20 @@ void main() {
     await n.saveExpense(expense.copyWith(amountPaise: 15000));
     expect(dataOf(c).expenses, hasLength(1));
     expect(dataOf(c).expenses.single.amountPaise, 15000);
+    final Expense income = Expense(
+      id: 'income-1',
+      amountPaise: 300000,
+      expenseDate: expense.expenseDate,
+      categoryId: null,
+      description: 'Salary',
+      paymentMethod: 'Bank transfer',
+      transactionType: TransactionType.income,
+      createdAt: expense.createdAt,
+      updatedAt: expense.updatedAt,
+    );
+    await n.saveExpense(income);
+    expect(dataOf(c).expenses.where((Expense item) => item.isIncome).single.amountPaise, 300000);
+    await n.deleteExpense(income.id);
     await n.deleteExpense(expense.id);
     expect(dataOf(c).expenses, isEmpty);
     expect(() => n.saveExpense(expense.copyWith(amountPaise: 0)), throwsArgumentError);

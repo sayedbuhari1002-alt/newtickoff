@@ -20,3 +20,7 @@ T enumByName<T extends Enum>(List<T> values, Object? name, T fallback) {
   }
   return fallback;
 }
+
+
+/// Direction of a money transaction. Existing records default to expense.
+enum TransactionType { expense, income }

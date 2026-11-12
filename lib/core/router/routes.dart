@@ -1,4 +1,5 @@
 import '../utils/date_utils.dart';
+import '../../domain/models/models.dart';
 import '../../domain/models/note.dart';
 
 /// Every route path in one place.
@@ -64,12 +65,14 @@ class AppRoutes {
 
   // Expense routes stay separate from journal-note routes.
   static const String expenseNewPath = '/expense/new';
-  static String expenseNew({DateTime? date}) => date == null
-      ? expenseNewPath
-      : Uri(
-          path: expenseNewPath,
-          queryParameters: <String, String>{'date': dateKey(date)},
-        ).toString();
+  static String expenseNew({DateTime? date, TransactionType type = TransactionType.expense}) {
+    final Map<String, String> query = <String, String>{};
+    if (date != null) query['date'] = dateKey(date);
+    if (type != TransactionType.expense) query['type'] = type.name;
+    return query.isEmpty
+        ? expenseNewPath
+        : Uri(path: expenseNewPath, queryParameters: query).toString();
+  }
   static String expenseEdit(String id) => '/expense/$id/edit';
 
   // Settings

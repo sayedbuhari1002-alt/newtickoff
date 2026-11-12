@@ -34,7 +34,7 @@ abstract class AppRepository {
   Future<void> upsertNote(Note note);
   Future<void> deleteNote(String noteId);
 
-  // Daily expenses and user-defined expense categories.
+  // Income/expense transactions and type-specific user-defined categories.
   Future<List<Expense>> loadExpenses();
   Future<void> upsertExpense(Expense expense);
   Future<void> deleteExpense(String expenseId);

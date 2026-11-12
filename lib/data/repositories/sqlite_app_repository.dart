@@ -312,6 +312,7 @@ class SqliteAppRepository implements AppRepository {
         categoryId: row['category_id'] as String?,
         description: row['description'] as String? ?? '',
         paymentMethod: row['payment_method'] as String? ?? '',
+        transactionType: enumByName(TransactionType.values, row['transaction_type'], TransactionType.expense),
         createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.now(),
         updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? '') ?? DateTime.now(),
       );
@@ -327,6 +328,7 @@ class SqliteAppRepository implements AppRepository {
       'category_id': expense.categoryId,
       'description': expense.description,
       'payment_method': expense.paymentMethod,
+      'transaction_type': expense.transactionType.name,
       'created_at': expense.createdAt.toIso8601String(),
       'updated_at': expense.updatedAt.toIso8601String(),
     });
@@ -350,6 +352,7 @@ class SqliteAppRepository implements AppRepository {
       colorValue: row['color_value'] as int? ?? 0xFFA78BFA,
       sortOrder: row['sort_order'] as int? ?? 0,
       isBuiltIn: (row['is_builtin'] as int? ?? 0) != 0,
+      transactionType: enumByName(TransactionType.values, row['transaction_type'], TransactionType.expense),
     )).toList();
   }
 
@@ -362,6 +365,7 @@ class SqliteAppRepository implements AppRepository {
       'color_value': category.colorValue,
       'sort_order': category.sortOrder,
       'is_builtin': category.isBuiltIn ? 1 : 0,
+      'transaction_type': category.transactionType.name,
     });
   }
 

@@ -289,6 +289,10 @@ void main() {
     expect(taskColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['parent_task_id', 'task_type', 'progress_value', 'difficulty_score', 'scheduled_date']));
     final List<Map<String, Object?>> noteColumns = await db.rawQuery('PRAGMA table_info(notes)');
     expect(noteColumns.map((Map<String, Object?> column) => column['name']), containsAll(<String>['video_json', 'note_type', 'period_date']));
+    final List<Map<String, Object?>> expenseColumns = await db.rawQuery('PRAGMA table_info(expenses)');
+    expect(expenseColumns.map((Map<String, Object?> column) => column['name']), contains('transaction_type'));
+    final List<Map<String, Object?>> expenseCategoryColumns = await db.rawQuery('PRAGMA table_info(expense_categories)');
+    expect(expenseCategoryColumns.map((Map<String, Object?> column) => column['name']), contains('transaction_type'));
     final List<Map<String, Object?>> tables = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
     );
@@ -389,6 +393,60 @@ void main() {
       expect(retained.single['title'], 'Keep me');
       expect(await countRows(upgraded, 'tasks'), 0);
       expect(await countRows(upgraded, 'task_activities'), 0);
+    } finally {
+      await upgraded.close();
+      await databaseFactory.deleteDatabase(oldPath);
+    }
+  });
+
+  test('version-9 money records migrate to typed transactions without data loss', () async {
+    final String oldPath = p.join(await getDatabasesPath(), 'v9-money-migration-test.db');
+    await databaseFactory.deleteDatabase(oldPath);
+    final Database oldDb = await databaseFactory.openDatabase(
+      oldPath,
+      options: OpenDatabaseOptions(
+        version: 9,
+        onCreate: (Database database, int version) async {
+          await database.execute('''
+            CREATE TABLE expense_categories (
+              id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+              icon_key TEXT NOT NULL DEFAULT 'category', color_value INTEGER NOT NULL DEFAULT 0,
+              sort_order INTEGER NOT NULL DEFAULT 0, is_builtin INTEGER NOT NULL DEFAULT 0
+            )
+          ''');
+          await database.execute('''
+            CREATE TABLE expenses (
+              id TEXT PRIMARY KEY, amount_paise INTEGER NOT NULL,
+              expense_date TEXT NOT NULL, category_id TEXT,
+              description TEXT NOT NULL DEFAULT '', payment_method TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            )
+          ''');
+          await database.insert('expense_categories', <String, Object?>{
+            'id': 'old-food', 'name': 'Food', 'is_builtin': 1,
+          });
+          await database.insert('expenses', <String, Object?>{
+            'id': 'legacy-expense', 'amount_paise': 4500,
+            'expense_date': '2026-11-05', 'category_id': 'old-food',
+            'description': 'Lunch', 'payment_method': 'UPI',
+            'created_at': '2026-11-05T12:00:00.000',
+            'updated_at': '2026-11-05T12:00:00.000',
+          });
+        },
+      ),
+    );
+    await oldDb.close();
+
+    final Database upgraded = await AppDatabase.open(path: oldPath);
+    try {
+      final SqliteAppRepository upgradedRepo = SqliteAppRepository(upgraded);
+      final Expense legacy = (await upgradedRepo.loadExpenses()).single;
+      expect(legacy.id, 'legacy-expense');
+      expect(legacy.amountPaise, 4500);
+      expect(legacy.transactionType, TransactionType.expense);
+      final List<ExpenseCategory> categories = await upgradedRepo.loadExpenseCategories();
+      expect(categories.where((ExpenseCategory c) => c.transactionType == TransactionType.income).map((ExpenseCategory c) => c.name), contains('Salary'));
+      expect(await upgraded.getVersion(), AppDatabase.version);
     } finally {
       await upgraded.close();
       await databaseFactory.deleteDatabase(oldPath);
@@ -702,8 +760,9 @@ void main() {
 
   test('expense categories are seeded and expenses round-trip in paise', () async {
     final List<ExpenseCategory> categories = await repo.loadExpenseCategories();
-    expect(categories, hasLength(9));
+    expect(categories, hasLength(16));
     expect(categories.every((ExpenseCategory c) => c.isBuiltIn), isTrue);
+    expect(categories.where((ExpenseCategory c) => c.transactionType == TransactionType.income).map((ExpenseCategory c) => c.name), contains('Salary'));
 
     final Expense expense = Expense(
       id: 'expense-1',
@@ -718,11 +777,27 @@ void main() {
     await repo.upsertExpense(expense);
     expect((await repo.loadExpenses()).single, expense);
 
+    final Expense income = Expense(
+      id: 'income-1',
+      amountPaise: 2500000,
+      expenseDate: DateTime(2026, 11, 1),
+      categoryId: 'inc_salary',
+      description: 'November salary',
+      paymentMethod: 'Bank transfer',
+      transactionType: TransactionType.income,
+      createdAt: DateTime(2026, 11, 1, 9),
+      updatedAt: DateTime(2026, 11, 1, 9),
+    );
+    await repo.upsertExpense(income);
+    expect((await repo.loadExpenses()).where((Expense item) => item.isIncome).single, income);
+
     await repo.upsertExpense(expense.copyWith(amountPaise: 15000));
-    expect(await countRows(db, 'expenses'), 1);
-    expect((await repo.loadExpenses()).single.amountPaise, 15000);
+    expect(await countRows(db, 'expenses'), 2);
+    expect((await repo.loadExpenses()).firstWhere((Expense item) => item.id == expense.id).amountPaise, 15000);
 
     await repo.deleteExpense(expense.id);
+    expect((await repo.loadExpenses()).single, income);
+    await repo.deleteExpense(income.id);
     expect(await repo.loadExpenses(), isEmpty);
   });
 
@@ -744,7 +819,7 @@ void main() {
 
     await repo.deleteExpenseCategory(category.id);
     expect((await repo.loadExpenses()).single.categoryId, isNull);
-    expect(await countRows(db, 'expense_categories'), 9);
+    expect(await countRows(db, 'expense_categories'), 16);
   });
 
   test('data survives closing and reopening the database file', () async {

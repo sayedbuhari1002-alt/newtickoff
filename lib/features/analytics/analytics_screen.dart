@@ -30,36 +30,56 @@ class AnalyticsScreen extends ConsumerStatefulWidget {
   ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
-class _ActualCountHistory extends StatelessWidget {
-  const _ActualCountHistory({
+class _PartialProgressHistory extends StatelessWidget {
+  const _PartialProgressHistory({
     required this.habits,
     required this.data,
+    required this.engine,
     required this.from,
     required this.to,
   });
 
   final List<Habit> habits;
   final AppData data;
+  final HabitEngine engine;
   final DateTime from;
   final DateTime to;
 
   @override
   Widget build(BuildContext context) {
-    final List<_CountHistoryValue> values = <_CountHistoryValue>[];
-    for (final Habit habit in habits.where((Habit h) => h.tracking == TrackingMethod.count)) {
-      for (final MapEntry<String, CompletionRecord> entry in data.recordsFor(habit.id).entries) {
+    final List<_HabitProgressHistoryValue> values = <_HabitProgressHistoryValue>[];
+    for (final Habit habit in habits.where(
+      (Habit h) =>
+          h.type == HabitType.build &&
+          (h.tracking == TrackingMethod.count ||
+              h.tracking == TrackingMethod.checklist),
+    )) {
+      for (final MapEntry<String, CompletionRecord> entry
+          in data.recordsFor(habit.id).entries) {
         final DateTime? day = parseDateKey(entry.key);
-        if (day == null || day.isBefore(from) || day.isAfter(to) || entry.value.count <= 0) continue;
-        values.add(_CountHistoryValue(habit: habit, day: day, count: entry.value.count));
+        if (day == null || day.isBefore(from) || day.isAfter(to)) continue;
+        final double progress = engine.dayProgress(habit, entry.value);
+        if (progress <= 0) continue;
+        values.add(
+          _HabitProgressHistoryValue(
+            habit: habit,
+            day: day,
+            progress: progress,
+            detail: _progressDetail(habit, entry.value),
+          ),
+        );
       }
     }
-    values.sort((_CountHistoryValue a, _CountHistoryValue b) => b.day.compareTo(a.day));
+    values.sort(
+      (_HabitProgressHistoryValue a, _HabitProgressHistoryValue b) =>
+          b.day.compareTo(a.day),
+    );
 
     return SectionCard(
-      title: 'Actual Count History',
+      title: 'Count & Checklist Progress',
       child: values.isEmpty
           ? Text(
-              'No count entries in this date range yet.',
+              'No count or checklist progress entries in this date range yet.',
               style: TextStyle(color: AppColors.textSecondary),
             )
           : Column(
@@ -82,15 +102,34 @@ class _ActualCountHistory extends StatelessWidget {
                             const SizedBox(height: 3),
                             Text(
                               dayMonthLabel(values[i].day),
-                              style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                              ),
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        countLabel(values[i].habit, values[i].count),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: <Widget>[
+                          Text(
+                            values[i].detail,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            percentLabel(values[i].progress),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.gold,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -99,13 +138,34 @@ class _ActualCountHistory extends StatelessWidget {
             ),
     );
   }
+
+  String _progressDetail(Habit habit, CompletionRecord record) {
+    switch (habit.tracking) {
+      case TrackingMethod.count:
+        return countLabel(habit, record.count);
+      case TrackingMethod.checklist:
+        final int checked = habit.checklist
+            .where((ChecklistItem item) => record.checkedItemIds.contains(item.id))
+            .length;
+        return '$checked/${habit.checklist.length} items';
+      case TrackingMethod.tick:
+        return '';
+    }
+  }
 }
 
-class _CountHistoryValue {
-  const _CountHistoryValue({required this.habit, required this.day, required this.count});
+class _HabitProgressHistoryValue {
+  const _HabitProgressHistoryValue({
+    required this.habit,
+    required this.day,
+    required this.progress,
+    required this.detail,
+  });
+
   final Habit habit;
   final DateTime day;
-  final double count;
+  final double progress;
+  final String detail;
 }
 
 class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
@@ -201,8 +261,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             children: <Widget>[
               Expanded(
                 child: StatTile(
-                  value: '${tally.completed.round()}',
-                  label: 'Completions',
+                  value: formatNumber(tally.completed),
+                  label: 'Progress Units',
                 ),
               ),
               const SizedBox(width: 10),
@@ -232,9 +292,20 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
           ),
-          if (selected.any((Habit h) => h.tracking == TrackingMethod.count)) ...<Widget>[
+          if (selected.any(
+            (Habit h) =>
+                h.type == HabitType.build &&
+                (h.tracking == TrackingMethod.count ||
+                    h.tracking == TrackingMethod.checklist),
+          )) ...<Widget>[
             const SizedBox(height: AppDimens.gap),
-            _ActualCountHistory(habits: selected, data: data, from: from, to: today),
+            _PartialProgressHistory(
+              habits: selected,
+              data: data,
+              engine: engine,
+              from: from,
+              to: today,
+            ),
           ],
           const SizedBox(height: AppDimens.gap),
           SectionCard(
@@ -357,7 +428,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
 
   Widget _summaryRow(PeriodSummary s) {
     final String detail = s.tally.hasData
-        ? '${s.tally.completed.round()} / ${s.tally.expected.round()}'
+        ? '${formatNumber(s.tally.completed)} / ${formatNumber(s.tally.expected)}'
         : '-';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),

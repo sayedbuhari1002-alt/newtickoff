@@ -104,7 +104,7 @@ GoRouter buildRouter({String initialLocation = AppRoutes.dashboard}) {
       GoRoute(path: AppRoutes.noteLibrary, builder: (BuildContext c, GoRouterState s) => const NoteLibraryScreen()),
       GoRoute(path: AppRoutes.noteNewPath, builder: (BuildContext c, GoRouterState s) => NoteEditorScreen(habitId: s.uri.queryParameters['habit'], logDate: parseDateKey(s.uri.queryParameters['date'] ?? ''), noteType: NoteType.values.where((NoteType type) => type.name == s.uri.queryParameters['type']).firstOrNull ?? NoteType.daily, periodDate: parseDateKey(s.uri.queryParameters['period'] ?? ''))),
       GoRoute(path: '/note/:id', builder: (BuildContext c, GoRouterState s) => NoteEditorScreen(noteId: s.pathParameters['id'])),
-      GoRoute(path: AppRoutes.expenseNewPath, builder: (BuildContext c, GoRouterState s) => ExpenseEditorScreen(initialDate: parseDateKey(s.uri.queryParameters['date'] ?? ''))),
+      GoRoute(path: AppRoutes.expenseNewPath, builder: (BuildContext c, GoRouterState s) => ExpenseEditorScreen(initialDate: parseDateKey(s.uri.queryParameters['date'] ?? ''), initialType: TransactionType.values.where((TransactionType type) => type.name == s.uri.queryParameters['type']).firstOrNull ?? TransactionType.expense)),
       GoRoute(path: '/expense/:id/edit', builder: (BuildContext c, GoRouterState s) => ExpenseEditorScreen(expenseId: s.pathParameters['id'])),
       GoRoute(path: AppRoutes.settings, builder: (BuildContext c, GoRouterState s) => const SettingsScreen()),
       GoRoute(path: AppRoutes.shareProgress, builder: (BuildContext c, GoRouterState s) => ShareProgressScreen(habitId: s.uri.queryParameters['habit'])),

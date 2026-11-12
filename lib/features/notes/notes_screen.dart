@@ -19,8 +19,8 @@ import '../../state/app_state.dart';
 enum _NotesMode { daily, analytics }
 
 /// Date-oriented Notes tab. The horizontal date strip matches the Dashboard;
-/// Daily Log shows journal entries and expenses for the selected date;
-/// Expense Analytics rolls the saved expenses up by month.
+/// Daily Log shows journal entries and money transactions for the selected date;
+/// Money Analytics rolls income and expenses up by month.
 class NotesScreen extends ConsumerStatefulWidget {
   const NotesScreen({super.key});
 
@@ -64,7 +64,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        _mode == _NotesMode.daily ? 'Daily Log' : 'Expense Analytics',
+                        _mode == _NotesMode.daily ? 'Daily Log' : 'Income & Expense Analytics',
                         style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
                       ),
                     ),
@@ -74,6 +74,11 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                         tooltip: 'Add daily note',
                         icon: const Icon(Icons.note_add_outlined),
                         onPressed: () => context.push(AppRoutes.noteNew(date: _selectedDate)),
+                      ),
+                      IconButton(
+                        tooltip: 'Add income',
+                        icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF66BB6A)),
+                        onPressed: () => context.push(AppRoutes.expenseNew(date: _selectedDate, type: TransactionType.income)),
                       ),
                       IconButton(
                         tooltip: 'Add expense',
@@ -91,7 +96,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                   onChanged: (_NotesMode next) => setState(() => _mode = next),
                   options: const <PillOption<_NotesMode>>[
                     PillOption<_NotesMode>(value: _NotesMode.daily, label: 'Daily Log'),
-                    PillOption<_NotesMode>(value: _NotesMode.analytics, label: 'Expense Analytics'),
+                    PillOption<_NotesMode>(value: _NotesMode.analytics, label: 'Money Analytics'),
                   ],
                 ),
               ),
@@ -125,16 +130,17 @@ class _DailyOverviewContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<Note> notes = data.notesForDate(date);
     final List<Note> habitNotes = data.habitNotesForDate(date);
-    final List<Expense> expenses = data.expensesForDate(date);
-    final int total = expenses.fold<int>(
-      0,
-      (int sum, Expense expense) => sum + expense.amountPaise,
-    );
+    final List<Expense> transactions = data.expensesForDate(date);
+    final List<Expense> income = transactions.where((Expense e) => e.isIncome).toList();
+    final List<Expense> expenses = transactions.where((Expense e) => e.isExpense).toList();
+    final int incomeTotal = income.fold<int>(0, (int sum, Expense e) => sum + e.amountPaise);
+    final int expenseTotal = expenses.fold<int>(0, (int sum, Expense e) => sum + e.amountPaise);
+    final int net = incomeTotal - expenseTotal;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppDimens.pagePadding, 4, AppDimens.pagePadding, 28),
       children: <Widget>[
-        _DateHeading(date: date, title: 'Your activity and spending'),
+        _DateHeading(date: date, title: 'Your activity and money flow'),
         const SizedBox(height: 12),
         SectionCard(
           title: 'Daily Notes (${notes.length})',
@@ -142,7 +148,7 @@ class _DailyOverviewContent extends StatelessWidget {
             children: <Widget>[
               if (notes.isEmpty)
                 Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Text('No notes recorded for this date.', style: TextStyle(color: AppColors.textSecondary)),
                 )
               else
@@ -178,35 +184,56 @@ class _DailyOverviewContent extends StatelessWidget {
         ],
         const SizedBox(height: 14),
         SectionCard(
-          title: 'Expenses (${expenses.length})',
+          title: 'Money Transactions (${transactions.length})',
           child: Column(
             children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(child: Text('Total Expenses', style: TextStyle(color: AppColors.textSecondary))),
-                  Text(_money(total), style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: AppColors.gold)),
-                ],
+              Row(children: <Widget>[
+                Expanded(child: _MetricCard(label: 'Income', value: _money(incomeTotal), icon: Icons.south_west_rounded, detail: '${income.length} entries')),
+                const SizedBox(width: 8),
+                Expanded(child: _MetricCard(label: 'Expenses', value: _money(expenseTotal), icon: Icons.north_east_rounded, detail: '${expenses.length} entries')),
+              ]),
+              const SizedBox(height: 9),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+                decoration: BoxDecoration(color: AppColors.surfaceRaised, borderRadius: BorderRadius.circular(12)),
+                child: Row(children: <Widget>[
+                  Expanded(child: Text('Net for this day', style: TextStyle(color: AppColors.textSecondary))),
+                  Text('${net >= 0 ? '+' : '−'}${_money(net.abs())}', style: TextStyle(fontWeight: FontWeight.w800, color: net >= 0 ? const Color(0xFF66BB6A) : AppColors.danger)),
+                ]),
               ),
-              const SizedBox(height: 8),
-              if (expenses.isEmpty)
+              const SizedBox(height: 10),
+              if (transactions.isEmpty)
                 Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text('No expenses recorded. This date\'s total is ₹0.', style: TextStyle(color: AppColors.textSecondary)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text('No income or expenses recorded for this date.', style: TextStyle(color: AppColors.textSecondary)),
                 )
               else
-                for (int i = 0; i < expenses.length; i++) ...<Widget>[
-                  _ExpenseTile(expense: expenses[i], category: data.expenseCategoryById(expenses[i].categoryId)),
-                  if (i != expenses.length - 1) Divider(height: 18, color: AppColors.divider),
+                for (int i = 0; i < transactions.length; i++) ...<Widget>[
+                  _TransactionTile(
+                    transaction: transactions[i],
+                    category: data.expenseCategoryById(transactions[i].categoryId),
+                  ),
+                  if (i != transactions.length - 1) Divider(height: 18, color: AppColors.divider),
                 ],
-              const SizedBox(height: 6),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => context.push(AppRoutes.expenseNew(date: date)),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add Expense'),
+              const SizedBox(height: 8),
+              Row(children: <Widget>[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.push(AppRoutes.expenseNew(date: date)),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Add Expense'),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.push(AppRoutes.expenseNew(date: date, type: TransactionType.income)),
+                    icon: const Icon(Icons.add_rounded, color: Color(0xFF66BB6A)),
+                    label: const Text('Add Income'),
+                  ),
+                ),
+              ]),
             ],
           ),
         ),
@@ -223,35 +250,90 @@ class _ExpenseAnalyticsContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<Expense> expenses = data.expensesForMonth(month);
+    final List<Expense> transactions = data.expensesForMonth(month);
+    final List<Expense> expenses = transactions.where((Expense e) => e.isExpense).toList();
+    final List<Expense> income = transactions.where((Expense e) => e.isIncome).toList();
     final DateTime now = DateTime.now();
     final DateTime currentMonth = DateTime(now.year, now.month);
     final DateTime selectedMonth = DateTime(month.year, month.month);
     final int days = selectedMonth.isAfter(currentMonth)
         ? 0
         : (selectedMonth == currentMonth ? now.day : daysInMonth(month.year, month.month));
-    final List<int> dailyTotals = List<int>.generate(days, (int index) {
-      final int day = index + 1;
-      return expenses.where((Expense e) => e.expenseDate.day == day).fold<int>(0, (int sum, Expense e) => sum + e.amountPaise);
-    });
-    final int total = dailyTotals.fold<int>(0, (int sum, int value) => sum + value);
-    final int zeroDays = dailyTotals.where((int value) => value == 0).length;
-    final int highest = dailyTotals.fold<int>(0, (int current, int value) => current > value ? current : value);
-    final int highestIndex = dailyTotals.indexOf(highest);
-    final Map<String, int> categoryTotals = <String, int>{};
-    for (final Expense expense in expenses) {
-      final String key = expense.categoryId ?? 'uncategorised';
-      categoryTotals[key] = (categoryTotals[key] ?? 0) + expense.amountPaise;
+
+    int totalForDay(List<Expense> items, int day) => items
+        .where((Expense e) => e.expenseDate.day == day)
+        .fold<int>(0, (int sum, Expense e) => sum + e.amountPaise);
+
+    final List<int> dailyExpenseTotals = List<int>.generate(
+      days, (int index) => totalForDay(expenses, index + 1),
+    );
+    final List<int> dailyIncomeTotals = List<int>.generate(
+      days, (int index) => totalForDay(income, index + 1),
+    );
+    final int expenseTotal = expenses.fold<int>(0, (int sum, Expense e) => sum + e.amountPaise);
+    final int incomeTotal = income.fold<int>(0, (int sum, Expense e) => sum + e.amountPaise);
+    final int net = incomeTotal - expenseTotal;
+    final int zeroDays = dailyExpenseTotals.where((int value) => value == 0).length;
+    final int highestExpense = dailyExpenseTotals.fold<int>(0, (int a, int b) => a > b ? a : b);
+    final int highestIncome = dailyIncomeTotals.fold<int>(0, (int a, int b) => a > b ? a : b);
+    final int highestExpenseDay = dailyExpenseTotals.indexOf(highestExpense) + 1;
+    final int highestIncomeDay = dailyIncomeTotals.indexOf(highestIncome) + 1;
+    final double dailyExpenseAverage = days == 0 ? 0 : expenseTotal / days;
+    final double dailyIncomeAverage = days == 0 ? 0 : incomeTotal / days;
+    final double dailyNetAverage = days == 0 ? 0 : net / days;
+    final String averagePeriod = selectedMonth.isAfter(currentMonth)
+        ? 'per day'
+        : (selectedMonth == currentMonth ? 'per day so far' : 'per calendar day');
+
+    Map<String, int> categoryTotals(List<Expense> records) {
+      final Map<String, int> totals = <String, int>{};
+      for (final Expense transaction in records) {
+        final String key = transaction.categoryId ?? 'uncategorised';
+        totals[key] = (totals[key] ?? 0) + transaction.amountPaise;
+      }
+      return totals;
     }
-    final List<MapEntry<String, int>> byCategory = categoryTotals.entries.toList()
-      ..sort((MapEntry<String, int> a, MapEntry<String, int> b) => b.value.compareTo(a.value));
-    final double average = days == 0 ? 0 : total / days;
-    final String averageLabel = selectedMonth.isAfter(currentMonth)
-        ? 'average per day'
-        : (selectedMonth == currentMonth
-            ? 'average per day so far'
-            : 'average per calendar day');
-    final int transactions = expenses.length;
+
+    List<MapEntry<String, int>> sortedCategories(List<Expense> records) {
+      final List<MapEntry<String, int>> result = categoryTotals(records).entries.toList()
+        ..sort((MapEntry<String, int> a, MapEntry<String, int> b) => b.value.compareTo(a.value));
+      return result;
+    }
+
+    final List<MapEntry<String, int>> expenseCategories = sortedCategories(expenses);
+    final List<MapEntry<String, int>> incomeCategories = sortedCategories(income);
+    final MapEntry<String, int>? topExpenseCategory = expenseCategories.isEmpty ? null : expenseCategories.first;
+    final MapEntry<String, int>? topIncomeCategory = incomeCategories.isEmpty ? null : incomeCategories.first;
+    String categoryName(String key) => key == 'uncategorised'
+        ? 'Uncategorised'
+        : (data.expenseCategoryById(key)?.name ?? 'Uncategorised');
+    final int maxDaily = math.max(highestExpense, highestIncome).toInt();
+
+    Widget categorySection({
+      required String title,
+      required List<MapEntry<String, int>> categories,
+      required int total,
+      required Color fallbackColor,
+      required String emptyText,
+    }) => SectionCard(
+      title: title,
+      child: categories.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              child: Text(emptyText, style: TextStyle(color: AppColors.textSecondary)),
+            )
+          : Column(children: <Widget>[
+              for (final MapEntry<String, int> entry in categories) ...<Widget>[
+                _CategoryBreakdownRow(
+                  label: categoryName(entry.key),
+                  amount: entry.value,
+                  fraction: total == 0 ? 0 : entry.value / total,
+                  color: Color(data.expenseCategoryById(entry.key)?.colorValue ?? fallbackColor.toARGB32()),
+                ),
+                if (entry != categories.last) const SizedBox(height: 14),
+              ],
+            ]),
+    );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppDimens.pagePadding, 8, AppDimens.pagePadding, 28),
@@ -268,61 +350,144 @@ class _ExpenseAnalyticsContent extends StatelessWidget {
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(color: AppColors.goldDim, borderRadius: BorderRadius.circular(AppDimens.radiusLg)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-            Text('Total Expenses', style: TextStyle(color: AppColors.textSecondary)),
+            Text('Net Cash Flow', style: TextStyle(color: AppColors.textSecondary)),
             const SizedBox(height: 6),
-            Text(_money(total), style: TextStyle(fontSize: 29, fontWeight: FontWeight.w800, color: AppColors.gold)),
+            Text('${net >= 0 ? '+' : '−'}${_money(net.abs())}', style: TextStyle(fontSize: 29, fontWeight: FontWeight.w800, color: net >= 0 ? const Color(0xFF66BB6A) : AppColors.danger)),
             const SizedBox(height: 4),
-            Text('$transactions transactions · ${_money(average.round())} $averageLabel', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            Text('Income minus expenses · ${transactions.length} total transactions', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            const SizedBox(height: 14),
+            Row(children: <Widget>[
+              Expanded(child: _FlowSummary(label: 'Money received', amount: incomeTotal, color: const Color(0xFF66BB6A))),
+              const SizedBox(width: 12),
+              Expanded(child: _FlowSummary(label: 'Money spent', amount: expenseTotal, color: AppColors.gold)),
+            ]),
           ]),
         ),
         const SizedBox(height: 12),
         Row(children: <Widget>[
-          Expanded(child: _MetricCard(label: 'Daily average', value: _money(average.round()), icon: Icons.calendar_today_outlined)),
-          const SizedBox(width: 10),
-          Expanded(child: _MetricCard(label: 'Highest day', value: highest == 0 ? '₹0' : _money(highest), icon: Icons.trending_up_rounded, detail: highest == 0 ? 'No spending' : '${highestIndex + 1} ${monthShort(month)}')),
+          Expanded(child: _MetricCard(label: 'Total Expenses', value: _money(expenseTotal), icon: Icons.north_east_rounded)),
+          const SizedBox(width: 9),
+          Expanded(child: _MetricCard(label: 'Total Income', value: _money(incomeTotal), icon: Icons.south_west_rounded)),
         ]),
-        const SizedBox(height: 10),
+        const SizedBox(height: 9),
         Row(children: <Widget>[
-          Expanded(child: _MetricCard(label: 'Transactions', value: '$transactions', icon: Icons.receipt_long_outlined)),
-          const SizedBox(width: 10),
-          Expanded(child: _MetricCard(label: 'Zero-expense days', value: '$zeroDays', icon: Icons.event_available_outlined)),
+          Expanded(child: _MetricCard(label: 'Daily spend avg.', value: _money(dailyExpenseAverage.round()), icon: Icons.calendar_today_outlined)),
+          const SizedBox(width: 9),
+          Expanded(child: _MetricCard(label: 'Daily income avg.', value: _money(dailyIncomeAverage.round()), icon: Icons.event_available_outlined)),
+        ]),
+        const SizedBox(height: 9),
+        Row(children: <Widget>[
+          Expanded(child: _MetricCard(label: 'Expense transactions', value: '${expenses.length}', icon: Icons.receipt_long_outlined)),
+          const SizedBox(width: 9),
+          Expanded(child: _MetricCard(label: 'Income transactions', value: '${income.length}', icon: Icons.account_balance_wallet_outlined)),
+        ]),
+        const SizedBox(height: 9),
+        Row(children: <Widget>[
+          Expanded(child: _MetricCard(
+            label: 'Top spending category',
+            value: topExpenseCategory == null ? '—' : _money(topExpenseCategory.value),
+            icon: Icons.shopping_bag_outlined,
+            detail: topExpenseCategory == null ? 'No expenses' : categoryName(topExpenseCategory.key),
+          )),
+          const SizedBox(width: 9),
+          Expanded(child: _MetricCard(
+            label: 'Top income source',
+            value: topIncomeCategory == null ? '—' : _money(topIncomeCategory.value),
+            icon: Icons.savings_outlined,
+            detail: topIncomeCategory == null ? 'No income' : categoryName(topIncomeCategory.key),
+          )),
+        ]),
+        const SizedBox(height: 9),
+        Row(children: <Widget>[
+          Expanded(child: _MetricCard(label: 'Zero-expense days', value: '$zeroDays', icon: Icons.event_available_outlined, detail: 'of $days days')),
+          const SizedBox(width: 9),
+          Expanded(child: _MetricCard(label: 'Avg. net per day', value: '${dailyNetAverage >= 0 ? '+' : '−'}${_money(dailyNetAverage.abs().round())}', icon: Icons.account_balance_outlined)),
+        ]),
+        const SizedBox(height: 9),
+        Row(children: <Widget>[
+          Expanded(child: _MetricCard(label: 'Highest spending day', value: highestExpense == 0 ? '₹0' : _money(highestExpense), icon: Icons.trending_up_rounded, detail: highestExpense == 0 ? 'No spending' : '$highestExpenseDay ${monthShort(month)}')),
+          const SizedBox(width: 9),
+          Expanded(child: _MetricCard(label: 'Highest income day', value: highestIncome == 0 ? '₹0' : _money(highestIncome), icon: Icons.trending_down_rounded, detail: highestIncome == 0 ? 'No income' : '$highestIncomeDay ${monthShort(month)}')),
         ]),
         const SizedBox(height: 16),
-        SectionCard(
+        categorySection(
           title: 'Expense by Category',
-          child: byCategory.isEmpty
-              ? Padding(padding: EdgeInsets.symmetric(vertical: 18), child: Text('No expenses recorded for this month.', style: TextStyle(color: AppColors.textSecondary)))
-              : Column(children: <Widget>[
-                  for (final MapEntry<String, int> entry in byCategory) ...<Widget>[
-                    _CategoryBreakdownRow(
-                      label: entry.key == 'uncategorised' ? 'Uncategorised' : (data.expenseCategoryById(entry.key)?.name ?? 'Uncategorised'),
-                      amount: entry.value,
-                      fraction: total == 0 ? 0 : entry.value / total,
-                      color: Color(data.expenseCategoryById(entry.key)?.colorValue ?? AppColors.textSecondary.toARGB32()),
-                    ),
-                    if (entry != byCategory.last) const SizedBox(height: 14),
-                  ],
-                ]),
+          categories: expenseCategories,
+          total: expenseTotal,
+          fallbackColor: AppColors.gold,
+          emptyText: 'No expenses recorded for this month.',
+        ),
+        const SizedBox(height: 14),
+        categorySection(
+          title: 'Income by Source',
+          categories: incomeCategories,
+          total: incomeTotal,
+          fallbackColor: const Color(0xFF66BB6A),
+          emptyText: 'No income recorded for this month.',
         ),
         const SizedBox(height: 14),
         SectionCard(
-          title: 'Daily Spending',
+          title: 'Daily Cash Flow',
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-            Text('Every day in this reporting period is included. Days without expenses have a value of ₹0.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-            const SizedBox(height: 18),
+            Text('Compare money received and money spent for each day in this reporting period.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            const SizedBox(height: 12),
+            Row(children: <Widget>[
+              _LegendDot(color: const Color(0xFF66BB6A), label: 'Income'),
+              const SizedBox(width: 16),
+              _LegendDot(color: AppColors.gold, label: 'Expenses'),
+            ]),
+            const SizedBox(height: 16),
             SizedBox(
-              height: 142,
+              height: 148,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: <Widget>[
-                    for (int i = 0; i < dailyTotals.length; i++)
-                      _DailyBar(day: i + 1, amount: dailyTotals[i], maxAmount: highest),
+                    for (int i = 0; i < days; i++)
+                      _DailyCashFlowBar(
+                        day: i + 1,
+                        income: dailyIncomeTotals[i],
+                        expense: dailyExpenseTotals[i],
+                        maxAmount: maxDaily,
+                      ),
                   ],
                 ),
               ),
             ),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        SectionCard(
+          title: 'Daily Spending',
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+            Text('Total outgoing money for each day. Days without expenses are shown as ₹0.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 132,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    for (int i = 0; i < dailyExpenseTotals.length; i++)
+                      _DailySingleBar(day: i + 1, amount: dailyExpenseTotals[i], maxAmount: highestExpense, color: AppColors.gold),
+                  ],
+                ),
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        SectionCard(
+          title: 'Transaction Summary',
+          child: Column(children: <Widget>[
+            _SummaryLine(label: 'Total transactions', value: '${transactions.length}'),
+            _SummaryLine(label: 'Income entries', value: '${income.length}'),
+            _SummaryLine(label: 'Expense entries', value: '${expenses.length}'),
+            _SummaryLine(label: 'Net amount (income − expenses)', value: '${net >= 0 ? '+' : '−'}${_money(net.abs())}', valueColor: net >= 0 ? const Color(0xFF66BB6A) : AppColors.danger),
+            _SummaryLine(label: 'Reporting days', value: '$days'),
+            _SummaryLine(label: 'Period', value: averagePeriod),
           ]),
         ),
       ],
@@ -400,31 +565,35 @@ class _NoteTile extends StatelessWidget {
   }
 }
 
-class _ExpenseTile extends StatelessWidget {
-  const _ExpenseTile({required this.expense, required this.category});
-  final Expense expense;
+class _TransactionTile extends StatelessWidget {
+  const _TransactionTile({required this.transaction, required this.category});
+  final Expense transaction;
   final ExpenseCategory? category;
 
   @override
-  Widget build(BuildContext context) => InkWell(
-    borderRadius: BorderRadius.circular(10),
-    onTap: () => context.push(AppRoutes.expenseEdit(expense.id)),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(children: <Widget>[
-        Container(width: 38, height: 38, decoration: BoxDecoration(color: Color(category?.colorValue ?? AppColors.gold.toARGB32()).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(11)), child: Icon(_categoryIcon(category?.iconKey ?? ''), color: Color(category?.colorValue ?? AppColors.gold.toARGB32()), size: 20)),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-          Text(expense.description.trim().isEmpty ? (category?.name ?? 'Expense') : expense.description.trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-          Text('${category?.name ?? 'Uncategorised'}${expense.paymentMethod.isEmpty ? '' : ' · ${expense.paymentMethod}'}', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        ])),
-        const SizedBox(width: 8),
-        Text(_money(expense.amountPaise), style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.gold)),
-        const SizedBox(width: 6),
-        Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),
-      ]),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final bool isIncome = transaction.isIncome;
+    final Color typeColor = isIncome ? const Color(0xFF66BB6A) : AppColors.gold;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => context.push(AppRoutes.expenseEdit(transaction.id)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(children: <Widget>[
+          Container(width: 38, height: 38, decoration: BoxDecoration(color: Color(category?.colorValue ?? typeColor.toARGB32()).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(11)), child: Icon(_categoryIcon(category?.iconKey ?? ''), color: Color(category?.colorValue ?? typeColor.toARGB32()), size: 20)),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+            Text(transaction.description.trim().isEmpty ? (category?.name ?? (isIncome ? 'Income' : 'Expense')) : transaction.description.trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text('${isIncome ? 'Income' : 'Expense'} · ${category?.name ?? 'Uncategorised'}${transaction.paymentMethod.isEmpty ? '' : ' · ${transaction.paymentMethod}'}', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          ])),
+          const SizedBox(width: 8),
+          Text('${isIncome ? '+' : '−'}${_money(transaction.amountPaise)}', style: TextStyle(fontWeight: FontWeight.w700, color: typeColor)),
+          const SizedBox(width: 6),
+          Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),
+        ]),
+      ),
+    );
+  }
 }
 
 class _MetricCard extends StatelessWidget {
@@ -451,6 +620,105 @@ class _MetricCard extends StatelessWidget {
   );
 }
 
+class _FlowSummary extends StatelessWidget {
+  const _FlowSummary({required this.label, required this.amount, required this.color});
+  final String label;
+  final int amount;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Text(label, style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+      const SizedBox(height: 4),
+      Text(_money(amount), style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 17)),
+    ],
+  );
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label});
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(children: <Widget>[
+    Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+    const SizedBox(width: 6),
+    Text(label, style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+  ]);
+}
+
+class _DailyCashFlowBar extends StatelessWidget {
+  const _DailyCashFlowBar({required this.day, required this.income, required this.expense, required this.maxAmount});
+  final int day;
+  final int income;
+  final int expense;
+  final int maxAmount;
+
+  @override
+  Widget build(BuildContext context) {
+    final double incomeHeight = maxAmount == 0 ? 3 : math.max(3, income / maxAmount * 86).toDouble();
+    final double expenseHeight = maxAmount == 0 ? 3 : math.max(3, expense / maxAmount * 86).toDouble();
+    return SizedBox(
+      width: 29,
+      child: Column(mainAxisAlignment: MainAxisAlignment.end, children: <Widget>[
+        const Spacer(),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            Container(height: incomeHeight, width: 7, decoration: BoxDecoration(color: income == 0 ? AppColors.border : const Color(0xFF66BB6A), borderRadius: const BorderRadius.vertical(top: Radius.circular(3)))),
+            const SizedBox(width: 3),
+            Container(height: expenseHeight, width: 7, decoration: BoxDecoration(color: expense == 0 ? AppColors.border : AppColors.gold, borderRadius: const BorderRadius.vertical(top: Radius.circular(3)))),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text('$day', style: TextStyle(fontSize: 9, color: AppColors.textHint)),
+      ]),
+    );
+  }
+}
+
+class _DailySingleBar extends StatelessWidget {
+  const _DailySingleBar({required this.day, required this.amount, required this.maxAmount, required this.color});
+  final int day;
+  final int amount;
+  final int maxAmount;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final double barHeight = maxAmount == 0 ? 3 : math.max(3, amount / maxAmount * 78).toDouble();
+    return SizedBox(
+      width: 23,
+      child: Column(mainAxisAlignment: MainAxisAlignment.end, children: <Widget>[
+        const Spacer(),
+        Container(height: barHeight, width: 11, decoration: BoxDecoration(color: amount == 0 ? AppColors.border : color, borderRadius: const BorderRadius.vertical(top: Radius.circular(4)))),
+        const SizedBox(height: 6),
+        Text('$day', style: TextStyle(fontSize: 9, color: AppColors.textHint)),
+      ]),
+    );
+  }
+}
+
+class _SummaryLine extends StatelessWidget {
+  const _SummaryLine({required this.label, required this.value, this.valueColor});
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(children: <Widget>[
+      Expanded(child: Text(label, style: TextStyle(color: AppColors.textSecondary, fontSize: 12))),
+      Text(value, style: TextStyle(fontWeight: FontWeight.w700, color: valueColor ?? AppColors.textPrimary)),
+    ]),
+  );
+}
+
 class _CategoryBreakdownRow extends StatelessWidget {
   const _CategoryBreakdownRow({required this.label, required this.amount, required this.fraction, required this.color});
   final String label;
@@ -468,27 +736,6 @@ class _CategoryBreakdownRow extends StatelessWidget {
   ]);
 }
 
-class _DailyBar extends StatelessWidget {
-  const _DailyBar({required this.day, required this.amount, required this.maxAmount});
-  final int day;
-  final int amount;
-  final int maxAmount;
-
-  @override
-  Widget build(BuildContext context) {
-    final double barHeight = maxAmount == 0 ? 3 : math.max(3, amount / maxAmount * 88).toDouble();
-    return SizedBox(
-      width: 23,
-      child: Column(mainAxisAlignment: MainAxisAlignment.end, children: <Widget>[
-        const Spacer(),
-        Container(height: barHeight, width: 11, decoration: BoxDecoration(color: amount == 0 ? AppColors.border : AppColors.gold, borderRadius: const BorderRadius.vertical(top: Radius.circular(4)))),
-        const SizedBox(height: 6),
-        Text('$day', style: TextStyle(fontSize: 9, color: AppColors.textHint)),
-      ]),
-    );
-  }
-}
-
 IconData _categoryIcon(String key) => switch (key) {
   'restaurant' => Icons.restaurant_rounded,
   'directions_car' => Icons.directions_car_rounded,
@@ -498,6 +745,12 @@ IconData _categoryIcon(String key) => switch (key) {
   'medical_services' => Icons.medical_services_outlined,
   'receipt_long' => Icons.receipt_long_outlined,
   'person' => Icons.person_outline_rounded,
+  'payments' => Icons.payments_outlined,
+  'work' => Icons.work_outline_rounded,
+  'business' => Icons.business_outlined,
+  'trending_up' => Icons.trending_up_rounded,
+  'savings' => Icons.savings_outlined,
+  'card_giftcard' => Icons.card_giftcard_rounded,
   'more_horiz' => Icons.more_horiz_rounded,
   _ => Icons.category_outlined,
 };

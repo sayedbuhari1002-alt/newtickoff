@@ -326,6 +326,110 @@ void main() {
     });
   });
 
+  group('Partial progress in habit analytics', () {
+    test('a count habit contributes its actual percentage before reaching goal', () {
+      final Habit h = habit(
+        tracking: TrackingMethod.count,
+        goal: 8,
+        created: today,
+      );
+      final CompletionRecord partial = CompletionRecord(
+        habitId: 'h',
+        dateKey: dateKey(today),
+        updatedAt: today,
+        count: 4,
+      );
+
+      final Tally tally = engine.tallyDay(h, today, recs(<CompletionRecord>[partial]), today);
+      expect(engine.isCompleted(h, partial), isFalse);
+      expect(engine.dayProgress(h, partial), closeTo(0.5, 1e-9));
+      expect(tally.expected, 1);
+      expect(tally.completed, closeTo(0.5, 1e-9));
+      expect(tally.rate, closeTo(0.5, 1e-9));
+    });
+
+    test('a checklist habit contributes the checked-item percentage', () {
+      final Habit h = habit(
+        tracking: TrackingMethod.checklist,
+        created: today,
+        checklist: const <ChecklistItem>[
+          ChecklistItem(id: 'a', title: 'A'),
+          ChecklistItem(id: 'b', title: 'B'),
+          ChecklistItem(id: 'c', title: 'C'),
+          ChecklistItem(id: 'd', title: 'D'),
+          ChecklistItem(id: 'e', title: 'E'),
+        ],
+      );
+      final CompletionRecord partial = CompletionRecord(
+        habitId: 'h',
+        dateKey: dateKey(today),
+        updatedAt: today,
+        checkedItemIds: <String>{'a', 'b', 'c', 'd'},
+      );
+
+      final Tally tally = engine.tallyDay(h, today, recs(<CompletionRecord>[partial]), today);
+      expect(engine.isCompleted(h, partial), isFalse);
+      expect(engine.dayProgress(h, partial), closeTo(0.8, 1e-9));
+      expect(tally.expected, 1);
+      expect(tally.completed, closeTo(0.8, 1e-9));
+      expect(tally.rate, closeTo(0.8, 1e-9));
+    });
+
+    test('partial count progress appears in score without completing the streak', () {
+      final Habit h = habit(
+        tracking: TrackingMethod.count,
+        goal: 8,
+        created: today,
+      );
+      final CompletionRecord partial = CompletionRecord(
+        habitId: 'h',
+        dateKey: dateKey(today),
+        updatedAt: today,
+        count: 4,
+      );
+
+      final HabitStats stats = engine.stats(h, recs(<CompletionRecord>[partial]));
+      expect(stats.score, closeTo(0.5, 1e-9));
+      expect(stats.completionRate, closeTo(0.5, 1e-9));
+      expect(stats.currentStreak, 0);
+      expect(stats.totalCompletions, 0);
+    });
+
+    test('an untouched current count/checklist day remains pending', () {
+      final Habit countHabit = habit(
+        tracking: TrackingMethod.count,
+        goal: 8,
+        created: today,
+      );
+      final Tally tally = engine.tallyDay(
+        countHabit,
+        today,
+        const <String, CompletionRecord>{},
+        today,
+      );
+      expect(tally.hasData, isFalse);
+    });
+
+    test('partial progress on a past due day is not treated as zero', () {
+      final Habit h = habit(
+        tracking: TrackingMethod.count,
+        goal: 8,
+        created: oct(20),
+      );
+      final CompletionRecord partial = CompletionRecord(
+        habitId: 'h',
+        dateKey: dateKey(oct(26)),
+        updatedAt: oct(26),
+        count: 2,
+      );
+
+      final Tally tally = engine.tallyDay(h, oct(26), recs(<CompletionRecord>[partial]), oct(20));
+      expect(tally.expected, 1);
+      expect(tally.completed, closeTo(0.25, 1e-9));
+      expect(tally.rate, closeTo(0.25, 1e-9));
+    });
+  });
+
   group('Some days per period', () {
     const Schedule threePerWeek = Schedule(
       type: FrequencyType.somePerPeriod,
