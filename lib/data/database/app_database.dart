@@ -14,13 +14,15 @@ import 'package:sqflite/sqflite.dart';
 /// * 8 - Productivity targets, assignments, distractions and scoring metadata.
 /// * 9 - daily Android UsageStats totals and reconciliation against event sessions.
 /// * 10 - income/expense transaction types and separate income categories.
+/// * 11 - per-app daily distraction allowances and allowance snapshots on usage sessions.
+/// * 12 - notes, photo/audio attachments and subtasks on reusable task templates.
 ///
 /// To change the schema, bump [version], add a step to [_migrations] that
 /// upgrades from the previous version, and keep [_createV1] untouched.
 class AppDatabase {
   AppDatabase._();
 
-  static const int version = 10;
+  static const int version = 12;
   static const String fileName = 'tickoff.db';
 
   /// Opens (creating if needed) the database. Pass [path] to use another file
@@ -45,6 +47,8 @@ class AppDatabase {
         if (newVersion >= 8) await _migrateV8(db);
         if (newVersion >= 9) await _migrateV9(db);
         if (newVersion >= 10) await _migrateV10(db);
+        if (newVersion >= 11) await _migrateV11(db);
+        if (newVersion >= 12) await _migrateV12(db);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         for (int v = oldVersion; v < newVersion; v++) {
@@ -67,6 +71,8 @@ class AppDatabase {
         7: _migrateV8,
         8: _migrateV9,
         9: _migrateV10,
+        10: _migrateV11,
+        11: _migrateV12,
       };
 
 
@@ -180,6 +186,58 @@ class AppDatabase {
         UNIQUE(date_key, package_name)
       )''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_app_usage_daily_date ON app_usage_daily_totals(date_key)');
+  }
+
+  static Future<void> _migrateV11(Database db) async {
+    // Per-app grace periods are saved on the category. The value copied to each
+    // usage session is a snapshot, so editing an allowance never rewrites past
+    // productivity scores.
+    final List<Map<String, Object?>> categoryRows = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'distraction_categories'",
+    );
+    if (categoryRows.isNotEmpty) {
+      final List<Map<String, Object?>> columns = await db.rawQuery(
+        'PRAGMA table_info(distraction_categories)',
+      );
+      final Set<String> names = columns.map((Map<String, Object?> row) => row['name'] as String).toSet();
+      if (!names.contains('package_daily_allowances_json')) {
+        await db.execute("ALTER TABLE distraction_categories ADD COLUMN package_daily_allowances_json TEXT NOT NULL DEFAULT '{}' ");
+      }
+    }
+
+    final List<Map<String, Object?>> usageRows = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'app_usage_records'",
+    );
+    if (usageRows.isNotEmpty) {
+      final List<Map<String, Object?>> columns = await db.rawQuery(
+        'PRAGMA table_info(app_usage_records)',
+      );
+      final Set<String> names = columns.map((Map<String, Object?> row) => row['name'] as String).toSet();
+      if (!names.contains('daily_allowance_minutes')) {
+        await db.execute('ALTER TABLE app_usage_records ADD COLUMN daily_allowance_minutes INTEGER NOT NULL DEFAULT 0');
+      }
+    }
+  }
+
+  static Future<void> _migrateV12(Database db) async {
+    final List<Map<String, Object?>> tableRows = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_templates'",
+    );
+    if (tableRows.isEmpty) return;
+    final List<Map<String, Object?>> columns = await db.rawQuery('PRAGMA table_info(task_templates)');
+    final Set<String> names = columns.map((Map<String, Object?> column) => column['name'] as String).toSet();
+    if (!names.contains('notes')) {
+      await db.execute("ALTER TABLE task_templates ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+    }
+    if (!names.contains('photo_paths_json')) {
+      await db.execute("ALTER TABLE task_templates ADD COLUMN photo_paths_json TEXT NOT NULL DEFAULT '[]'");
+    }
+    if (!names.contains('audio_paths_json')) {
+      await db.execute("ALTER TABLE task_templates ADD COLUMN audio_paths_json TEXT NOT NULL DEFAULT '[]'");
+    }
+    if (!names.contains('subtasks_json')) {
+      await db.execute("ALTER TABLE task_templates ADD COLUMN subtasks_json TEXT NOT NULL DEFAULT '[]'");
+    }
   }
 
   static Future<void> _migrateV10(Database db) async {

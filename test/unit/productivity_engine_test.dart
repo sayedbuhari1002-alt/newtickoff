@@ -207,6 +207,61 @@ void main() {
     expect(score.penaltyPoints, closeTo(5, 0.0001));
   });
 
+  test('Automatic app penalties begin only after that app exceeds its daily allowance', () {
+    final DistractionCategory category = DistractionCategory(
+      id: 'social-apps', name: 'Social apps', severityPointsPerHour: 60,
+      createdAt: day, autoTrack: true,
+      packageNames: const <String>['com.instagram.android'],
+      // The category is now configured for 60 minutes, but these saved
+      // sessions retain the 30-minute allowance that applied when recorded.
+      dailyAllowanceMinutesByPackage: const <String, int>{'com.instagram.android': 60},
+    );
+    final ProductivityDayScore score = calculate(
+      categories: <DistractionCategory>[category],
+      usage: <AppUsageRecord>[
+        AppUsageRecord(
+          id: 'instagram-1', categoryId: category.id,
+          packageName: 'com.instagram.android',
+          startAt: DateTime(2026, 11, 8, 12),
+          endAt: DateTime(2026, 11, 8, 12, 20),
+          severityPointsPerHour: 60, dailyAllowanceMinutes: 30,
+        ),
+        AppUsageRecord(
+          id: 'instagram-2', categoryId: category.id,
+          packageName: 'com.instagram.android',
+          startAt: DateTime(2026, 11, 8, 14),
+          endAt: DateTime(2026, 11, 8, 14, 45),
+          severityPointsPerHour: 60, dailyAllowanceMinutes: 30,
+        ),
+      ],
+    );
+    // Total usage is 65 minutes. The first 30 minutes are free, so only
+    // 35 minutes at 60 points/hour are deducted.
+    expect(score.penaltyPoints, closeTo(35, 0.0001));
+  });
+
+  test('Automatic app usage within the daily allowance has no penalty', () {
+    final DistractionCategory category = DistractionCategory(
+      id: 'social-apps', name: 'Social apps', severityPointsPerHour: 60,
+      createdAt: day, autoTrack: true,
+      packageNames: const <String>['com.instagram.android'],
+      dailyAllowanceMinutesByPackage: const <String, int>{'com.instagram.android': 30},
+    );
+    final ProductivityDayScore score = calculate(
+      categories: <DistractionCategory>[category],
+      usage: <AppUsageRecord>[
+        AppUsageRecord(
+          id: 'instagram-1', categoryId: category.id,
+          packageName: 'com.instagram.android',
+          startAt: DateTime(2026, 11, 8, 12),
+          endAt: DateTime(2026, 11, 8, 12, 30),
+          severityPointsPerHour: 60, dailyAllowanceMinutes: 30,
+        ),
+      ],
+    );
+    expect(score.penaltyPoints, 0);
+  });
+
   test('Target overrides affect one date while defaults apply from their effective date', () {
     final AppData data = AppData(
       productivityTargets: const <ProductivityTargetChange>[
@@ -316,7 +371,7 @@ void main() {
     expect(reset.achievementPoints, 0);
   });
 
-  test('Today progressive task score follows current saved progress, not its history', () {
+  test('Today progressive task score follows net current progress from day start', () {
     final DateTime now = DateTime.now();
     final Task task = Task(
       id: 'cisco', title: 'Cisco', createdAt: now, updatedAt: now,
@@ -363,6 +418,57 @@ void main() {
       progressEvents: <TaskProgressEvent>[event, reset],
     );
     expect(atZero.achievementPoints, 0);
+  });
+
+  test('Progressive task slider changes are scored only above the day-start value', () {
+    final DateTime now = DateTime.now();
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    final Task task = Task(
+      id: 'training', title: 'Training',
+      createdAt: today.subtract(const Duration(days: 1)), updatedAt: now,
+      taskType: TaskType.progressive, progressValue: 10,
+      difficultyScore: 5,
+    );
+    final DateTime morning = today.add(const Duration(hours: 9));
+    final List<TaskProgressEvent> events = <TaskProgressEvent>[
+      TaskProgressEvent(
+        id: 'training-up', taskId: task.id,
+        previousValue: 10, newValue: 36,
+        previousPercent: 10, newPercent: 36, progressDelta: 26,
+        occurredAt: morning, difficultyScore: 5,
+      ),
+      TaskProgressEvent(
+        id: 'training-back', taskId: task.id,
+        previousValue: 36, newValue: 10,
+        previousPercent: 36, newPercent: 10, progressDelta: -26,
+        occurredAt: morning.add(const Duration(minutes: 2)), difficultyScore: 5,
+      ),
+    ];
+    final ProductivityDayScore returnedToYesterday = calculate(
+      scoreDate: today,
+      today: today,
+      tasks: <Task>[task],
+      progressEvents: events,
+    );
+    expect(returnedToYesterday.achievementPoints, 0);
+
+    final Task finalTwenty = task.copyWith(progressValue: 20, updatedAt: now);
+    final List<TaskProgressEvent> partialEvents = <TaskProgressEvent>[
+      events.first,
+      TaskProgressEvent(
+        id: 'training-partial', taskId: task.id,
+        previousValue: 36, newValue: 20,
+        previousPercent: 36, newPercent: 20, progressDelta: -16,
+        occurredAt: morning.add(const Duration(minutes: 3)), difficultyScore: 5,
+      ),
+    ];
+    final ProductivityDayScore partialNet = calculate(
+      scoreDate: today,
+      today: today,
+      tasks: <Task>[finalTwenty],
+      progressEvents: partialEvents,
+    );
+    expect(partialNet.achievementPoints, closeTo(0.5, 0.0001));
   });
 
   test('Count-based progressive tasks use their current saved count as a fraction of target', () {

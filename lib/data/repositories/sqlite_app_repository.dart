@@ -559,6 +559,13 @@ class SqliteAppRepository implements AppRepository {
       iconKey: row['icon_key'] as String? ?? 'task',
       colorValue: row['color_value'] as int? ?? 0xFFA78BFA,
       repeat: TaskRepeat.values.firstWhere((TaskRepeat v) => v.name == row['repeat_rule'], orElse: () => TaskRepeat.none),
+      notes: row['notes'] as String? ?? '',
+      photoPaths: (jsonDecode(row['photo_paths_json'] as String? ?? '[]') as List).whereType<String>().toList(),
+      audioPaths: (jsonDecode(row['audio_paths_json'] as String? ?? '[]') as List).whereType<String>().toList(),
+      subtasks: (jsonDecode(row['subtasks_json'] as String? ?? '[]') as List)
+          .whereType<Map>()
+          .map((Map item) => Subtask.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
       createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
       updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
     )).toList();
@@ -579,6 +586,10 @@ class SqliteAppRepository implements AppRepository {
       'icon_key': template.iconKey,
       'color_value': template.colorValue,
       'repeat_rule': template.repeat.name,
+      'notes': template.notes,
+      'photo_paths_json': jsonEncode(template.photoPaths),
+      'audio_paths_json': jsonEncode(template.audioPaths),
+      'subtasks_json': jsonEncode(template.subtasks.map((Subtask item) => item.toJson()).toList()),
       'created_at': template.createdAt.toIso8601String(),
       'updated_at': template.updatedAt.toIso8601String(),
     };

@@ -385,7 +385,9 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     for (final String path in paths.toSet()) {
       final bool taskStillUses = data.tasks.any((Task t) => t.photoPaths.contains(path) || t.audioPaths.contains(path));
       final bool noteStillUses = data.notes.any((Note n) => n.photoPaths.contains(path) || n.audioPaths.contains(path));
-      if (taskStillUses || noteStillUses || path.trim().isEmpty) continue;
+      final bool templateStillUses = data.taskTemplates.any((TaskTemplate template) =>
+          template.photoPaths.contains(path) || template.audioPaths.contains(path));
+      if (taskStillUses || noteStillUses || templateStillUses || path.trim().isEmpty) continue;
       try {
         final File file = File(path);
         if (await file.exists()) await file.delete();
@@ -886,10 +888,14 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
   Future<void> saveTaskTemplate(TaskTemplate template) async {
     if (template.name.trim().isEmpty) throw ArgumentError('Enter a template name.');
     if (!template.difficultyScore.isFinite || template.difficultyScore < 1 || template.difficultyScore > 10) throw ArgumentError('Template difficulty must be between 1 and 10.');
-    if (template.taskType == TaskType.progressive && template.progressTarget <= 0) throw ArgumentError('Progress target must be greater than zero.');
+    if (template.taskType == TaskType.progressive && (!template.progressTarget.isFinite || template.progressTarget <= 0)) throw ArgumentError('Progress target must be greater than zero.');
+    if (template.subtasks.any((Subtask item) => item.title.trim().isEmpty)) throw ArgumentError('Subtask names cannot be empty.');
+    if (template.subtasks.any((Subtask item) => !item.difficultyScore.isFinite || item.difficultyScore < 1 || item.difficultyScore > 10)) throw ArgumentError('Subtask difficulty must be between 1 and 10.');
     final bool duplicateName = _current.taskTemplates.any((TaskTemplate existing) =>
       existing.id != template.id && existing.name.trim().toLowerCase() == template.name.trim().toLowerCase());
     if (duplicateName) throw ArgumentError('A template with this name already exists.');
+    final AppData before = _current;
+    final TaskTemplate? old = before.taskTemplates.where((TaskTemplate item) => item.id == template.id).firstOrNull;
     final TaskTemplate saved = template.copyWith(name: template.name.trim(), updatedAt: DateTime.now());
     await _repo.upsertTaskTemplate(saved);
     final AppData data = _current;
@@ -898,12 +904,21 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     if (index >= 0) templates[index] = saved; else templates.add(saved);
     templates.sort((TaskTemplate a, TaskTemplate b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     state = AsyncData<AppData>(data.copyWith(taskTemplates: templates));
+    if (old != null) {
+      final Set<String> retained = <String>{...saved.photoPaths, ...saved.audioPaths};
+      await _cleanupOrphanedAttachments(<String>{...old.photoPaths, ...old.audioPaths}.where((String path) => !retained.contains(path)));
+    }
   }
 
   Future<void> deleteTaskTemplate(String templateId) async {
+    final AppData before = _current;
+    final TaskTemplate? removed = before.taskTemplates.where((TaskTemplate item) => item.id == templateId).firstOrNull;
     await _repo.deleteTaskTemplate(templateId);
     final AppData data = _current;
     state = AsyncData<AppData>(data.copyWith(taskTemplates: data.taskTemplates.where((TaskTemplate item) => item.id != templateId).toList()));
+    if (removed != null) {
+      await _cleanupOrphanedAttachments(<String>{...removed.photoPaths, ...removed.audioPaths});
+    }
   }
 
   Future<void> toggleSubtask(String taskId, String subtaskId) async {
@@ -1015,6 +1030,11 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     if (!category.severityPointsPerHour.isFinite || category.severityPointsPerHour < 0 || category.severityPointsPerHour > 100) throw ArgumentError('Severity must be between 0 and 100 points per hour.');
     final Set<String> packages = category.packageNames.map((String value) => value.trim()).where((String value) => value.isNotEmpty).toSet();
     if (category.autoTrack && packages.isEmpty) throw ArgumentError('Choose at least one installed app to enable automatic tracking.');
+    for (final MapEntry<String, int> entry in category.dailyAllowanceMinutesByPackage.entries) {
+      if (entry.value < 0 || entry.value > 1440) {
+        throw ArgumentError('Daily app allowances must be between 0 and 1440 minutes.');
+      }
+    }
     String normalise(String value) => value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
     final bool duplicate = _current.distractionCategories.any((DistractionCategory value) => value.id != category.id && normalise(value.name) == normalise(name));
     if (duplicate) throw ArgumentError('A category with this name already exists.');
@@ -1086,6 +1106,7 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
         id: record.id, categoryId: record.categoryId, packageName: record.packageName,
         startAt: record.startAt, endAt: record.endAt,
         severityPointsPerHour: record.severityPointsPerHour ?? category?.severityPointsPerHour,
+        dailyAllowanceMinutes: record.dailyAllowanceMinutes,
       );
       await _repo.upsertAppUsageRecord(saved);
       savedRecords.add(saved);

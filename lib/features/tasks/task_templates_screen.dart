@@ -7,110 +7,15 @@ import 'package:go_router/go_router.dart';
 import '../../domain/models/models.dart';
 import '../../state/app_data.dart';
 import '../../state/app_state.dart';
+import 'task_template_editor_screen.dart';
 
 class TaskTemplatesScreen extends ConsumerWidget {
   const TaskTemplatesScreen({super.key});
 
   Future<void> _edit(BuildContext context, WidgetRef ref, TaskTemplate template) async {
-    final TextEditingController name = TextEditingController(text: template.name);
-    final TextEditingController category = TextEditingController(text: template.category);
-    final TextEditingController difficulty = TextEditingController(text: template.difficultyScore.toString());
-    final TextEditingController target = TextEditingController(text: template.progressTarget.toString());
-    final TextEditingController unit = TextEditingController(text: template.progressUnit);
-    TaskType type = template.taskType;
-    TaskProgressMode mode = template.progressMode;
-    TaskPriority priority = template.priority;
-    TaskRepeat repeat = template.repeat;
-    final bool? save = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) => StatefulBuilder(
-        builder: (BuildContext dialogContext, StateSetter setDialogState) => AlertDialog(
-          title: const Text('Edit task template'),
-          content: SizedBox(
-            width: 420,
-            child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
-                TextField(controller: name, decoration: const InputDecoration(labelText: 'Template name')),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<TaskType>(
-                  value: type,
-                  decoration: const InputDecoration(labelText: 'Task type'),
-                  items: const <DropdownMenuItem<TaskType>>[
-                    DropdownMenuItem(value: TaskType.standard, child: Text('Standard')),
-                    DropdownMenuItem(value: TaskType.progressive, child: Text('Progressive')),
-                  ],
-                  onChanged: (TaskType? value) => setDialogState(() => type = value ?? TaskType.standard),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<TaskPriority>(
-                  value: priority,
-                  decoration: const InputDecoration(labelText: 'Priority'),
-                  items: TaskPriority.values.map((TaskPriority value) => DropdownMenuItem(value: value, child: Text(value.name))).toList(),
-                  onChanged: (TaskPriority? value) => setDialogState(() => priority = value ?? TaskPriority.medium),
-                ),
-                const SizedBox(height: 8),
-                TextField(controller: difficulty, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Difficulty (1–10)')),
-                const SizedBox(height: 8),
-                TextField(controller: category, decoration: const InputDecoration(labelText: 'Category')),
-                if (type == TaskType.progressive) ...<Widget>[
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<TaskProgressMode>(
-                    value: mode,
-                    decoration: const InputDecoration(labelText: 'Progress method'),
-                    items: const <DropdownMenuItem<TaskProgressMode>>[
-                      DropdownMenuItem(value: TaskProgressMode.percentage, child: Text('Percentage')),
-                      DropdownMenuItem(value: TaskProgressMode.count, child: Text('Count / target')),
-                    ],
-                    onChanged: (TaskProgressMode? value) => setDialogState(() => mode = value ?? TaskProgressMode.percentage),
-                  ),
-                  if (mode == TaskProgressMode.count) ...<Widget>[
-                    const SizedBox(height: 8),
-                    TextField(controller: target, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Count target')),
-                    const SizedBox(height: 8),
-                    TextField(controller: unit, decoration: const InputDecoration(labelText: 'Unit')),
-                  ],
-                ],
-                const SizedBox(height: 8),
-                DropdownButtonFormField<TaskRepeat>(
-                  value: repeat,
-                  decoration: const InputDecoration(labelText: 'Repeat'),
-                  items: const <DropdownMenuItem<TaskRepeat>>[
-                    DropdownMenuItem(value: TaskRepeat.none, child: Text('Does not repeat')),
-                    DropdownMenuItem(value: TaskRepeat.daily, child: Text('Every day')),
-                    DropdownMenuItem(value: TaskRepeat.weekly, child: Text('Every week')),
-                    DropdownMenuItem(value: TaskRepeat.monthly, child: Text('Every month')),
-                  ],
-                  onChanged: (TaskRepeat? value) => setDialogState(() => repeat = value ?? TaskRepeat.none),
-                ),
-              ]),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, name.text.trim().isNotEmpty), child: const Text('Save')),
-          ],
-        ),
-      ),
-    );
-    if (save == true && context.mounted) {
-      final double? parsedDifficulty = double.tryParse(difficulty.text.trim());
-      final double? parsedTarget = double.tryParse(target.text.trim());
-      if (parsedDifficulty == null || !parsedDifficulty.isFinite || parsedDifficulty < 1 || parsedDifficulty > 10 || (type == TaskType.progressive && mode == TaskProgressMode.count && (parsedTarget == null || !parsedTarget.isFinite || parsedTarget <= 0))) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Check the difficulty and progress target values.')));
-      } else {
-        try {
-          await ref.read(appDataProvider.notifier).saveTaskTemplate(template.copyWith(
-            name: name.text.trim(), category: category.text.trim(), difficultyScore: parsedDifficulty,
-            taskType: type, progressMode: mode,
-            progressTarget: mode == TaskProgressMode.percentage ? 100 : parsedTarget!,
-            progressUnit: unit.text.trim(), priority: priority, repeat: repeat,
-          ));
-        } catch (error) {
-          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
-        }
-      }
-    }
-    name.dispose(); category.dispose(); difficulty.dispose(); target.dispose(); unit.dispose();
+    await Navigator.of(context).push<bool>(MaterialPageRoute<bool>(
+      builder: (BuildContext _) => TaskTemplateEditorScreen(template: template),
+    ));
   }
 
   Future<void> _duplicate(BuildContext context, WidgetRef ref, TaskTemplate template) async {
@@ -133,6 +38,17 @@ class TaskTemplatesScreen extends ConsumerWidget {
           difficultyScore: template.difficultyScore, priority: template.priority,
           category: template.category, iconKey: template.iconKey,
           colorValue: template.colorValue, repeat: template.repeat,
+          notes: template.notes,
+          photoPaths: List<String>.of(template.photoPaths),
+          audioPaths: List<String>.of(template.audioPaths),
+          subtasks: <Subtask>[
+            for (int index = 0; index < template.subtasks.length; index++)
+              Subtask(
+                id: newId(), title: template.subtasks[index].title,
+                createdAt: now, sortOrder: index,
+                difficultyScore: template.subtasks[index].difficultyScore,
+              ),
+          ],
         ));
       } catch (error) {
         if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
@@ -168,7 +84,7 @@ class TaskTemplatesScreen extends ConsumerWidget {
                 child: ListTile(
                   leading: const Icon(Icons.bookmark_outline_rounded),
                   title: Text(template.name),
-                  subtitle: Text('$progressLabel · ${template.priority.name} priority · Difficulty ${template.difficultyScore} · ${template.category.isEmpty ? 'Uncategorised' : template.category}'),
+                  subtitle: Text('$progressLabel · ${template.priority.name} priority · Difficulty ${template.difficultyScore} · ${template.category.isEmpty ? 'Uncategorised' : template.category}\n${template.subtasks.length} subtasks · ${template.photoPaths.length} photos · ${template.audioPaths.length} audio notes${template.notes.trim().isEmpty ? '' : ' · Notes'}'),
                   trailing: PopupMenuButton<String>(
                     onSelected: (String action) async {
                       if (action == 'edit') await _edit(context, ref, template);

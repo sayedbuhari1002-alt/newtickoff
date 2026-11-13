@@ -160,6 +160,13 @@ void main() {
       progressTarget: 12, progressUnit: 'chapters', difficultyScore: 3.5,
       priority: TaskPriority.high, category: 'Study', iconKey: 'study',
       repeat: TaskRepeat.weekly, createdAt: created, updatedAt: created,
+      notes: 'Review chapter summaries and solve practice questions.',
+      photoPaths: const <String>['/attachments/revision-plan.jpg'],
+      audioPaths: const <String>['/attachments/lecture-note.m4a'],
+      subtasks: <Subtask>[
+        Subtask(id: 'template-step-1', title: 'Read chapter 1', createdAt: created, sortOrder: 0, difficultyScore: 2.5),
+        Subtask(id: 'template-step-2', title: 'Solve practice questions', createdAt: created, sortOrder: 1, difficultyScore: 3.0),
+      ],
     );
     await repo.upsertTaskTemplate(template);
     final TaskTemplate loaded = (await repo.loadTaskTemplates()).single;
@@ -169,6 +176,11 @@ void main() {
     expect(loaded.progressTarget, 12);
     expect(loaded.difficultyScore, 3.5);
     expect(loaded.priority, TaskPriority.high);
+    expect(loaded.notes, template.notes);
+    expect(loaded.photoPaths, template.photoPaths);
+    expect(loaded.audioPaths, template.audioPaths);
+    expect(loaded.subtasks.map((Subtask item) => item.title).toList(), <String>['Read chapter 1', 'Solve practice questions']);
+    expect(loaded.subtasks.first.difficultyScore, 2.5);
     await repo.deleteTaskTemplate(template.id);
     expect(await repo.loadTaskTemplates(), isEmpty);
   });
@@ -206,6 +218,10 @@ void main() {
       id: 'category-1', name: 'Social Media', severityPointsPerHour: 2.5,
       details: 'Manual and selected apps', autoTrack: true,
       packageNames: const <String>['com.instagram.android', 'com.facebook.katana'],
+      dailyAllowanceMinutesByPackage: const <String, int>{
+        'com.instagram.android': 30,
+        'com.facebook.katana': 15,
+      },
       createdAt: created,
     );
     await repo.upsertDistractionCategory(category);
@@ -217,16 +233,19 @@ void main() {
     final AppUsageRecord usage = AppUsageRecord(
       id: 'usage-1', categoryId: category.id, packageName: 'com.instagram.android',
       startAt: DateTime(2026, 11, 8, 13), endAt: DateTime(2026, 11, 8, 13, 10), severityPointsPerHour: 2.5,
+      dailyAllowanceMinutes: 30,
     );
     await repo.upsertAppUsageRecord(usage);
     await repo.upsertProductivityTarget(const ProductivityTargetChange(effectiveDate: '2026-11-09', target: 18.5));
     await repo.upsertProductivityTargetOverride('2026-11-10', 12.5);
 
     expect((await repo.loadDistractionCategories()).single.packageNames, contains('com.instagram.android'));
+    expect((await repo.loadDistractionCategories()).single.dailyAllowanceMinutesByPackage['com.instagram.android'], 30);
     expect((await repo.loadDistractionLogs()).single.durationMinutes, closeTo(20, 0.001));
     expect((await repo.loadDistractionLogs()).single.severityPointsPerHour, 2.5);
     expect((await repo.loadAppUsageRecords()).single.packageName, 'com.instagram.android');
     expect((await repo.loadAppUsageRecords()).single.severityPointsPerHour, 2.5);
+    expect((await repo.loadAppUsageRecords()).single.dailyAllowanceMinutes, 30);
     expect((await repo.loadProductivityTargets()).last.target, 18.5);
     expect((await repo.loadProductivityTargetOverrides())['2026-11-10'], 12.5);
   });
@@ -293,6 +312,10 @@ void main() {
     expect(expenseColumns.map((Map<String, Object?> column) => column['name']), contains('transaction_type'));
     final List<Map<String, Object?>> expenseCategoryColumns = await db.rawQuery('PRAGMA table_info(expense_categories)');
     expect(expenseCategoryColumns.map((Map<String, Object?> column) => column['name']), contains('transaction_type'));
+    final List<Map<String, Object?>> distractionCategoryColumns = await db.rawQuery('PRAGMA table_info(distraction_categories)');
+    expect(distractionCategoryColumns.map((Map<String, Object?> column) => column['name']), contains('package_daily_allowances_json'));
+    final List<Map<String, Object?>> appUsageColumns = await db.rawQuery('PRAGMA table_info(app_usage_records)');
+    expect(appUsageColumns.map((Map<String, Object?> column) => column['name']), contains('daily_allowance_minutes'));
     final List<Map<String, Object?>> tables = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
     );

@@ -106,6 +106,7 @@ class DistractionCategory {
     this.details = '',
     this.autoTrack = false,
     this.packageNames = const <String>[],
+    this.dailyAllowanceMinutesByPackage = const <String, int>{},
   });
   final String id;
   final String name;
@@ -113,12 +114,16 @@ class DistractionCategory {
   final String details;
   final bool autoTrack;
   final List<String> packageNames;
+  /// Daily grace period for each automatically tracked app, in minutes.
+  /// A value of zero means every tracked minute is eligible for a penalty.
+  final Map<String, int> dailyAllowanceMinutesByPackage;
   final DateTime createdAt;
 
   Map<String, Object?> toMap() => <String, Object?>{
     'id': id, 'name': name.trim(), 'severity_points_per_hour': severityPointsPerHour,
     'details': details, 'auto_track': autoTrack ? 1 : 0,
     'package_names_json': jsonEncode(packageNames.toSet().toList()),
+    'package_daily_allowances_json': jsonEncode(dailyAllowanceMinutesByPackage),
     'created_at': createdAt.toIso8601String(),
   };
 
@@ -129,6 +134,7 @@ class DistractionCategory {
     details: row['details'] as String? ?? '',
     autoTrack: (row['auto_track'] as int? ?? 0) != 0,
     packageNames: _decodePackageNames(row['package_names_json'] as String? ?? '[]'),
+    dailyAllowanceMinutesByPackage: _decodePackageDailyAllowances(row['package_daily_allowances_json'] as String? ?? '{}'),
     createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
   );
 }
@@ -173,6 +179,7 @@ class AppUsageRecord {
     required this.startAt,
     required this.endAt,
     this.severityPointsPerHour,
+    this.dailyAllowanceMinutes = 0,
   });
   final String id;
   final String categoryId;
@@ -180,10 +187,14 @@ class AppUsageRecord {
   final DateTime startAt;
   final DateTime endAt;
   final double? severityPointsPerHour;
+  /// Daily allowance captured when this usage session was saved. Keeping the
+  /// value on the record prevents later setting changes from rewriting history.
+  final int dailyAllowanceMinutes;
   Map<String, Object?> toMap() => <String, Object?>{
     'id': id, 'category_id': categoryId, 'package_name': packageName,
     'start_at': startAt.toIso8601String(), 'end_at': endAt.toIso8601String(),
     'severity_points_per_hour': severityPointsPerHour,
+    'daily_allowance_minutes': dailyAllowanceMinutes,
   };
   factory AppUsageRecord.fromMap(Map<String, Object?> row) => AppUsageRecord(
     id: row['id'] as String, categoryId: row['category_id'] as String,
@@ -191,6 +202,7 @@ class AppUsageRecord {
     startAt: DateTime.tryParse(row['start_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
     endAt: DateTime.tryParse(row['end_at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
     severityPointsPerHour: (row['severity_points_per_hour'] as num?)?.toDouble(),
+    dailyAllowanceMinutes: (row['daily_allowance_minutes'] as num?)?.toInt() ?? 0,
   );
 }
 
@@ -246,6 +258,24 @@ class ProductivityTargetChange {
   Map<String, Object?> toMap() => <String, Object?>{
     'effective_date': effectiveDate, 'target': target,
   };
+}
+
+Map<String, int> _decodePackageDailyAllowances(String raw) {
+  try {
+    final Object? value = jsonDecode(raw);
+    if (value is! Map) return <String, int>{};
+    final Map<String, int> decoded = <String, int>{};
+    for (final MapEntry<Object?, Object?> entry in value.entries) {
+      final String packageName = entry.key?.toString().trim() ?? '';
+      final int? minutes = entry.value is num ? (entry.value as num).toInt() : int.tryParse(entry.value?.toString() ?? '');
+      if (packageName.isNotEmpty && minutes != null) {
+        decoded[packageName] = minutes.clamp(0, 1440).toInt();
+      }
+    }
+    return decoded;
+  } catch (_) {
+    return <String, int>{};
+  }
 }
 
 List<String> _decodePackageNames(String raw) {

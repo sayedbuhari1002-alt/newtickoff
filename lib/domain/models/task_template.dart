@@ -19,6 +19,10 @@ class TaskTemplate {
     this.iconKey = 'task',
     this.colorValue = 0xFFA78BFA,
     this.repeat = TaskRepeat.none,
+    this.notes = '',
+    this.photoPaths = const <String>[],
+    this.audioPaths = const <String>[],
+    this.subtasks = const <Subtask>[],
   });
 
   final String id;
@@ -33,6 +37,10 @@ class TaskTemplate {
   final String iconKey;
   final int colorValue;
   final TaskRepeat repeat;
+  final String notes;
+  final List<String> photoPaths;
+  final List<String> audioPaths;
+  final List<Subtask> subtasks;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -48,6 +56,10 @@ class TaskTemplate {
     String? iconKey,
     int? colorValue,
     TaskRepeat? repeat,
+    String? notes,
+    List<String>? photoPaths,
+    List<String>? audioPaths,
+    List<Subtask>? subtasks,
     DateTime? updatedAt,
   }) => TaskTemplate(
         id: id,
@@ -62,6 +74,10 @@ class TaskTemplate {
         iconKey: iconKey ?? this.iconKey,
         colorValue: colorValue ?? this.colorValue,
         repeat: repeat ?? this.repeat,
+        notes: notes ?? this.notes,
+        photoPaths: photoPaths ?? this.photoPaths,
+        audioPaths: audioPaths ?? this.audioPaths,
+        subtasks: subtasks ?? this.subtasks,
         createdAt: createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );

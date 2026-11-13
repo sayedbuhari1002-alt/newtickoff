@@ -76,6 +76,17 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
   String _dateKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   String _dateLabel(DateTime date) => '${date.day} ${_month(date.month)} ${date.year}';
   String _month(int month) => const <String>['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month - 1];
+
+  String _distractionCategorySubtitle(DistractionCategory category) {
+    final String severity = '${category.severityPointsPerHour.toStringAsFixed(1)} penalty points/hour';
+    if (!category.autoTrack) return '$severity · manual only';
+    final List<String> limits = category.packageNames.map((String packageName) {
+      final String appName = _installedAppLabels[packageName] ?? packageName;
+      final int minutes = category.dailyAllowanceMinutesByPackage[packageName] ?? 0;
+      return '$appName: $minutes min/day free';
+    }).toList();
+    return '$severity · ${limits.join(' · ')}';
+  }
   bool get _isToday => _dateKey(_selectedDate) == _dateKey(DateTime.now());
 
   Future<void> _chooseDate() async {
@@ -231,6 +242,12 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
     final TextEditingController severity = TextEditingController(text: (existing?.severityPointsPerHour ?? 1.0).toString());
     final TextEditingController details = TextEditingController(text: existing?.details ?? '');
     Set<String> selectedPackages = Set<String>.of(existing?.packageNames ?? const <String>[]);
+    final Map<String, TextEditingController> allowanceControllers = <String, TextEditingController>{
+      for (final String packageName in selectedPackages)
+        packageName: TextEditingController(
+          text: (existing?.dailyAllowanceMinutesByPackage[packageName] ?? 30).toString(),
+        ),
+    };
     List<InstalledApp> selectedAppCatalog = <InstalledApp>[];
     if (selectedPackages.isNotEmpty) {
       try {
@@ -253,6 +270,12 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
               final ({List<InstalledApp> apps, Set<String> selected})? result =
                   await _chooseInstalledApps(selectedPackages);
               if (result != null) {
+                for (final String packageName in result.selected) {
+                  allowanceControllers.putIfAbsent(
+                    packageName,
+                    () => TextEditingController(text: '30'),
+                  );
+                }
                 setDialogState(() {
                   selectedAppCatalog = result.apps;
                   selectedPackages = result.selected;
@@ -262,26 +285,59 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
             icon: const Icon(Icons.apps_rounded),
             label: Text('Choose installed apps (${selectedPackages.length} selected)'),
           ),
-          if (selectedPackages.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: selectedPackages.map((String packageName) {
-                    final InstalledApp? app = selectedAppCatalog
-                        .where((InstalledApp item) => item.packageName == packageName)
-                        .firstOrNull;
-                    return Chip(
-                      label: Text(app?.label ?? 'App no longer available', style: const TextStyle(fontSize: 11)),
-                      onDeleted: () => setDialogState(() => selectedPackages.remove(packageName)),
-                    );
-                  }).toList(),
-                ),
-              ),
+          if (selectedPackages.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 10),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Daily free usage allowance', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
             ),
+            const SizedBox(height: 3),
+            Text(
+              'Set a separate daily limit for each app. Penalties apply only to usage beyond the limit. Enter 0 for no free allowance.',
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 6),
+            ...selectedPackages.map((String packageName) {
+              final InstalledApp? app = selectedAppCatalog
+                  .where((InstalledApp item) => item.packageName == packageName)
+                  .firstOrNull;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        app?.label ?? packageName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 94,
+                      child: TextField(
+                        controller: allowanceControllers[packageName],
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.end,
+                        decoration: const InputDecoration(
+                          labelText: 'Limit',
+                          suffixText: 'min',
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove app',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => setDialogState(() => selectedPackages.remove(packageName)),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
           const SizedBox(height: 4),
           Text('Choose the apps you want Tazkiyane to count as distractions. Only apps with an icon in your app drawer are listed.', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
         ],
@@ -293,16 +349,34 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
       ],
     )));
     if (saved == true && mounted) {
-      final DistractionCategory category = DistractionCategory(
-        id: existing?.id ?? newId(), name: name.text.trim(),
-        severityPointsPerHour: double.tryParse(severity.text.trim().replaceAll(',', '.')) ?? 1,
-        details: details.text.trim(), autoTrack: autoTrack,
-        packageNames: selectedPackages.toList()..sort(),
-        createdAt: existing?.createdAt ?? DateTime.now(),
-      );
-      await _guard(() => ref.read(appDataProvider.notifier).saveDistractionCategory(category));
+      final Map<String, int> allowances = <String, int>{};
+      String? allowanceProblem;
+      for (final String packageName in (autoTrack ? selectedPackages : <String>{})) {
+        final int? minutes = int.tryParse(allowanceControllers[packageName]?.text.trim() ?? '30');
+        if (minutes == null || minutes < 0 || minutes > 1440) {
+          allowanceProblem = 'Enter a daily allowance from 0 to 1440 minutes for every selected app.';
+          break;
+        }
+        allowances[packageName] = minutes;
+      }
+      if (allowanceProblem != null) {
+        _message(allowanceProblem);
+      } else {
+        final DistractionCategory category = DistractionCategory(
+          id: existing?.id ?? newId(), name: name.text.trim(),
+          severityPointsPerHour: double.tryParse(severity.text.trim().replaceAll(',', '.')) ?? 1,
+          details: details.text.trim(), autoTrack: autoTrack,
+          packageNames: selectedPackages.toList()..sort(),
+          dailyAllowanceMinutesByPackage: allowances,
+          createdAt: existing?.createdAt ?? DateTime.now(),
+        );
+        await _guard(() => ref.read(appDataProvider.notifier).saveDistractionCategory(category));
+      }
     }
     name.dispose(); severity.dispose(); details.dispose();
+    for (final TextEditingController controller in allowanceControllers.values) {
+      controller.dispose();
+    }
   }
 
   Future<void> _createDistractionLog(AppData data) async {
@@ -603,7 +677,12 @@ class _ProductivityScreenState extends ConsumerState<ProductivityScreen> with Wi
         ListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(category.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: Text('${category.severityPointsPerHour.toStringAsFixed(1)} penalty points/hour${category.autoTrack ? ' · ${category.packageNames.length} app(s) selected' : ' · manual only'}', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          subtitle: Text(
+            _distractionCategorySubtitle(category),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
           trailing: IconButton(tooltip: 'Edit category', onPressed: () => _createCategory(existing: category), icon: const Icon(Icons.edit_outlined, size: 18)),
         ),
       const Divider(height: 18),

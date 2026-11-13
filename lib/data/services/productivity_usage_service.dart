@@ -99,6 +99,7 @@ class ProductivityUsageService {
         startAt: from,
         endAt: to,
         severityPointsPerHour: category.severityPointsPerHour,
+        dailyAllowanceMinutes: category.dailyAllowanceMinutesByPackage[packageName] ?? 0,
       ));
     }
     sessions.sort((AppUsageRecord a, AppUsageRecord b) => a.startAt.compareTo(b.startAt));

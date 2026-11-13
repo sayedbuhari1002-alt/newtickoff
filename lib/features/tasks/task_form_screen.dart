@@ -13,6 +13,7 @@ import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/ids.dart';
 import '../../data/services/task_reminder_service.dart';
+import '../habit_form/category_picker.dart';
 import '../../domain/models/models.dart';
 import '../../state/app_data.dart';
 import '../../state/app_state.dart';
@@ -30,7 +31,8 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _title = TextEditingController();
   final TextEditingController _description = TextEditingController();
-  final TextEditingController _category = TextEditingController();
+  String? _selectedCategoryId;
+  String _legacyCategoryName = '';
   final TextEditingController _notes = TextEditingController();
   DateTime? _dueAt;
   DateTime? _reminderAt;
@@ -57,7 +59,6 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
   void dispose() {
     _title.dispose();
     _description.dispose();
-    _category.dispose();
     _notes.dispose();
     _progressTarget.dispose();
     _progressUnit.dispose();
@@ -84,7 +85,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
   void _fill(Task task) {
     _title.text = task.title;
     _description.text = task.description;
-    _category.text = task.category;
+    _setCategoryByName(task.category);
     _notes.text = task.notes;
     _dueAt = task.dueAt;
     _reminderAt = task.reminderAt;
@@ -110,13 +111,123 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     _progressUnit.text = template.progressUnit;
     _difficulty.text = template.difficultyScore.toString();
     _priority = template.priority;
-    _category.text = template.category;
+    _setCategoryByName(template.category);
+    _notes.text = template.notes;
+    _subtasks = _instantiateTemplateSubtasks(template.subtasks);
+    _photoPaths = List<String>.of(template.photoPaths);
+    _audioPaths = List<String>.of(template.audioPaths);
     _iconKey = template.iconKey;
     _colorValue = template.colorValue;
     _repeat = template.repeat;
-    // Deliberately do not populate title, due date, reminder, completion,
-    // current progress, notes or attachments from a template.
+    // Titles, deadlines, reminders and current completion/progress remain task-specific.
     _initialised = true;
+  }
+
+  String get _selectedCategoryName {
+    final AppData? data = ref.read(appDataProvider).valueOrNull;
+    return data?.categoryById(_selectedCategoryId)?.name ?? _legacyCategoryName;
+  }
+
+  void _setCategoryByName(String name) {
+    final AppData? data = ref.read(appDataProvider).valueOrNull;
+    final String normalized = name.trim().toLowerCase();
+    final List<HabitCategory> matches = normalized.isEmpty
+        ? <HabitCategory>[]
+        : (data?.categories ?? const <HabitCategory>[]).where((HabitCategory category) => category.name.trim().toLowerCase() == normalized).toList();
+    final HabitCategory? match = matches.isEmpty ? null : matches.first;
+    _selectedCategoryId = match?.id;
+    _legacyCategoryName = match == null && normalized.isNotEmpty ? name.trim() : '';
+  }
+
+  Future<void> _chooseCategory() async {
+    final CategoryChoice? choice = await showCategoryPicker(context, selectedId: _selectedCategoryId);
+    if (choice == null || !mounted) return;
+    setState(() {
+      _selectedCategoryId = choice.id;
+      _legacyCategoryName = '';
+    });
+  }
+
+  List<Subtask> _instantiateTemplateSubtasks(List<Subtask> source) {
+    final DateTime now = DateTime.now();
+    return <Subtask>[
+      for (int index = 0; index < source.length; index++)
+        Subtask(
+          id: newId(),
+          title: source[index].title,
+          createdAt: now,
+          sortOrder: index,
+          difficultyScore: source[index].difficultyScore,
+        ),
+    ];
+  }
+
+  List<Subtask> _subtasksForTemplate(List<Subtask> source) {
+    final DateTime now = DateTime.now();
+    return <Subtask>[
+      for (int index = 0; index < source.length; index++)
+        Subtask(
+          id: newId(),
+          title: source[index].title,
+          createdAt: now,
+          sortOrder: index,
+          difficultyScore: source[index].difficultyScore,
+        ),
+    ];
+  }
+
+  Future<void> _addSubtask() async {
+    final _SubtaskDraft? draft = await _showSubtaskDraft();
+    if (draft == null || !mounted) return;
+    final DateTime now = DateTime.now();
+    setState(() => _subtasks.add(Subtask(
+      id: newId(), title: draft.title, createdAt: now,
+      sortOrder: _subtasks.length, difficultyScore: draft.difficultyScore,
+    )));
+  }
+
+  Future<void> _editSubtask(Subtask subtask) async {
+    final _SubtaskDraft? draft = await _showSubtaskDraft(existing: subtask);
+    if (draft == null || !mounted) return;
+    setState(() {
+      final int index = _subtasks.indexWhere((Subtask item) => item.id == subtask.id);
+      if (index >= 0) _subtasks[index] = subtask.copyWith(title: draft.title, difficultyScore: draft.difficultyScore);
+    });
+  }
+
+  void _removeSubtask(String id) => setState(() => _subtasks.removeWhere((Subtask item) => item.id == id));
+
+  Future<_SubtaskDraft?> _showSubtaskDraft({Subtask? existing}) async {
+    final TextEditingController title = TextEditingController(text: existing?.title ?? '');
+    final TextEditingController difficulty = TextEditingController(text: (existing?.difficultyScore ?? 1).toString());
+    String? error;
+    final _SubtaskDraft? result = await showDialog<_SubtaskDraft>(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext dialogContext, StateSetter setDialogState) => AlertDialog(
+          title: Text(existing == null ? 'Add subtask' : 'Edit subtask'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
+            TextField(controller: title, autofocus: true, textCapitalization: TextCapitalization.sentences, decoration: InputDecoration(labelText: 'Subtask name', errorText: error)),
+            const SizedBox(height: 12),
+            TextField(controller: difficulty, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Difficulty score (1–10)')),
+          ]),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            FilledButton(onPressed: () {
+              final double? points = double.tryParse(difficulty.text.trim());
+              if (title.text.trim().isEmpty || points == null || !points.isFinite || points < 1 || points > 10) {
+                setDialogState(() => error = title.text.trim().isEmpty ? 'Enter a subtask name.' : 'Difficulty must be between 1 and 10.');
+                return;
+              }
+              Navigator.pop(dialogContext, _SubtaskDraft(title.text.trim(), points));
+            }, child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    title.dispose();
+    difficulty.dispose();
+    return result;
   }
 
   Future<void> _chooseDueDate() async {
@@ -213,6 +324,18 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     }
   }
 
+  Future<void> _cleanupUnusedSessionAttachments(Iterable<String> retainedPaths) async {
+    final Set<String> retained = retainedPaths.toSet();
+    for (final String path in _sessionAddedPaths.toList()) {
+      if (retained.contains(path)) continue;
+      _sessionAddedPaths.remove(path);
+      try {
+        final File file = File(path);
+        if (await file.exists()) await file.delete();
+      } catch (_) { /* Best-effort cleanup of replaced attachments. */ }
+    }
+  }
+
   Future<void> _removeAttachment(String path) async {
     setState(() { _photoPaths.remove(path); _audioPaths.remove(path); });
     if (_sessionAddedPaths.remove(path)) {
@@ -258,7 +381,11 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
       _progressUnit.text = selected.progressUnit;
       _difficulty.text = selected.difficultyScore.toString();
       _priority = selected.priority;
-      _category.text = selected.category;
+      _setCategoryByName(selected.category);
+      _notes.text = selected.notes;
+      _subtasks = _instantiateTemplateSubtasks(selected.subtasks);
+      _photoPaths = List<String>.of(selected.photoPaths);
+      _audioPaths = List<String>.of(selected.audioPaths);
       _iconKey = selected.iconKey;
       _colorValue = selected.colorValue;
       _repeat = selected.repeat;
@@ -297,10 +424,15 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
         progressTarget: double.tryParse(_progressTarget.text.trim()) ?? 100,
         progressUnit: _progressUnit.text.trim(),
         difficultyScore: double.tryParse(_difficulty.text.trim()) ?? 1.0,
-        priority: _priority, category: _category.text.trim(), iconKey: _iconKey,
+        priority: _priority, category: _selectedCategoryName, iconKey: _iconKey,
         colorValue: _colorValue, repeat: _repeat,
+        notes: _notes.text.trim(), photoPaths: List<String>.of(_photoPaths),
+        audioPaths: List<String>.of(_audioPaths), subtasks: _subtasksForTemplate(_subtasks),
       );
       await ref.read(appDataProvider.notifier).saveTaskTemplate(template);
+      // The template now owns references to these new attachment files. Do not
+      // delete them when this form is closed before the task itself is saved.
+      await _cleanupUnusedSessionAttachments(<String>{...template.photoPaths, ...template.audioPaths});
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Template "${template.name}" saved.')));
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
@@ -322,7 +454,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
       dueAt: _dueAt,
       reminderAt: _reminderAt,
       priority: _priority,
-      category: _category.text.trim(),
+      category: _selectedCategoryName,
       iconKey: _iconKey,
       colorValue: _colorValue,
       isCompleted: old?.isCompleted ?? false,
@@ -347,6 +479,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     );
     try {
       await ref.read(appDataProvider.notifier).saveTask(task);
+      await _cleanupUnusedSessionAttachments(<String>{...task.photoPaths, ...task.audioPaths});
       _savedSuccessfully = true;
       _sessionAddedPaths.clear();
       final String? reminderIssue = TaskReminderService.instance.lastSchedulingIssue;
@@ -424,8 +557,15 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                 onChanged: (TaskPriority? value) => setState(() => _priority = value ?? TaskPriority.medium),
               ),
               const SizedBox(height: 12),
-              TextFormField(controller: _category, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Category', hintText: 'Study, personal, work…')),
-              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.label_outline_rounded),
+                title: const Text('Category'),
+                subtitle: Text(_selectedCategoryName.isEmpty ? 'No category' : _selectedCategoryName),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: _chooseCategory,
+              ),
+              const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: _iconKey,
                 decoration: const InputDecoration(labelText: 'Icon'),
@@ -496,9 +636,28 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                   Padding(padding: const EdgeInsets.only(top: 8), child: Text('You can update the percentage as you work over multiple sessions.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))),
               ],
               const SizedBox(height: 16),
-              OutlinedButton.icon(onPressed: _saveAsTemplate, icon: const Icon(Icons.bookmark_add_outlined), label: const Text('Save these settings as a template')),
-              const SizedBox(height: 8),
               Text('To organise related tasks, create them individually and group them from the Tasks screen using long-press selection.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              const SizedBox(height: 24),
+              const _SectionTitle('Subtasks'),
+              Text('Break this task into smaller steps. Each subtask can be completed separately.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(onPressed: _addSubtask, icon: const Icon(Icons.add_rounded), label: const Text('Add subtask')),
+              if (_subtasks.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 8),
+                for (final Subtask subtask in _subtasks)
+                  Card(
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(subtask.isCompleted ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, color: subtask.isCompleted ? AppColors.gold : AppColors.textSecondary),
+                      title: Text(subtask.title),
+                      subtitle: Text('Difficulty ${subtask.difficultyScore.toStringAsFixed(subtask.difficultyScore == subtask.difficultyScore.roundToDouble() ? 0 : 1)}'),
+                      trailing: Wrap(mainAxisSize: MainAxisSize.min, children: <Widget>[
+                        IconButton(tooltip: 'Edit subtask', onPressed: () => _editSubtask(subtask), icon: const Icon(Icons.edit_outlined)),
+                        IconButton(tooltip: 'Remove subtask', onPressed: () => _removeSubtask(subtask.id), icon: const Icon(Icons.close_rounded)),
+                      ]),
+                    ),
+                  ),
+              ],
               const SizedBox(height: 24),
               const _SectionTitle('Notes'),
               TextFormField(controller: _notes, maxLines: 4, decoration: const InputDecoration(hintText: 'Add context or notes for this task…', alignLabelWithHint: true)),
@@ -513,7 +672,9 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                 for (final String path in _photoPaths) ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: const Icon(Icons.image_outlined), title: Text(path_util.basename(path), maxLines: 1, overflow: TextOverflow.ellipsis), trailing: IconButton(tooltip: 'Remove photo', onPressed: () => _removeAttachment(path), icon: const Icon(Icons.close_rounded))),
                 for (final String path in _audioPaths) ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: const Icon(Icons.audio_file_outlined), title: Text(path_util.basename(path), maxLines: 1, overflow: TextOverflow.ellipsis), trailing: IconButton(tooltip: 'Remove audio', onPressed: () => _removeAttachment(path), icon: const Icon(Icons.close_rounded))),
               ],
-              const SizedBox(height: 24),
+              const SizedBox(height: 18),
+              OutlinedButton.icon(onPressed: _saving ? null : _saveAsTemplate, icon: const Icon(Icons.bookmark_add_outlined), label: const Text('Save these settings as a template')),
+              const SizedBox(height: 12),
               FilledButton(onPressed: _saving ? null : _save, child: Text(_saving ? 'Saving…' : widget.taskId == null ? 'Create Task' : 'Save Changes')),
             ],
           ),
@@ -521,6 +682,12 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
       ),
     );
   }
+}
+
+class _SubtaskDraft {
+  const _SubtaskDraft(this.title, this.difficultyScore);
+  final String title;
+  final double difficultyScore;
 }
 
 class _SectionTitle extends StatelessWidget {

@@ -134,11 +134,60 @@ class ProductivityEngine {
         _addScoredInterval(scoredIntervals, category, log.startAt, log.endAt, start, end, severity: severity);
       }
     }
+    // Apply each app's daily grace period before building penalty intervals.
+    // The allowance is snapshotted on every AppUsageRecord so later edits to a
+    // category do not retroactively alter already-recorded days.
+    final Map<String, List<AppUsageRecord>> usageByPackage = <String, List<AppUsageRecord>>{};
     for (final AppUsageRecord record in appUsageRecords) {
       final DistractionCategory? category = categoryById[record.categoryId];
       final double severity = record.severityPointsPerHour ?? category?.severityPointsPerHour ?? 0;
-      if (category != null && severity > 0) {
-        _addScoredInterval(scoredIntervals, category, record.startAt, record.endAt, start, end, severity: severity);
+      if (category == null || severity <= 0 ||
+          !record.startAt.isBefore(end) || !record.endAt.isAfter(start)) {
+        continue;
+      }
+      usageByPackage.putIfAbsent(record.packageName, () => <AppUsageRecord>[]).add(record);
+    }
+    for (final List<AppUsageRecord> sessions in usageByPackage.values) {
+      sessions.sort((AppUsageRecord a, AppUsageRecord b) => a.startAt.compareTo(b.startAt));
+      final AppUsageRecord firstSession = sessions.first;
+      final int allowanceMillis = firstSession.dailyAllowanceMinutes.clamp(0, 1440).toInt() * 60000;
+      int consumedMillis = 0;
+      DateTime? previousSessionEnd;
+
+      for (final AppUsageRecord record in sessions) {
+        DateTime sessionStart = record.startAt.isBefore(start) ? start : record.startAt;
+        final DateTime sessionEnd = record.endAt.isAfter(end) ? end : record.endAt;
+        // Avoid consuming or charging duplicate time if the native event feed
+        // happens to contain overlapping sessions for the same package.
+        if (previousSessionEnd != null && sessionStart.isBefore(previousSessionEnd)) {
+          sessionStart = previousSessionEnd;
+        }
+        if (!sessionEnd.isAfter(sessionStart)) continue;
+
+        final int durationMillis = sessionEnd.difference(sessionStart).inMilliseconds;
+        final int allowanceRemaining = allowanceMillis > consumedMillis
+            ? allowanceMillis - consumedMillis
+            : 0;
+        final int exemptMillis = durationMillis < allowanceRemaining
+            ? durationMillis
+            : allowanceRemaining;
+        consumedMillis += durationMillis;
+        previousSessionEnd = sessionEnd;
+
+        final DateTime chargeStart = sessionStart.add(Duration(milliseconds: exemptMillis));
+        final DistractionCategory? recordCategory = categoryById[record.categoryId];
+        final double recordSeverity = record.severityPointsPerHour ?? recordCategory?.severityPointsPerHour ?? 0;
+        if (recordCategory != null && recordSeverity > 0 && sessionEnd.isAfter(chargeStart)) {
+          _addScoredInterval(
+            scoredIntervals,
+            recordCategory,
+            chargeStart,
+            sessionEnd,
+            start,
+            end,
+            severity: recordSeverity,
+          );
+        }
       }
     }
     // Merge all overlapping manual and automatic intervals, even when the user
@@ -282,9 +331,9 @@ class ProductivityEngine {
     return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}';
   }
 
-  /// Today's score follows the currently saved task state. A progressive task
-  /// contributes its current percentage only when its progress was changed
-  /// today; reducing that percentage immediately reduces today's points.
+  /// Today's score follows the currently saved task state relative to the
+  /// progress value at the start of the day. Moving a slider up and then back
+  /// to yesterday's value therefore removes all provisional points for today.
   void _addCurrentTaskContributions({
     required DateTime date,
     required List<Task> tasks,
@@ -305,16 +354,27 @@ class ProductivityEngine {
       final bool container = isContainer(task);
 
       if (!container && task.taskType == TaskType.progressive) {
-        final bool changedToday =
-            (todayEventsByTask[task.id]?.isNotEmpty ?? false) || _sameDay(task.createdAt, date);
-        final double currentPercent = changedToday ? task.progressPercent : 0;
-        if (currentPercent > 0) {
-          positive.add(ProductivityContribution(
-            label: task.title,
-            points: task.difficultyScore * currentPercent / 100,
-            kind: 'Progressive Task',
-            detail: '${currentPercent.toStringAsFixed(1)}% current progress',
-          ));
+        final List<TaskProgressEvent> taskEvents =
+            List<TaskProgressEvent>.of(todayEventsByTask[task.id] ?? const <TaskProgressEvent>[])
+              ..sort((TaskProgressEvent a, TaskProgressEvent b) => a.occurredAt.compareTo(b.occurredAt));
+        final bool createdToday = _sameDay(task.createdAt, date);
+        if (taskEvents.isNotEmpty || createdToday) {
+          // A task created today starts at zero for today's scoring. Existing
+          // tasks start from the value immediately before their first update
+          // today, not from their absolute saved progress.
+          final double startOfDayPercent = createdToday
+              ? 0
+              : taskEvents.first.previousPercent.clamp(0, 100).toDouble();
+          final double netProgressToday =
+              (task.progressPercent - startOfDayPercent).clamp(0, 100).toDouble();
+          if (netProgressToday > 0) {
+            positive.add(ProductivityContribution(
+              label: task.title,
+              points: task.difficultyScore * netProgressToday / 100,
+              kind: 'Progressive Task',
+              detail: '${netProgressToday.toStringAsFixed(1)}% net progress today',
+            ));
+          }
         }
       } else if (!container && task.isCompleted && task.completedAt != null && _sameDay(task.completedAt!, date)) {
         positive.add(ProductivityContribution(

@@ -172,7 +172,37 @@ class _ProductivityAnalyticsTabState
             subtitle: trendLabel,
             child: SizedBox(
               height: 170,
-              child: _LineScoreChart(values: buckets.map((b) => b.net).toList()),
+              child: _LineScoreChart(
+                values: buckets.map((_ScoreBucket bucket) => bucket.net).toList(),
+                color: AppColors.gold,
+                emptyMessage: 'No productivity trend is available yet.',
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _Panel(
+            title: 'Points earned trend',
+            subtitle: 'Positive points earned before penalties',
+            child: SizedBox(
+              height: 150,
+              child: _LineScoreChart(
+                values: buckets.map((_ScoreBucket bucket) => bucket.earned).toList(),
+                color: AppColors.secondaryAccent,
+                emptyMessage: 'No earned points are available for this period.',
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _Panel(
+            title: 'Penalty points trend',
+            subtitle: 'Points deducted from distractions and quit-habit slips',
+            child: SizedBox(
+              height: 150,
+              child: _LineScoreChart(
+                values: buckets.map((_ScoreBucket bucket) => bucket.penalty).toList(),
+                color: AppColors.danger,
+                emptyMessage: 'No penalty points are available for this period.',
+              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -319,7 +349,20 @@ class _ProductivityAnalyticsTabState
         0,
         (double sum, _DailyScore item) => sum + item.score.netScore,
       );
-      return _ScoreBucket(label: _bucketLabel(from, to), net: net);
+      final double earned = group.fold<double>(
+        0,
+        (double sum, _DailyScore item) => sum + item.score.achievementPoints,
+      );
+      final double penalty = group.fold<double>(
+        0,
+        (double sum, _DailyScore item) => sum + item.score.penaltyPoints,
+      );
+      return _ScoreBucket(
+        label: _bucketLabel(from, to),
+        net: net,
+        earned: earned,
+        penalty: penalty,
+      );
     }).toList();
   }
 
@@ -345,9 +388,16 @@ class _DailyScore {
 }
 
 class _ScoreBucket {
-  const _ScoreBucket({required this.label, required this.net});
+  const _ScoreBucket({
+    required this.label,
+    required this.net,
+    required this.earned,
+    required this.penalty,
+  });
   final String label;
   final double net;
+  final double earned;
+  final double penalty;
 }
 
 class _MetricCard extends StatelessWidget {
@@ -490,24 +540,31 @@ class _EmptyAnalyticsText extends StatelessWidget {
 }
 
 class _LineScoreChart extends StatelessWidget {
-  const _LineScoreChart({required this.values});
+  const _LineScoreChart({
+    required this.values,
+    required this.color,
+    required this.emptyMessage,
+  });
   final List<double> values;
+  final Color color;
+  final String emptyMessage;
 
   @override
   Widget build(BuildContext context) {
     if (values.isEmpty || values.every((double value) => value == 0)) {
-      return const _EmptyAnalyticsText(text: 'No score trend is available yet.');
+      return _EmptyAnalyticsText(text: emptyMessage);
     }
     return CustomPaint(
-      painter: _LineScorePainter(values: values),
+      painter: _LineScorePainter(values: values, color: color),
       child: const SizedBox.expand(),
     );
   }
 }
 
 class _LineScorePainter extends CustomPainter {
-  const _LineScorePainter({required this.values});
+  const _LineScorePainter({required this.values, required this.color});
   final List<double> values;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -516,13 +573,13 @@ class _LineScorePainter extends CustomPainter {
       ..color = AppColors.border
       ..strokeWidth = 1;
     final Paint line = Paint()
-      ..color = AppColors.gold
+      ..color = color
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     final Paint pointsPaint = Paint()
-      ..color = AppColors.gold
+      ..color = color
       ..style = PaintingStyle.fill;
     for (int row = 1; row <= 3; row++) {
       final double y = size.height * row / 4;
@@ -557,7 +614,7 @@ class _LineScorePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LineScorePainter oldDelegate) =>
-      oldDelegate.values != values;
+      oldDelegate.values != values || oldDelegate.color != color;
 }
 
 class _BarScoreChart extends StatelessWidget {

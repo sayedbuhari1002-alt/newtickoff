@@ -1,5 +1,22 @@
 # Tazkiyane next-version changes
 
+## 0.6.7+31 — reusable task template content
+
+- Task templates now preserve notes, photo attachments, audio recordings, and reusable subtasks with difficulty scores.
+- Applying a template copies its notes and media attachments to the task and creates new, incomplete subtask records. Subtask deadlines, reminders, and completion state are not copied, avoiding stale dates or completed steps in a new task.
+- Task creation and template editing now use the same category picker as habits, including No category and New category. Legacy free-text task categories are retained when editing until the user chooses a managed category.
+- Added subtask add/edit/remove controls to the task form and expanded the template editor to manage notes, photo/audio attachments, and subtasks.
+- Attachment cleanup now accounts for references held by task templates as well as tasks and journal notes.
+- SQLite schema version 12 adds template notes, photo paths, audio paths, and serialized subtasks through an additive migration.
+
+## 0.6.6+30 — progressive-task day baseline, app grace periods, and complete productivity trends
+
+- Today's progressive-task score now uses the difference between the saved progress at the start of the day and the current saved progress. Temporarily moving a task slider up and then returning to yesterday's percentage no longer awards points for that day. Newly created progressive tasks still start their daily baseline at zero.
+- Automatic distraction tracking now supports a separate daily free-usage allowance for each selected app. Only the chronological usage beyond that app's daily allowance is charged at the configured category penalty rate. A zero-minute allowance means no free usage.
+- The allowance used by each automatic usage session is stored as a snapshot, so editing an app's allowance does not change penalties on already-recorded dates.
+- Productivity Analytics now has separate trend graphs for net productivity, points earned before deductions, and penalty points, all using the existing 7-day, 30-day, 90-day, and 12-month range selector.
+- SQLite schema version 11 adds per-app allowance settings and usage-session allowance snapshots. The migration is additive and retains existing settings, usage records, and history.
+
 ## 0.6.5+28 — partial count/checklist progress in habit analytics
 
 - Habit analytics now calculates Build count-based habit progress proportionally against the configured daily goal. For example, 4 of 8 counts contributes 50% rather than 0% until the target is fully reached.
