@@ -2,7 +2,7 @@
 name: tickoff_replacement
 description: Offline-first personal productivity app for habits, tasks, daily journal and expenses.
 publish_to: 'none'
-version: 0.6.7+32
+version: 0.6.7+33
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
