@@ -381,7 +381,7 @@ class _TaskTemplateEditorScreenState extends ConsumerState<TaskTemplateEditorScr
                     leading: const Icon(Icons.checklist_rounded),
                     title: Text(subtask.title),
                     subtitle: Text('Difficulty ${subtask.difficultyScore.toStringAsFixed(subtask.difficultyScore == subtask.difficultyScore.roundToDouble() ? 0 : 1)}'),
-                    trailing: Wrap(mainAxisSize: MainAxisSize.min, children: <Widget>[
+                    trailing: Wrap(children: <Widget>[
                       IconButton(tooltip: 'Edit subtask', onPressed: () => _editSubtask(subtask), icon: const Icon(Icons.edit_outlined)),
                       IconButton(tooltip: 'Remove subtask', onPressed: () => setState(() => _subtasks.removeWhere((Subtask item) => item.id == subtask.id)), icon: const Icon(Icons.close_rounded)),
                     ]),

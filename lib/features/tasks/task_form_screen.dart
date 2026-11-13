@@ -651,7 +651,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                       leading: Icon(subtask.isCompleted ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, color: subtask.isCompleted ? AppColors.gold : AppColors.textSecondary),
                       title: Text(subtask.title),
                       subtitle: Text('Difficulty ${subtask.difficultyScore.toStringAsFixed(subtask.difficultyScore == subtask.difficultyScore.roundToDouble() ? 0 : 1)}'),
-                      trailing: Wrap(mainAxisSize: MainAxisSize.min, children: <Widget>[
+                      trailing: Wrap(children: <Widget>[
                         IconButton(tooltip: 'Edit subtask', onPressed: () => _editSubtask(subtask), icon: const Icon(Icons.edit_outlined)),
                         IconButton(tooltip: 'Remove subtask', onPressed: () => _removeSubtask(subtask.id), icon: const Icon(Icons.close_rounded)),
                       ]),
