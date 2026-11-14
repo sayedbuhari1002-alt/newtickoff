@@ -502,7 +502,8 @@ class ProductivityEngine {
     final DateTime dayEnd = DateTime(date.year, date.month, date.day, 23, 59, 59, 999);
     final Map<String, Task> taskById = <String, Task>{for (final Task task in tasks) task.id: task};
     final Map<String, TaskActivity> latestSnapshotByTask = <String, TaskActivity>{};
-    final Set<String> progressChangedOnDay = <String>{};
+    final Map<String, List<TaskProgressEvent>> progressEventsOnDay =
+        <String, List<TaskProgressEvent>>{};
     final Set<String> createdOnDay = <String>{};
 
     for (final TaskActivity activity in activities) {
@@ -517,7 +518,15 @@ class ProductivityEngine {
       }
     }
     for (final TaskProgressEvent event in progressEvents) {
-      if (_sameDay(event.occurredAt, date)) progressChangedOnDay.add(event.taskId);
+      if (_sameDay(event.occurredAt, date)) {
+        progressEventsOnDay
+            .putIfAbsent(event.taskId, () => <TaskProgressEvent>[])
+            .add(event);
+      }
+    }
+    for (final List<TaskProgressEvent> events in progressEventsOnDay.values) {
+      events.sort((TaskProgressEvent a, TaskProgressEvent b) =>
+          a.occurredAt.compareTo(b.occurredAt));
     }
 
     final Set<String> taskIds = <String>{...latestSnapshotByTask.keys, ...taskById.keys};
@@ -548,22 +557,46 @@ class ProductivityEngine {
       final String taskType = (snapshot['taskType'] as String?) ?? task?.taskType.name ?? TaskType.standard.name;
 
       if (taskType == TaskType.progressive.name && !isContainer) {
-        final bool changedThatDay = progressChangedOnDay.contains(taskId) ||
-            createdOnDay.contains(taskId) || (task != null && _sameDay(task.createdAt, date));
+        final List<TaskProgressEvent> dayEvents =
+            progressEventsOnDay[taskId] ?? const <TaskProgressEvent>[];
+        final bool createdThatDay = createdOnDay.contains(taskId) ||
+            (task != null && _sameDay(task.createdAt, date));
+        final bool changedThatDay = dayEvents.isNotEmpty || createdThatDay;
         if (!changedThatDay) continue;
-        final double progressValue = (snapshot['progressValue'] as num?)?.toDouble() ?? task?.progressValue ?? 0;
-        final double progressTarget = (snapshot['progressTarget'] as num?)?.toDouble() ?? task?.progressTarget ?? 100;
-        final String progressMode = (snapshot['progressMode'] as String?) ?? task?.progressMode.name ?? TaskProgressMode.percentage.name;
-        final double currentPercent = progressMode == TaskProgressMode.count.name
-            ? (progressTarget <= 0 ? 0 : (progressValue / progressTarget * 100).clamp(0, 100).toDouble())
+
+        final double progressValue =
+            (snapshot['progressValue'] as num?)?.toDouble() ?? task?.progressValue ?? 0;
+        final double progressTarget =
+            (snapshot['progressTarget'] as num?)?.toDouble() ?? task?.progressTarget ?? 100;
+        final String progressMode = (snapshot['progressMode'] as String?) ??
+            task?.progressMode.name ?? TaskProgressMode.percentage.name;
+        final double cumulativePercent = progressMode == TaskProgressMode.count.name
+            ? (progressTarget <= 0
+                ? 0
+                : (progressValue / progressTarget * 100).clamp(0, 100).toDouble())
             : progressValue.clamp(0, 100).toDouble();
-        final double difficulty = (snapshot['difficultyScore'] as num?)?.toDouble() ?? task?.difficultyScore ?? 1;
-        if (currentPercent > 0) {
+
+        // Historical progressive-task scoring is based on the net increase
+        // during this calendar day, not the task's cumulative percentage.
+        // The earliest event captures the exact start-of-day baseline; the
+        // latest immutable task activity captures the end-of-day total.
+        // Newly created tasks start from zero, matching today's live scorer.
+        final double startOfDayPercent = createdThatDay
+            ? 0
+            : dayEvents.isNotEmpty
+                ? dayEvents.first.previousPercent.clamp(0, 100).toDouble()
+                : cumulativePercent;
+        final double netProgressThatDay =
+            (cumulativePercent - startOfDayPercent).clamp(0, 100).toDouble();
+        final double difficulty =
+            (snapshot['difficultyScore'] as num?)?.toDouble() ??
+                (dayEvents.isNotEmpty ? dayEvents.last.difficultyScore : task?.difficultyScore ?? 1);
+        if (netProgressThatDay > 0) {
           positive.add(ProductivityContribution(
             label: title,
-            points: difficulty * currentPercent / 100,
+            points: difficulty * netProgressThatDay / 100,
             kind: 'Progressive Task',
-            detail: '${currentPercent.toStringAsFixed(1)}% end-of-day progress',
+            detail: '${cumulativePercent.toStringAsFixed(1)}% cumulative · +${netProgressThatDay.toStringAsFixed(1)}% that day',
           ));
         }
       } else if (!isContainer) {
@@ -605,8 +638,9 @@ class ProductivityEngine {
     }
 
     // Backward compatibility for older or partial snapshots (including records
-    // written before task-state fields were included). These retain the prior
-    // event-based interpretation without affecting complete modern snapshots.
+    // written before task-state fields were included). When an end-of-day task
+    // snapshot is unavailable, the day's first and last progress events provide
+    // its starting and ending percentages for the same net-progress calculation.
     if (legacyTaskIds.isEmpty) return;
     final Map<String, List<TaskProgressEvent>> progressByTask = <String, List<TaskProgressEvent>>{};
     for (final TaskProgressEvent event in progressEvents.where((TaskProgressEvent event) => legacyTaskIds.contains(event.taskId))) {
@@ -625,15 +659,25 @@ class ProductivityEngine {
       if (isContainer) continue;
       final String title = task?.title ?? (historical['title'] as String? ?? taskId);
       final List<TaskProgressEvent> events = progressByTask[taskId] ?? const <TaskProgressEvent>[];
-      if (events.isNotEmpty) {
-        double highWater = events.first.previousPercent.clamp(0, 100).toDouble();
-        for (final TaskProgressEvent event in events) {
-          final double nextHigh = event.newPercent > highWater ? event.newPercent : highWater;
-          final double newlyReached = (nextHigh - highWater).clamp(0, 100).toDouble();
-          if (newlyReached > 0 && _sameDay(event.occurredAt, date)) {
-            positive.add(ProductivityContribution(label: title, points: event.difficultyScore * newlyReached / 100, kind: 'Progressive Task', detail: '${newlyReached.toStringAsFixed(1)}% legacy progress event'));
-          }
-          highWater = nextHigh;
+      final List<TaskProgressEvent> dayEvents = events
+          .where((TaskProgressEvent event) => _sameDay(event.occurredAt, date))
+          .toList()
+        ..sort((TaskProgressEvent a, TaskProgressEvent b) =>
+            a.occurredAt.compareTo(b.occurredAt));
+      if (dayEvents.isNotEmpty) {
+        final double startOfDayPercent =
+            dayEvents.first.previousPercent.clamp(0, 100).toDouble();
+        final double endOfDayPercent =
+            dayEvents.last.newPercent.clamp(0, 100).toDouble();
+        final double netProgressThatDay =
+            (endOfDayPercent - startOfDayPercent).clamp(0, 100).toDouble();
+        if (netProgressThatDay > 0) {
+          positive.add(ProductivityContribution(
+            label: title,
+            points: dayEvents.last.difficultyScore * netProgressThatDay / 100,
+            kind: 'Progressive Task',
+            detail: '${endOfDayPercent.toStringAsFixed(1)}% cumulative · +${netProgressThatDay.toStringAsFixed(1)}% that day',
+          ));
         }
       }
     }

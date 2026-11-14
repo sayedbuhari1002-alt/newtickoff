@@ -102,6 +102,33 @@ void main() {
     expect(score.penaltyPoints, 0);
   });
 
+  test('historical habit score uses the final difficulty saved for that date', () {
+    final DateTime yesterday = DateTime(2026, 11, 13);
+    final DateTime today = DateTime(2026, 11, 14);
+    final Habit habit = Habit(
+      id: 'updated-habit', title: 'Exam revision', createdAt: day,
+      productivityPoints: 3,
+    );
+    final CompletionRecord record = CompletionRecord(
+      habitId: habit.id, dateKey: '2026-11-13', updatedAt: yesterday,
+      done: true, productivityPoints: 1,
+      habitType: HabitType.build.name, trackingMethod: TrackingMethod.tick.name,
+      dailyGoalSnapshot: 1, checklistItemIds: const <String>{},
+    );
+
+    final ProductivityDayScore score = calculate(
+      scoreDate: yesterday,
+      today: today,
+      habits: <Habit>[habit],
+      completions: <String, Map<String, CompletionRecord>>{
+        habit.id: <String, CompletionRecord>{record.dateKey: record},
+      },
+    );
+
+    expect(score.achievementPoints, 1);
+    expect(score.contributions.single.points, 1);
+  });
+
   test('Standard task and subtask awards use stored snapshots and decimal weights', () {
     final DateTime completedAt = DateTime(2026, 11, 8, 14);
     final List<TaskActivity> activities = <TaskActivity>[
@@ -575,6 +602,117 @@ void main() {
     final ProductivityDayScore tuesdayScore = calculate(scoreDate: tuesday, today: today, scoringStart: monday, tasks: <Task>[task], activities: activities, progressEvents: events);
     expect(mondayScore.achievementPoints, closeTo(1, 0.0001));
     expect(tuesdayScore.achievementPoints, 0);
+  });
+
+  test('historical progressive task awards only the net progress earned that day', () {
+    final DateTime today = DateTime(2026, 11, 14);
+    final DateTime firstDay = DateTime(2026, 11, 12);
+    final DateTime secondDay = DateTime(2026, 11, 13);
+    final Task currentTask = Task(
+      id: 'training-history', title: 'Cisco Training',
+      createdAt: firstDay, updatedAt: secondDay.add(const Duration(hours: 17)),
+      taskType: TaskType.progressive, progressValue: 15,
+      difficultyScore: 5,
+    );
+
+    TaskActivity snapshot(String id, DateTime at, double progress) => TaskActivity(
+      id: id, taskId: currentTask.id, entityId: currentTask.id,
+      entityType: 'task', eventType: 'task_progress_updated', occurredAt: at,
+      snapshotJson: jsonEncode(<String, Object?>{
+        'title': currentTask.title,
+        'difficultyScore': 5,
+        'isGroup': false,
+        'hasSubtasks': false,
+        'subtaskCount': 0,
+        'isCompleted': false,
+        'completedAt': null,
+        'taskType': 'progressive',
+        'progressMode': 'percentage',
+        'progressValue': progress,
+        'progressTarget': 100,
+        'subtasks': <Object>[],
+      }),
+    );
+
+    final List<TaskActivity> activities = <TaskActivity>[
+      snapshot('day-one-end', firstDay.add(const Duration(hours: 18)), 10),
+      snapshot('day-two-end', secondDay.add(const Duration(hours: 17)), 15),
+    ];
+    final List<TaskProgressEvent> events = <TaskProgressEvent>[
+      TaskProgressEvent(
+        id: 'day-one-progress', taskId: currentTask.id,
+        previousValue: 0, newValue: 10, previousPercent: 0,
+        newPercent: 10, progressDelta: 10,
+        occurredAt: firstDay.add(const Duration(hours: 18)), difficultyScore: 5,
+      ),
+      TaskProgressEvent(
+        id: 'day-two-progress', taskId: currentTask.id,
+        previousValue: 10, newValue: 15, previousPercent: 10,
+        newPercent: 15, progressDelta: 5,
+        occurredAt: secondDay.add(const Duration(hours: 17)), difficultyScore: 5,
+      ),
+    ];
+
+    final ProductivityDayScore firstDayScore = calculate(
+      scoreDate: firstDay, today: today, scoringStart: firstDay,
+      tasks: <Task>[currentTask], activities: activities,
+      progressEvents: events,
+    );
+    final ProductivityDayScore secondDayScore = calculate(
+      scoreDate: secondDay, today: today, scoringStart: firstDay,
+      tasks: <Task>[currentTask], activities: activities,
+      progressEvents: events,
+    );
+
+    expect(firstDayScore.achievementPoints, closeTo(0.5, 0.0001));
+    expect(secondDayScore.achievementPoints, closeTo(0.25, 0.0001));
+    expect(secondDayScore.contributions.single.detail,
+        '15.0% cumulative · +5.0% that day');
+  });
+
+  test('historical progressive slider returning to its start value earns zero', () {
+    final DateTime today = DateTime(2026, 11, 14);
+    final DateTime yesterday = DateTime(2026, 11, 13);
+    final Task task = Task(
+      id: 'training-return', title: 'Training',
+      createdAt: yesterday.subtract(const Duration(days: 1)),
+      updatedAt: yesterday.add(const Duration(hours: 11)),
+      taskType: TaskType.progressive, progressValue: 10, difficultyScore: 5,
+    );
+    TaskActivity activity(String id, DateTime at, double progress) => TaskActivity(
+      id: id, taskId: task.id, entityId: task.id, entityType: 'task',
+      eventType: 'task_progress_updated', occurredAt: at,
+      snapshotJson: jsonEncode(<String, Object?>{
+        'title': task.title, 'difficultyScore': 5, 'isGroup': false,
+        'hasSubtasks': false, 'subtaskCount': 0, 'isCompleted': false,
+        'completedAt': null, 'taskType': 'progressive',
+        'progressMode': 'percentage', 'progressValue': progress,
+        'progressTarget': 100, 'subtasks': <Object>[],
+      }),
+    );
+    final DateTime first = yesterday.add(const Duration(hours: 9));
+    final List<TaskProgressEvent> events = <TaskProgressEvent>[
+      TaskProgressEvent(
+        id: 'up', taskId: task.id, previousValue: 10, newValue: 36,
+        previousPercent: 10, newPercent: 36, progressDelta: 26,
+        occurredAt: first, difficultyScore: 5,
+      ),
+      TaskProgressEvent(
+        id: 'back', taskId: task.id, previousValue: 36, newValue: 10,
+        previousPercent: 36, newPercent: 10, progressDelta: -26,
+        occurredAt: first.add(const Duration(minutes: 2)), difficultyScore: 5,
+      ),
+    ];
+    final ProductivityDayScore score = calculate(
+      scoreDate: yesterday, today: today, scoringStart: yesterday,
+      tasks: <Task>[task],
+      activities: <TaskActivity>[
+        activity('up-snapshot', first, 36),
+        activity('back-snapshot', first.add(const Duration(minutes: 2)), 10),
+      ],
+      progressEvents: events,
+    );
+    expect(score.achievementPoints, 0);
   });
 
   test('Inline subtask history uses the checked state saved at each day end', () {

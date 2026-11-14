@@ -106,6 +106,29 @@ void main() {
     expect(repo.habits.containsKey('x'), isFalse);
   });
 
+  test('launch reconciles only the open day with the latest habit scoring settings', () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final Habit h = habit().copyWith(productivityPoints: 1);
+    repo.habits[h.id] = h;
+    repo.records['h|2026-10-26'] = CompletionRecord(
+      habitId: h.id, dateKey: '2026-10-26', updatedAt: DateTime(2026, 10, 26),
+      done: true, productivityPoints: 2,
+      habitType: HabitType.build.name, trackingMethod: TrackingMethod.tick.name,
+    );
+    repo.records['h|2026-10-27'] = CompletionRecord(
+      habitId: h.id, dateKey: '2026-10-27', updatedAt: today,
+      done: true, productivityPoints: 2,
+      habitType: HabitType.build.name, trackingMethod: TrackingMethod.tick.name,
+    );
+
+    final ProviderContainer c = containerFor(repo);
+    await load(c);
+
+    expect(repo.records['h|2026-10-27']!.productivityPoints, 1);
+    expect(repo.records['h|2026-10-26']!.productivityPoints, 2);
+    expect(dataOf(c).recordsFor(h.id)['2026-10-27']!.productivityPoints, 1);
+  });
+
   test('editing a habit keeps its completion history', () async {
     final InMemoryAppRepository repo = InMemoryAppRepository();
     final ProviderContainer c = containerFor(repo);
@@ -116,6 +139,27 @@ void main() {
     await n.saveHabit(h.copyWith(title: 'Renamed'));
     expect(repo.habits['h']!.title, 'Renamed');
     expect(repo.records.length, 1);
+  });
+
+  test("editing habit scoring today refreshes only today's completion snapshot", () async {
+    final InMemoryAppRepository repo = InMemoryAppRepository();
+    final ProviderContainer c = containerFor(repo);
+    final AppDataNotifier n = await load(c);
+    final Habit h = habit().copyWith(productivityPoints: 2);
+    final DateTime yesterday = DateTime(2026, 10, 26);
+
+    await n.saveHabit(h);
+    await n.toggleTick(h, yesterday);
+    await n.toggleTick(h, today);
+    expect(repo.records['h|2026-10-26']!.productivityPoints, 2);
+    expect(repo.records['h|2026-10-27']!.productivityPoints, 2);
+
+    await n.saveHabit(h.copyWith(productivityPoints: 1));
+
+    expect(repo.records['h|2026-10-27']!.productivityPoints, 1);
+    expect(repo.records['h|2026-10-26']!.productivityPoints, 2);
+    expect(dataOf(c).recordsFor('h')['2026-10-27']!.productivityPoints, 1);
+    expect(dataOf(c).recordsFor('h')['2026-10-26']!.productivityPoints, 2);
   });
 
   test('toggleTick creates then removes the record; never duplicates', () async {

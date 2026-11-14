@@ -86,6 +86,22 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
       index.putIfAbsent(r.habitId, () => <String, CompletionRecord>{})[r.dateKey] = r;
     }
 
+    // Reconcile only the still-open calendar day on launch. This also repairs
+    // a current-day completion created by an older app build before the user
+    // upgrades: the final settings currently shown by the habit form become
+    // the snapshot that will be read after midnight. Past dates are untouched.
+    final String openDateKey = dateKey(ref.read(todayProvider));
+    for (final Habit habit in habits) {
+      final CompletionRecord? openDayRecord = index[habit.id]?[openDateKey];
+      if (openDayRecord == null) continue;
+      final CompletionRecord refreshed =
+          _refreshHabitDaySnapshot(openDayRecord, habit);
+      if (refreshed != openDayRecord) {
+        await repo.upsertCompletion(refreshed);
+        index[habit.id]![openDateKey] = refreshed;
+      }
+    }
+
     AppData data = AppData(
       habits: habits,
       categories: categories,
@@ -142,6 +158,23 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     state = await AsyncValue.guard(build);
   }
 
+  CompletionRecord _refreshHabitDaySnapshot(
+    CompletionRecord record,
+    Habit habit,
+  ) {
+    return record.copyWith(
+      productivityPoints: habit.productivityPoints,
+      quitPenalty: habit.quitPenalty,
+      habitType: habit.type.name,
+      trackingMethod: habit.tracking.name,
+      dailyGoalSnapshot: habit.dailyGoal,
+      clearDailyGoalSnapshot: habit.dailyGoal == null,
+      checklistItemIds: habit.checklist
+          .map((ChecklistItem item) => item.id)
+          .toSet(),
+    );
+  }
+
   // ------------------------------------------------------------- achievements
 
   Future<AppData> _syncAchievements(AppData data, Habit habit) async {
@@ -187,6 +220,22 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
           data.recordsFor(habit.id)[dateKey(today)],
         );
     await _repo.upsertHabit(habit);
+
+    // A completion record snapshots the scoring configuration the first time
+    // a habit is touched on a date. If the habit is edited later on that same
+    // current date, refresh only today's snapshot so the live score and the
+    // score shown after midnight use the same final daily configuration.
+    // Records for every earlier date remain immutable.
+    final String todayKey = dateKey(today);
+    final CompletionRecord? existingTodayRecord =
+        data.recordsFor(habit.id)[todayKey];
+    CompletionRecord? refreshedTodayRecord;
+    if (existingTodayRecord != null) {
+      refreshedTodayRecord =
+          _refreshHabitDaySnapshot(existingTodayRecord, habit);
+      await _repo.upsertCompletion(refreshedTodayRecord);
+    }
+
     final List<Habit> habits = List<Habit>.of(data.habits);
     final int i = habits.indexWhere((Habit h) => h.id == habit.id);
     if (i >= 0) {
@@ -194,7 +243,17 @@ class AppDataNotifier extends AsyncNotifier<AppData> {
     } else {
       habits.add(habit);
     }
-    data = data.copyWith(habits: habits);
+    Map<String, Map<String, CompletionRecord>> completions = data.completions;
+    if (refreshedTodayRecord != null) {
+      final Map<String, CompletionRecord> records =
+          Map<String, CompletionRecord>.of(data.recordsFor(habit.id));
+      records[todayKey] = refreshedTodayRecord;
+      completions = <String, Map<String, CompletionRecord>>{
+        ...data.completions,
+        habit.id: records,
+      };
+    }
+    data = data.copyWith(habits: habits, completions: completions);
     data = await _syncAchievements(data, habit);
     state = AsyncData<AppData>(data);
     // Reminder scheduling uses platform channels and may be slow or

@@ -38,7 +38,8 @@ class CompletionRecord {
   final double count;
   final Set<String> checkedItemIds;
   final bool slipped;
-  /// Snapshot of the habit's scoring configuration when this date was first recorded.
+  /// Snapshot of the habit's scoring configuration for this date. The open day
+  /// is refreshed when its habit settings change; past-day snapshots stay fixed.
   final double? productivityPoints;
   final double? quitPenalty;
   /// Rule snapshots ensure later habit edits do not rewrite historical scores.
@@ -66,6 +67,7 @@ class CompletionRecord {
     String? habitType,
     String? trackingMethod,
     double? dailyGoalSnapshot,
+    bool clearDailyGoalSnapshot = false,
     Set<String>? checklistItemIds,
   }) {
     return CompletionRecord(
@@ -80,7 +82,7 @@ class CompletionRecord {
       quitPenalty: quitPenalty ?? this.quitPenalty,
       habitType: habitType ?? this.habitType,
       trackingMethod: trackingMethod ?? this.trackingMethod,
-      dailyGoalSnapshot: dailyGoalSnapshot ?? this.dailyGoalSnapshot,
+      dailyGoalSnapshot: clearDailyGoalSnapshot ? null : (dailyGoalSnapshot ?? this.dailyGoalSnapshot),
       checklistItemIds: checklistItemIds ?? this.checklistItemIds,
     );
   }
